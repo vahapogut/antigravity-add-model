@@ -1,0 +1,43 @@
+{
+  "id": "ojtWpcQ-2byqsH-9fee2c4cbf2c5e63",
+  "object": "chat.completion",
+  "created": 1779309804,
+  "model": "deepseek-ai/DeepSeek-V4-Pro",
+  "metadata": {
+    "weight_version": "default"
+  },
+  "prompt": [],
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "call_709eaf79ce624fb993f20327",
+            "index": 13,
+            "type": "function",
+            "function": {
+              "name": "run_command",
+              "arguments": "{\"CommandLine\": \"git add -A\", \"Cwd\": \"c:\\\\Users\\\\vahap\\\\OneDrive\\\\Desktop\\\\antigravity-add-model\", \"toolAction\": \"Staging all files\", \"toolSummary\": \"Git add all\"}"
+            }
+          }
+        ],
+        "reasoning": "The `git add -A :!scratch :!node_modules :!.git` command failed because of the `:!node_modules` pattern. Let me try a different approach - just add everything and let .gitignore handle node_modules.\n\nWait, actually the error says `node_modules` is ignored by .gitignore, so it wasn't added. The `:!` patterns might not work well in PowerShell. Let me try a different approach."
+      },
+      "logprobs": null,
+      "finish_reason": "tool_calls",
+      "seed": null
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 68795,
+    "total_tokens": 69010,
+    "completion_tokens": 215,
+    "prompt_tokens_details": {
+      "cached_tokens": 67840
+    },
+    "reasoning_tokens": 0
+  }
+}
