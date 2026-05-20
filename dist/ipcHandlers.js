@@ -130,18 +130,37 @@ function registerIpcHandlers(storageManager) {
     });
     electron_1.ipcMain.handle('storage:get-custom-models', async () => {
         const path = require('path');
+        const cryptoStore = require('./cryptoStore');
         const geminiDir = path.join(electron_1.app.getPath('home'), '.gemini', 'antigravity');
         const filePath = path.join(geminiDir, 'custom_models.json');
         try {
             const content = await fs.readFile(filePath, 'utf-8');
             const parsed = JSON.parse(content);
-            return parsed.models || [];
+            const models = parsed.models || [];
+            
+            // Return models with masked API keys to the UI
+            return models.map(m => {
+                let maskedKey = m.apiKey;
+                if (m.apiKey && m.apiKey !== 'none') {
+                    const decrypted = cryptoStore.decryptString(m.apiKey);
+                    if (decrypted.length <= 8) {
+                        maskedKey = '********';
+                    } else {
+                        maskedKey = decrypted.substring(0, 4) + '...' + decrypted.substring(decrypted.length - 4);
+                    }
+                }
+                return {
+                    ...m,
+                    apiKey: maskedKey
+                };
+            });
         } catch (err) {
             return [];
         }
     });
     electron_1.ipcMain.handle('storage:save-custom-model', async (_event, newModel) => {
         const path = require('path');
+        const cryptoStore = require('./cryptoStore');
         const geminiDir = path.join(electron_1.app.getPath('home'), '.gemini', 'antigravity');
         const filePath = path.join(geminiDir, 'custom_models.json');
         try {
@@ -156,6 +175,19 @@ function registerIpcHandlers(storageManager) {
             
             // Check if model already exists, if so update it, otherwise push
             const existingIdx = models.findIndex(m => m.name === newModel.name);
+            
+            // Düzenleme çakışması koruması: Eğer yeni gelen anahtar maskeliyse ve eski kayıt varsa, eski şifreli anahtarı koru
+            const isMasked = newModel.apiKey && (newModel.apiKey.includes('...') || newModel.apiKey.startsWith('***') || newModel.apiKey === '********');
+            if (isMasked && existingIdx !== -1) {
+                newModel.apiKey = models[existingIdx].apiKey;
+                newModel.encrypted = models[existingIdx].encrypted;
+            } else {
+                if (newModel.apiKey && newModel.apiKey !== 'none') {
+                    newModel.apiKey = cryptoStore.encryptString(newModel.apiKey);
+                    newModel.encrypted = true;
+                }
+            }
+            
             if (existingIdx !== -1) {
                 models[existingIdx] = newModel;
             } else {

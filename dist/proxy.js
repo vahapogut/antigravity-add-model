@@ -9,6 +9,26 @@ const { app } = require('electron');
 let server = null;
 let proxyPort = 0;
 
+// Cross-turn state tracking — scoped per model to prevent parallel request corruption
+const modelToolCallIds = new Map();     // modelName -> { "functionName": "original_tool_call_id" }
+const modelReasoningContent = new Map(); // modelName -> preserved reasoning_content from previous turn
+const activeStreamContexts = new Map();  // key: chunk.id -> { accumulatedText, accumulatedReasoning, toolCalls }
+
+/**
+ * Generates a unique, hash-based placeholder model ID from a model's display name.
+ * Uses djb2 hash algorithm for fast, deterministic IDs that won't change between restarts.
+ */
+function generateModelPlaceholderId(model) {
+    const input = (model.displayName || model.name || 'custom-model').toLowerCase();
+    let hash = 5381;
+    for (let i = 0; i < input.length; i++) {
+        hash = ((hash << 5) + hash) + input.charCodeAt(i); // hash * 33 + c
+        hash = hash & hash; // Force 32-bit integer
+    }
+    const absHash = Math.abs(hash) % 900000;
+    return `MODEL_PLACEHOLDER_${absHash}`;
+}
+
 /**
  * Gets the path to the custom models configuration file.
  */
@@ -23,6 +43,8 @@ function getCustomModelsPath() {
  */
 function loadCustomModels() {
     const filePath = getCustomModelsPath();
+    const cryptoStore = require('./cryptoStore');
+    
     if (!fs.existsSync(filePath)) {
         const defaultModels = {
             models: [
@@ -56,16 +78,38 @@ function loadCustomModels() {
         };
         try {
             fs.mkdirSync(path.dirname(filePath), { recursive: true });
+            
+            // Encrypt keys before writing
+            defaultModels.models = cryptoStore.encryptModels(defaultModels.models);
+            
             fs.writeFileSync(filePath, JSON.stringify(defaultModels, null, 2), 'utf-8');
         } catch (e) {
             console.error('[Proxy] Failed to write default custom_models.json', e);
         }
-        return defaultModels.models;
+        return cryptoStore.decryptModels(defaultModels.models);
     }
+    
     try {
         const content = fs.readFileSync(filePath, 'utf-8');
         const parsed = JSON.parse(content);
-        return parsed.models || [];
+        const models = parsed.models || [];
+        
+        // Auto-migration check: if any model is not encrypted but has apiKey
+        const needsMigration = models.some(m => !m.encrypted && m.apiKey && m.apiKey !== 'none' && !m.apiKey.startsWith('enc:') && !m.apiKey.startsWith('fallback:'));
+        if (needsMigration) {
+            console.log('[Proxy] Plaintext custom_models.json detected. Migrating to encrypted format...');
+            cryptoStore.backupFile(filePath);
+            const encryptedModels = cryptoStore.encryptModels(models);
+            try {
+                fs.writeFileSync(filePath, JSON.stringify({ models: encryptedModels }, null, 2), 'utf-8');
+                console.log('[Proxy] Successfully migrated custom_models.json to encrypted format.');
+                return cryptoStore.decryptModels(encryptedModels);
+            } catch (err) {
+                console.error('[Proxy] Failed to write encrypted custom_models.json during migration:', err);
+            }
+        }
+        
+        return cryptoStore.decryptModels(models);
     } catch (e) {
         console.error('[Proxy] Failed to parse custom_models.json', e);
         return [];
@@ -163,8 +207,10 @@ function mapGeminiToOpenAI(geminiBody, modelName) {
                     const toolCalls = [];
                     for (const p of item.parts) {
                         if (p.functionCall) {
+                            // Use preserved original ID from API, or generate one
+                            const callId = p.functionCall.id || ("call_" + Math.random().toString(36).slice(2, 10));
                             toolCalls.push({
-                                id: "call_" + Math.random().toString(36).slice(2, 10),
+                                id: callId,
                                 type: "function",
                                 function: {
                                     name: p.functionCall.name,
@@ -175,13 +221,18 @@ function mapGeminiToOpenAI(geminiBody, modelName) {
                             });
                         }
                     }
-                    messages.push({ role: 'assistant', content: null, tool_calls: toolCalls });
+                    const assistantMsg = { role: 'assistant', content: null, tool_calls: toolCalls };
+                    messages.push(assistantMsg);
                 } else if (hasFunctionResponse) {
                     for (const p of item.parts) {
                         if (p.functionResponse) {
+                            // Match tool_call_id: prefer id from functionResponse, fall back to stored mapping
+                            const funcName = p.functionResponse.name || '';
+                            const modelToolCalls = modelToolCallIds.get(modelName) || {};
+                            const toolCallId = p.functionResponse.id || modelToolCalls[funcName] || ('call_' + funcName);
                             messages.push({
                                 role: 'tool',
-                                tool_call_id: p.functionResponse.id || "call_unknown",
+                                tool_call_id: toolCallId,
                                 content: typeof p.functionResponse.response === 'string'
                                     ? p.functionResponse.response
                                     : JSON.stringify(p.functionResponse.response || {})
@@ -196,6 +247,20 @@ function mapGeminiToOpenAI(geminiBody, modelName) {
                     messages.push({ role, content });
                 }
             }
+        }
+    }
+
+    // Inject reasoning_content into assistant messages missing it
+    // (required by DeepSeek native API which validates this strictly)
+    let lastAssistantIdx = -1;
+    for (let i = 0; i < messages.length; i++) {
+        if (messages[i].role === 'assistant') lastAssistantIdx = i;
+    }
+    for (let i = 0; i < messages.length; i++) {
+        if (messages[i].role === 'assistant' && !messages[i].reasoning_content) {
+            // Only the last assistant gets the preserved reasoning, others get empty
+            const preservedReasoning = modelReasoningContent.get(modelName) || '';
+            messages[i].reasoning_content = (i === lastAssistantIdx && preservedReasoning) ? preservedReasoning : '';
         }
     }
 
@@ -290,10 +355,15 @@ function mapOpenAIToGemini(openAiRes, modelName) {
             } catch (e) {
                 args = {};
             }
+            // Store original tool_call_id for later matching with functionResponse
+            const modelTCIds = modelToolCallIds.get(modelName) || {};
+            modelTCIds[tc.function.name] = tc.id;
+            modelToolCallIds.set(modelName, modelTCIds);
             return {
                 functionCall: {
                     name: tc.function.name,
-                    args: args  // Gemini expects object, OpenAI sends string
+                    args: args,
+                    id: tc.id  // preserve through Gemini format
                 }
             };
         });
@@ -408,16 +478,59 @@ function mapGeminiToAnthropic(geminiBody, modelName) {
 
 /**
  * Maps Anthropic response format to Gemini format.
+ * Handles text, tool_use, and mixed content blocks.
  */
 function mapAnthropicToGemini(anthRes, modelName) {
-    const text = anthRes.content?.[0]?.text || '';
-    const finishReason = anthRes.stop_reason === 'end_turn' ? 'STOP' : 'OTHER';
+    const contentBlocks = anthRes.content || [];
+    const parts = [];
+    const functionCalls = [];
+
+    for (const block of contentBlocks) {
+        if (block.type === 'text' && block.text) {
+            parts.push({ text: block.text });
+        } else if (block.type === 'tool_use') {
+            // Store tool_call_id for later matching with functionResponse
+            const modelTCIds = modelToolCallIds.get(modelName) || {};
+            modelTCIds[block.name] = block.id;
+            modelToolCallIds.set(modelName, modelTCIds);
+            functionCalls.push({
+                functionCall: {
+                    name: block.name,
+                    args: block.input || {},
+                    id: block.id
+                }
+            });
+        }
+    }
+
+    // If we have tool_use blocks, return TOOL_CALL finish reason
+    if (functionCalls.length > 0) {
+        return {
+            candidates: [{
+                content: {
+                    parts: [...parts, ...functionCalls],
+                    role: 'model'
+                },
+                finishReason: 'TOOL_CALL',
+                index: 0
+            }],
+            usageMetadata: {
+                promptTokenCount: anthRes.usage?.input_tokens || 0,
+                candidatesTokenCount: anthRes.usage?.output_tokens || 0,
+                totalTokenCount: (anthRes.usage?.input_tokens || 0) + (anthRes.usage?.output_tokens || 0)
+            }
+        };
+    }
+
+    // Pure text response
+    const finishReason = anthRes.stop_reason === 'end_turn' ? 'STOP' : 
+                         anthRes.stop_reason === 'max_tokens' ? 'MAX_TOKENS' : 'OTHER';
 
     return {
         candidates: [
             {
                 content: {
-                    parts: [{ text }],
+                    parts: parts,
                     role: 'model'
                 },
                 finishReason: finishReason,
@@ -430,6 +543,250 @@ function mapAnthropicToGemini(anthRes, modelName) {
             totalTokenCount: (anthRes.usage?.input_tokens || 0) + (anthRes.usage?.output_tokens || 0)
         }
     };
+}
+
+/**
+ * Maps OpenAI chat completion chunk to Gemini generateContentResponse format.
+ */
+function mapOpenAIChunkToGemini(chunk, modelName) {
+    const choice = chunk.choices?.[0];
+    if (!choice) return null;
+    
+    const delta = choice.delta;
+    const streamId = chunk.id || 'default_stream';
+    
+    if (!activeStreamContexts.has(streamId)) {
+        activeStreamContexts.set(streamId, {
+            accumulatedText: '',
+            accumulatedReasoning: '',
+            toolCalls: {}
+        });
+    }
+    const context = activeStreamContexts.get(streamId);
+    
+    // 1. Tool call streaming integration
+    if (delta?.tool_calls && Array.isArray(delta.tool_calls)) {
+        for (const tc of delta.tool_calls) {
+            const idx = tc.index ?? 0;
+            if (!context.toolCalls[idx]) {
+                context.toolCalls[idx] = { id: '', name: '', arguments: '' };
+            }
+            if (tc.id) context.toolCalls[idx].id = tc.id;
+            if (tc.function?.name) context.toolCalls[idx].name += tc.function.name;
+            if (tc.function?.arguments) context.toolCalls[idx].arguments += tc.function.arguments;
+        }
+    }
+    
+    // 2. Düşünme süreci (Reasoning) canlı görselleştirme
+    let text = delta?.content || '';
+    const reasoning = delta?.reasoning_content || delta?.reasoning || '';
+    
+    if (reasoning) {
+        context.accumulatedReasoning += reasoning;
+        text = `\n> **Thinking Process:**\n> ${reasoning.replace(/\n/g, '\n> ')}\n`;
+    }
+    
+    if (text) {
+        context.accumulatedText += text;
+    }
+    
+    // Tamamlanmış DSML araç çağrılarını algılama
+    const dsml = parseDSMLToolCalls(context.accumulatedText);
+    if (dsml && dsml.functionCalls.length > 0) {
+        const parts = dsml.functionCalls.map(fc => ({
+            functionCall: {
+                name: fc.name,
+                args: fc.args
+            }
+        }));
+        
+        context.accumulatedText = ''; // buffer'ı boşalt
+        
+        return {
+            candidates: [{
+                content: {
+                    parts: parts,
+                    role: 'model'
+                },
+                finishReason: 'TOOL_CALL',
+                index: 0
+            }]
+        };
+    }
+    
+    const finishReason = choice.finish_reason;
+    if (finishReason === 'stop' || finishReason === 'length') {
+        activeStreamContexts.delete(streamId);
+        return {
+            candidates: [{
+                content: {
+                    parts: text ? [{ text }] : [],
+                    role: 'model'
+                },
+                finishReason: 'STOP',
+                index: 0
+            }]
+        };
+    }
+    
+    if (finishReason === 'tool_calls' || (delta?.tool_calls && Object.keys(context.toolCalls).length > 0 && !text)) {
+        const parts = Object.values(context.toolCalls).map(tc => {
+            let args = {};
+            try {
+                args = JSON.parse(tc.arguments);
+            } catch (e) {
+                try {
+                    args = eval('(' + tc.arguments + ')');
+                } catch (err) {}
+            }
+            const modelTCIds = modelToolCallIds.get(modelName) || {};
+            modelTCIds[tc.name] = tc.id;
+            modelToolCallIds.set(modelName, modelTCIds);
+            return {
+                functionCall: {
+                    name: tc.name,
+                    args: args,
+                    id: tc.id
+                }
+            };
+        });
+        
+        if (finishReason === 'tool_calls') {
+            activeStreamContexts.delete(streamId);
+        }
+        
+        return {
+            candidates: [{
+                content: {
+                    parts: parts,
+                    role: 'model'
+                },
+                finishReason: 'TOOL_CALL',
+                index: 0
+            }]
+        };
+    }
+    
+    if (text) {
+        return {
+            candidates: [{
+                content: {
+                    parts: [{ text }],
+                    role: 'model'
+                },
+                finishReason: 'OTHER',
+                index: 0
+            }]
+        };
+    }
+    
+    return null;
+}
+
+/**
+ * Maps Anthropic chunk event to Gemini generateContentResponse format.
+ */
+function mapAnthropicChunkToGemini(chunk, modelName) {
+    const type = chunk.type;
+    const streamId = chunk.message?.id || 'anthropic_stream';
+    
+    if (!activeStreamContexts.has(streamId)) {
+        activeStreamContexts.set(streamId, {
+            accumulatedText: '',
+            accumulatedReasoning: '',
+            toolCalls: {}
+        });
+    }
+    const context = activeStreamContexts.get(streamId);
+    
+    if (type === 'content_block_start') {
+        const block = chunk.content_block;
+        const idx = chunk.index ?? 0;
+        if (block?.type === 'tool_use') {
+            context.toolCalls[idx] = {
+                id: block.id,
+                name: block.name,
+                arguments: ''
+            };
+        }
+    }
+    
+    if (type === 'content_block_delta') {
+        const delta = chunk.delta;
+        const idx = chunk.index ?? 0;
+        if (delta?.type === 'text_delta') {
+            const text = delta.text || '';
+            context.accumulatedText += text;
+            return {
+                candidates: [{
+                    content: {
+                        parts: [{ text }],
+                        role: 'model'
+                    },
+                    finishReason: 'OTHER',
+                    index: 0
+                }]
+            };
+        } else if (delta?.type === 'input_delta') {
+            if (context.toolCalls[idx]) {
+                context.toolCalls[idx].arguments += delta.partial_json || '';
+            }
+        }
+    }
+    
+    if (type === 'message_delta') {
+        const delta = chunk.delta;
+        if (delta?.stop_reason === 'tool_use') {
+            const parts = Object.values(context.toolCalls).map(tc => {
+                let args = {};
+                try {
+                    args = JSON.parse(tc.arguments);
+                } catch (e) {
+                    try {
+                        args = eval('(' + tc.arguments + ')');
+                    } catch (err) {}
+                }
+                const modelTCIds = modelToolCallIds.get(modelName) || {};
+                modelTCIds[tc.name] = tc.id;
+                modelToolCallIds.set(modelName, modelTCIds);
+                return {
+                    functionCall: {
+                        name: tc.name,
+                        args: args,
+                        id: tc.id
+                    }
+                };
+            });
+            
+            activeStreamContexts.delete(streamId);
+            return {
+                candidates: [{
+                    content: {
+                        parts: parts,
+                        role: 'model'
+                    },
+                    finishReason: 'TOOL_CALL',
+                    index: 0
+                }]
+            };
+        }
+    }
+    
+    if (type === 'message_stop') {
+        activeStreamContexts.delete(streamId);
+        return {
+            candidates: [{
+                content: {
+                    parts: [],
+                    role: 'model'
+                },
+                finishReason: 'STOP',
+                index: 0
+            }]
+        };
+    }
+    
+    return null;
 }
 
 /**
@@ -539,9 +896,24 @@ function handleCustomModelRequest(res, model, geminiBody, isStream) {
         headers['x-goog-api-key'] = model.apiKey;
     }
 
+    if (isStream) {
+        if (provider === 'openai' || provider === 'ollama' || provider === 'anthropic') {
+            payload.stream = true;
+        }
+    }
+
     let finalUrlStr = model.apiUrl;
-    if ((provider === 'openai' || model.provider === 'custom') && finalUrlStr.endsWith('/v1')) {
-        finalUrlStr += '/chat/completions';
+    if (provider === 'openai' || model.provider === 'custom' || provider === 'ollama') {
+        const urlLower = finalUrlStr.toLowerCase();
+        if (!urlLower.includes('/chat/completions') && !urlLower.includes('/completions')) {
+            if (finalUrlStr.endsWith('/v1')) {
+                finalUrlStr += '/chat/completions';
+            } else if (!finalUrlStr.endsWith('/')) {
+                finalUrlStr += '/v1/chat/completions';
+            } else {
+                finalUrlStr += 'v1/chat/completions';
+            }
+        }
     }
     const url = new URL(finalUrlStr);
     const client = url.protocol === 'https:' ? https : http;
@@ -551,68 +923,163 @@ function handleCustomModelRequest(res, model, geminiBody, isStream) {
         headers: headers
     };
 
+    // Faz 4: Kurumsal SSL bypass
+    if (model.allowUnauthorized || model.provider === 'custom') {
+        options.rejectUnauthorized = false;
+    }
+
     console.log(`[Proxy] Routing ${model.name} to ${model.provider} (${model.apiUrl}) (isStream: ${!!isStream})`);
 
     const request = client.request(url, options, (apiRes) => {
-        let body = '';
-        apiRes.on('data', chunk => body += chunk);
-        apiRes.on('end', () => {
-            if (apiRes.statusCode >= 400) {
-                console.error(`[Proxy] API error (${apiRes.statusCode}):`, body);
-                res.writeHead(apiRes.statusCode, { 'Content-Type': 'application/json' });
-                res.end(body);
-                return;
-            }
+        if (isStream) {
+            res.writeHead(200, {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'X-Accel-Buffering': 'no'
+            });
 
-            try {
-                // Diagnostic: save raw API response
-                try {
-                    const fsDiag = require('fs');
-                    fsDiag.writeFileSync('c:\\Users\\vahap\\OneDrive\\Desktop\\antigravity-add-model\\scratch\\api_response_raw.json', body);
-                } catch (e) {}
+            let buffer = '';
+            apiRes.on('data', (chunk) => {
+                buffer += chunk.toString('utf-8');
+                const lines = buffer.split('\n');
+                buffer = lines.pop(); // keep last partial line
 
-                const parsed = JSON.parse(body);
-                let mapped;
-                const providerForResponse = model.provider === 'custom' ? 'openai' : model.provider;
-                if (providerForResponse === 'openai' || providerForResponse === 'ollama') {
-                    mapped = mapOpenAIToGemini(parsed, model.name);
-                } else if (providerForResponse === 'anthropic') {
-                    mapped = mapAnthropicToGemini(parsed, model.name);
-                } else if (providerForResponse === 'google') {
-                    mapped = parsed;
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed) continue;
+                    if (trimmed.startsWith('data: ')) {
+                        const dataStr = trimmed.substring(6).trim();
+                        if (dataStr === '[DONE]') continue;
+                        try {
+                            const parsed = JSON.parse(dataStr);
+                            let mapped = null;
+                            if (provider === 'openai' || provider === 'ollama') {
+                                mapped = mapOpenAIChunkToGemini(parsed, model.name);
+                            } else if (provider === 'anthropic') {
+                                mapped = mapAnthropicChunkToGemini(parsed, model.name);
+                            }
+
+                            if (mapped) {
+                                const cloudCodeResponse = {
+                                    response: mapped,
+                                    traceId: "",
+                                    metadata: {}
+                                };
+                                res.write(`data: ${JSON.stringify(cloudCodeResponse)}\n\n`);
+                            }
+                        } catch (err) {
+                            // Suppress logs for partial/invalid json streams, but keep track
+                        }
+                    }
+                }
+            });
+
+            apiRes.on('end', () => {
+                // Parse last line if any
+                if (buffer.trim().startsWith('data: ')) {
+                    const dataStr = buffer.trim().substring(6).trim();
+                    if (dataStr !== '[DONE]') {
+                        try {
+                            const parsed = JSON.parse(dataStr);
+                            let mapped = null;
+                            if (provider === 'openai' || provider === 'ollama') {
+                                mapped = mapOpenAIChunkToGemini(parsed, model.name);
+                            } else if (provider === 'anthropic') {
+                                mapped = mapAnthropicChunkToGemini(parsed, model.name);
+                            }
+                            if (mapped) {
+                                const cloudCodeResponse = {
+                                    response: mapped,
+                                    traceId: "",
+                                    metadata: {}
+                                };
+                                res.write(`data: ${JSON.stringify(cloudCodeResponse)}\n\n`);
+                            }
+                        } catch (e) {}
+                    }
                 }
 
-                // Wrap in Cloud Code envelope format (matches Google's internal API)
-                const cloudCodeResponse = {
-                    response: mapped,
+                // Final STOP signal to safely close stream
+                const finalResponse = {
+                    response: {
+                        candidates: [{
+                            content: { parts: [], role: 'model' },
+                            finishReason: 'STOP',
+                            index: 0
+                        }]
+                    },
                     traceId: "",
                     metadata: {}
                 };
+                res.write(`data: ${JSON.stringify(finalResponse)}\n\n`);
+                res.end();
+            });
 
-                if (isStream) {
-                    res.writeHead(200, {
-                        'Content-Type': 'text/event-stream',
-                        'Cache-Control': 'no-cache',
-                        'Connection': 'keep-alive'
-                    });
-                    res.write(`data: ${JSON.stringify(cloudCodeResponse)}\n\n`);
-                    res.end();
-                } else {
+        } else {
+            let body = '';
+            apiRes.on('data', chunk => body += chunk);
+            apiRes.on('end', () => {
+                if (apiRes.statusCode >= 400) {
+                    console.error(`[Proxy] API error (${apiRes.statusCode}):`, body.slice(0, 500));
+                    res.writeHead(apiRes.statusCode, { 'Content-Type': 'application/json' });
+                    res.end(body);
+                    return;
+                }
+
+                try {
+                    // Diagnostic: save raw API response in app userData
+                    try {
+                        const fsDiag = require('fs');
+                        const diagPath = path.join(app.getPath('userData'), 'api_response_raw.json');
+                        fsDiag.writeFileSync(diagPath, body);
+                    } catch (e) {}
+
+                    const parsed = JSON.parse(body);
+
+                    const reasoning = parsed.choices?.[0]?.message?.reasoning_content
+                        || parsed.choices?.[0]?.message?.reasoning;
+                    if (reasoning) {
+                        modelReasoningContent.set(model.name, reasoning);
+                    }
+
+                    let mapped;
+                    const providerForResponse = model.provider === 'custom' ? 'openai' : model.provider;
+                    if (providerForResponse === 'openai' || providerForResponse === 'ollama') {
+                        mapped = mapOpenAIToGemini(parsed, model.name);
+                    } else if (providerForResponse === 'anthropic') {
+                        mapped = mapAnthropicToGemini(parsed, model.name);
+                    } else if (providerForResponse === 'google') {
+                        mapped = parsed;
+                    }
+
+                    const cloudCodeResponse = {
+                        response: mapped,
+                        traceId: "",
+                        metadata: {}
+                    };
+
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify(cloudCodeResponse));
+                } catch (e) {
+                    console.error('[Proxy] Failed to map response:', e);
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: { message: 'Failed to translate model response' } }));
                 }
-            } catch (e) {
-                console.error('[Proxy] Failed to map response:', e);
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: { message: 'Failed to translate model response' } }));
-            }
-        });
+            });
+        }
     });
 
     request.on('error', (err) => {
         console.error('[Proxy] Custom Model Request Error:', err);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: { message: 'Custom model request failed: ' + err.message } }));
+        if (isStream) {
+            const errResponse = { response: { candidates: [{ content: { parts: [{ text: 'Network error: ' + err.message }], role: 'model' }, finishReason: 'STOP', index: 0 }] }, traceId: '', metadata: {} };
+            res.write('data: ' + JSON.stringify(errResponse) + '\n\n');
+            res.end();
+        } else {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: 'Custom model request failed: ' + err.message } }));
+        }
     });
 
     request.write(JSON.stringify(payload));
@@ -664,7 +1131,7 @@ function handleRequest(req, res) {
                         const mergeModels = (target) => {
                             if (Array.isArray(target)) {
                                 const mapped = customModels.map((m, idx) => ({
-                                    name: "models/MODEL_PLACEHOLDER_M" + (400 + idx),
+                                    name: "models/" + generateModelPlaceholderId(m),
                                     version: "1.0",
                                     displayName: m.displayName,
                                     description: m.description,
@@ -688,12 +1155,12 @@ function handleRequest(req, res) {
                                         maxTokens: 1048576,
                                         maxOutputTokens: 4096,
                                         tokenizerType: "LLAMA_WITH_SPECIAL",
-                                        model: "MODEL_PLACEHOLDER_M" + (400 + idx),
+                                        model: generateModelPlaceholderId(m),
                                         apiProvider: "API_PROVIDER_GOOGLE_GEMINI",
                                         modelProvider: "MODEL_PROVIDER_GOOGLE"
                                     };
                                     m._slug = slug;
-                                    console.log(`[Proxy] Custom model "${m.displayName}" => slug: ${slug} => model: MODEL_PLACEHOLDER_M${400 + idx}`);
+                                    console.log(`[Proxy] Custom model "${m.displayName}" => slug: ${slug} => model: ${generateModelPlaceholderId(m)}`);
                                 });
                                 return result;
                             }
@@ -724,7 +1191,7 @@ function handleRequest(req, res) {
                                     maxTokens: 1048576,
                                     maxOutputTokens: 4096,
                                     tokenizerType: "LLAMA_WITH_SPECIAL",
-                                    model: "MODEL_PLACEHOLDER_M" + (400 + idx),
+                                    model: generateModelPlaceholderId(m),
                                     apiProvider: "API_PROVIDER_GOOGLE_GEMINI",
                                     modelProvider: "MODEL_PROVIDER_GOOGLE"
                                 };
@@ -764,7 +1231,7 @@ function handleRequest(req, res) {
                                 displayName: m.displayName,
                                 maxTokens: 1048576,
                                 maxOutputTokens: 4096,
-                                model: "MODEL_PLACEHOLDER_M" + (400 + idx),
+                                model: generateModelPlaceholderId(m),
                                 apiProvider: "API_PROVIDER_GOOGLE_GEMINI",
                                 modelProvider: "MODEL_PROVIDER_GOOGLE"
                             };
@@ -785,7 +1252,7 @@ function handleRequest(req, res) {
                         displayName: m.displayName,
                         maxTokens: 1048576,
                         maxOutputTokens: 4096,
-                        model: "MODEL_PLACEHOLDER_M" + (400 + idx),
+                        model: generateModelPlaceholderId(m),
                         apiProvider: "API_PROVIDER_GOOGLE_GEMINI",
                         modelProvider: "MODEL_PROVIDER_GOOGLE"
                     };
@@ -823,7 +1290,7 @@ function handleRequest(req, res) {
                         const customModels = loadCustomModels();
 
                         const mappedCustom = customModels.map((m, idx) => ({
-                            name: "models/MODEL_PLACEHOLDER_M" + (400 + idx),
+                            name: "models/" + generateModelPlaceholderId(m),
                             version: "1.0",
                             displayName: m.displayName,
                             description: m.description,
@@ -847,7 +1314,7 @@ function handleRequest(req, res) {
                         console.error('[Proxy] Google list models failed, returning custom models list only:', err);
                         const customModels = loadCustomModels();
                         const mappedCustom = customModels.map((m, idx) => ({
-                            name: "models/MODEL_PLACEHOLDER_M" + (400 + idx),
+                            name: "models/" + generateModelPlaceholderId(m),
                             version: "1.0",
                             displayName: m.displayName,
                             description: m.description,
@@ -889,7 +1356,7 @@ function handleRequest(req, res) {
                 if (modelName) {
                     const customModels = loadCustomModels();
                     const matchedCustomModel = customModels.find((m, idx) => {
-                        const enumName = "MODEL_PLACEHOLDER_M" + (400 + idx);
+                        const enumName = generateModelPlaceholderId(m);
                         return m.name === modelName || toSlug(m) === modelName || enumName === modelName || enumName === modelId;
                     });
                     if (matchedCustomModel) {
@@ -917,7 +1384,7 @@ function handleRequest(req, res) {
             const matchedModelName = isGenerate ? generateMatch[1] : streamMatch[1];
             const customModels = loadCustomModels();
             const matchedCustomModel = customModels.find((m, idx) => {
-                const enumName = "MODEL_PLACEHOLDER_M" + (400 + idx);
+                const enumName = generateModelPlaceholderId(m);
                 return m.name === matchedModelName || toSlug(m) === matchedModelName || enumName === matchedModelName || ("models/" + enumName) === matchedModelName;
             });
 
@@ -946,16 +1413,29 @@ function handleRequest(req, res) {
 function startProxy() {
     return new Promise((resolve, reject) => {
         server = http.createServer(handleRequest);
-        server.listen(50999, '127.0.0.1', () => {
-            proxyPort = server.address().port;
-            console.log(`[Proxy] Server listening on http://127.0.0.1:${proxyPort}`);
-            resolve(proxyPort);
-        });
+        
+        let primaryPort = 50999;
+        
+        function tryListen(port) {
+            server.listen(port, '127.0.0.1', () => {
+                proxyPort = server.address().port;
+                console.log(`[Proxy] Server listening on http://127.0.0.1:${proxyPort}`);
+                resolve(proxyPort);
+            });
+        }
 
         server.on('error', (err) => {
-            console.error('[Proxy] Startup failed:', err);
-            reject(err);
+            if (err.code === 'EADDRINUSE' && primaryPort === 50999) {
+                console.warn('[Proxy] Port 50999 is already in use. Retrying on dynamic port...');
+                primaryPort = 0; // fallback to any available port
+                tryListen(0);
+            } else {
+                console.error('[Proxy] Startup failed:', err);
+                reject(err);
+            }
         });
+        
+        tryListen(primaryPort);
     });
 }
 

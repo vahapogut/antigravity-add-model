@@ -582,6 +582,55 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    // Check DOM periodically (every 1s) to inject the UI element seamlessly
-    setInterval(injectCustomModelsSection, 1000);
+    // MutationObserver ile verimli DOM takibi — setInterval yerine
+    let injectionObserver = null;
+    let injectionDebounceTimer = null;
+    
+    function setupInjectionObserver() {
+        // Önce hemen dene
+        injectCustomModelsSection();
+        
+        // Zaten eklenmişse observer'a gerek yok
+        if (document.getElementById('agy-custom-models-section')) return;
+        
+        // Observer kur: document.body altındaki tüm değişiklikleri izle
+        injectionObserver = new MutationObserver(() => {
+            // Debounce: ardışık mutasyonları tek bir denemede birleştir
+            if (injectionDebounceTimer) clearTimeout(injectionDebounceTimer);
+            injectionDebounceTimer = setTimeout(async () => {
+                await injectCustomModelsSection();
+                // Başarıyla enjekte edildiyse observer'ı durdur
+                if (document.getElementById('agy-custom-models-section')) {
+                    if (injectionObserver) {
+                        injectionObserver.disconnect();
+                        injectionObserver = null;
+                    }
+                }
+            }, 200);
+        });
+        
+        injectionObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+    }
+    
+    // SPA sayfa geçişlerinde yeniden enjeksiyon için URL izleme
+    let lastUrl = location.href;
+    setInterval(() => {
+        const currentUrl = location.href;
+        if (currentUrl !== lastUrl) {
+            lastUrl = currentUrl;
+            // Sayfa değişti — önceki observer'ı temizle ve yeniden kur
+            if (injectionObserver) {
+                injectionObserver.disconnect();
+                injectionObserver = null;
+            }
+            // Kısa gecikmeyle yeniden kur (yeni DOM'un oluşması için)
+            setTimeout(setupInjectionObserver, 500);
+        }
+    }, 1500);
+    
+    // Başlangıçta observer'ı kur
+    setupInjectionObserver();
 });
