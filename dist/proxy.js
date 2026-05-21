@@ -13,6 +13,128 @@ let proxyPort = 0;
 const modelToolCallIds = new Map();     // modelName -> { "functionName": "original_tool_call_id" }
 const modelReasoningContent = new Map(); // modelName -> preserved reasoning_content from previous turn
 const activeStreamContexts = new Map();  // key: chunk.id -> { accumulatedText, accumulatedReasoning, toolCalls }
+const translatedToolCalls = new Map();  // toolCallId -> { originalName, translatedName, cmd, cwd }
+
+/**
+ * Translates generic shell/terminal commands (run_command) into native Antigravity file tools.
+ */
+function translateToolCallToNative(name, args) {
+    if (name !== 'run_command' || !args || !args.CommandLine) {
+        return { name, args };
+    }
+
+    const cmd = args.CommandLine.trim();
+    const cwd = args.Cwd || process.cwd();
+
+    // 1. list_dir translation
+    // Matches: ls, dir, ls -la, dir /w, ls ., dir . etc.
+    const isListDir = /^(ls|dir)(\s+[\w\-\/\.\*]+)*$/i.test(cmd);
+    if (isListDir) {
+        let dirPath = cwd;
+        const tokens = cmd.split(/\s+/).slice(1);
+        const pathToken = tokens.find(t => !t.startsWith('-') && !t.startsWith('/'));
+        if (pathToken) {
+            dirPath = path.isAbsolute(pathToken) ? pathToken : path.resolve(cwd, pathToken);
+        }
+        console.log(`[Proxy] Translating run_command "${cmd}" to list_dir on "${dirPath}"`);
+        return {
+            name: 'list_dir',
+            args: { DirectoryPath: dirPath }
+        };
+    }
+
+    // 2. view_file translation
+    // Matches: cat file.txt, type file.txt, cat "file space.txt", cat ./file.txt etc.
+    const catMatch = /^(cat|type)\s+(["']?)(.*?)\2$/i.exec(cmd);
+    if (catMatch) {
+        const filePath = catMatch[3].trim();
+        const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(cwd, filePath);
+        console.log(`[Proxy] Translating run_command "${cmd}" to view_file on "${absPath}"`);
+        return {
+            name: 'view_file',
+            args: { AbsolutePath: absPath }
+        };
+    }
+
+    // 3. grep_search translation
+    // Matches: grep -rn "query" path, grep -i "query" file, findstr /s /i "query" path etc.
+    if (cmd.toLowerCase().startsWith('grep') || cmd.toLowerCase().startsWith('findstr')) {
+        let query = '';
+        let searchPath = cwd;
+
+        const regexQuotes = /"([^"]+)"|'([^']+)'/g;
+        const quotesFound = [...cmd.matchAll(regexQuotes)];
+        if (quotesFound.length > 0) {
+            query = quotesFound[0][1] || quotesFound[0][2];
+        } else {
+            const tokens = cmd.split(/\s+/);
+            query = tokens[tokens.length - 1];
+        }
+
+        const tokens = cmd.split(/\s+/);
+        const pathToken = tokens.find((t, idx) => idx > 0 && !t.startsWith('-') && !t.startsWith('/') && !t.includes('"') && !t.includes("'") && t !== query);
+        if (pathToken) {
+            searchPath = path.isAbsolute(pathToken) ? pathToken : path.resolve(cwd, pathToken);
+        }
+
+        if (query) {
+            console.log(`[Proxy] Translating run_command "${cmd}" to grep_search (Query: "${query}", Path: "${searchPath}")`);
+            return {
+                name: 'grep_search',
+                args: {
+                    Query: query,
+                    SearchPath: searchPath,
+                    CaseInsensitive: cmd.includes('-i') || cmd.toLowerCase().includes('/i'),
+                    IsRegex: false,
+                    MatchPerLine: true
+                }
+            };
+        }
+    }
+
+    return { name, args };
+}
+
+/**
+ * Formats native file tool outputs (JSON/Array) back into standard textual command-line outputs.
+ */
+function formatTranslatedResponse(translatedInfo, responseData) {
+    const { translatedName, cmd } = translatedInfo;
+    console.log(`[Proxy] Formatting native response back to CLI for translated tool "${translatedName}" (Cmd: "${cmd}")`);
+
+    if (translatedName === 'list_dir') {
+        if (Array.isArray(responseData)) {
+            return responseData.map(item => {
+                const typeIndicator = item.isDir ? '<DIR>' : '     ';
+                const sizeStr = item.isDir ? '' : ` (${item.sizeBytes || 0} bytes)`;
+                return `${typeIndicator}  ${item.name}${sizeStr}`;
+            }).join('\n');
+        }
+        if (responseData && typeof responseData === 'object') {
+            const items = responseData.files || responseData.children || [];
+            if (Array.isArray(items)) {
+                return items.map(item => `${item.isDir ? '<DIR>' : '     '}  ${item.name}`).join('\n');
+            }
+        }
+        return typeof responseData === 'string' ? responseData : JSON.stringify(responseData);
+    }
+
+    if (translatedName === 'view_file') {
+        if (responseData && typeof responseData === 'object') {
+            return responseData.content || responseData.CodeContent || JSON.stringify(responseData);
+        }
+        return typeof responseData === 'string' ? responseData : JSON.stringify(responseData);
+    }
+
+    if (translatedName === 'grep_search') {
+        if (Array.isArray(responseData)) {
+            return responseData.map(match => `${match.Filename}:${match.LineNumber}:${match.LineContent}`).join('\n');
+        }
+        return typeof responseData === 'string' ? responseData : JSON.stringify(responseData);
+    }
+
+    return typeof responseData === 'string' ? responseData : JSON.stringify(responseData);
+}
 
 /**
  * Generates a unique, hash-based placeholder model ID from a model's display name.
@@ -210,14 +332,25 @@ function mapGeminiToOpenAI(geminiBody, modelName) {
                         if (p.functionCall) {
                             // Use preserved original ID from API, or generate one
                             const callId = p.functionCall.id || ("call_" + Math.random().toString(36).slice(2, 10));
+                            // Map back from translated name if it was a translated tool call
+                            let originalName = p.functionCall.name;
+                            let originalArgs = p.functionCall.args;
+                            const translatedInfo = translatedToolCalls.get(callId);
+                            if (translatedInfo) {
+                                originalName = translatedInfo.originalName;
+                                originalArgs = {
+                                    CommandLine: translatedInfo.cmd,
+                                    Cwd: translatedInfo.cwd
+                                };
+                            }
                             toolCalls.push({
                                 id: callId,
                                 type: "function",
                                 function: {
-                                    name: p.functionCall.name,
-                                    arguments: typeof p.functionCall.args === 'string'
-                                        ? p.functionCall.args
-                                        : JSON.stringify(p.functionCall.args || {})
+                                    name: originalName,
+                                    arguments: typeof originalArgs === 'string'
+                                        ? originalArgs
+                                        : JSON.stringify(originalArgs || {})
                                 }
                             });
                         }
@@ -231,12 +364,21 @@ function mapGeminiToOpenAI(geminiBody, modelName) {
                             const funcName = p.functionResponse.name || '';
                             const modelToolCalls = modelToolCallIds.get(modelName) || {};
                             const toolCallId = p.functionResponse.id || modelToolCalls[funcName] || ('call_' + funcName);
+                            
+                            const responseData = p.functionResponse.response;
+                            let contentStr = '';
+                            const translatedInfo = translatedToolCalls.get(toolCallId);
+                            if (translatedInfo) {
+                                contentStr = formatTranslatedResponse(translatedInfo, responseData);
+                            } else {
+                                contentStr = typeof responseData === 'string'
+                                    ? responseData
+                                    : JSON.stringify(responseData || {});
+                            }
                             messages.push({
                                 role: 'tool',
                                 tool_call_id: toolCallId,
-                                content: typeof p.functionResponse.response === 'string'
-                                    ? p.functionResponse.response
-                                    : JSON.stringify(p.functionResponse.response || {})
+                                content: contentStr
                             });
                         }
                     }
@@ -374,10 +516,22 @@ function mapOpenAIToGemini(openAiRes, modelName) {
             const modelTCIds = modelToolCallIds.get(modelName) || {};
             modelTCIds[tc.function.name] = tc.id;
             modelToolCallIds.set(modelName, modelTCIds);
+
+            // Translate tool call to native
+            const translated = translateToolCallToNative(tc.function.name, args);
+            if (translated.name !== tc.function.name) {
+                translatedToolCalls.set(tc.id, {
+                    originalName: tc.function.name,
+                    translatedName: translated.name,
+                    cmd: args.CommandLine,
+                    cwd: args.Cwd
+                });
+            }
+
             return {
                 functionCall: {
-                    name: tc.function.name,
-                    args: args,
+                    name: translated.name,
+                    args: translated.args,
                     id: tc.id  // preserve through Gemini format
                 }
             };
@@ -464,6 +618,33 @@ function mapOpenAIToGemini(openAiRes, modelName) {
 }
 
 /**
+ * Maps Gemini tools array to Anthropic tools format.
+ */
+function mapGeminiToolsToAnthropic(geminiTools) {
+    if (!geminiTools || !Array.isArray(geminiTools)) return [];
+    const anthropicTools = [];
+    for (const toolGroup of geminiTools) {
+        if (toolGroup.functionDeclarations && Array.isArray(toolGroup.functionDeclarations)) {
+            for (const func of toolGroup.functionDeclarations) {
+                const params = func.parameters ? JSON.parse(JSON.stringify(func.parameters)) : { type: "OBJECT", properties: {} };
+                if (params.type && typeof params.type === 'string') {
+                    params.type = params.type.toLowerCase();
+                }
+                if (params.properties) {
+                    fixParamTypes(params.properties);
+                }
+                anthropicTools.push({
+                    name: func.name,
+                    description: func.description || "",
+                    input_schema: params
+                });
+            }
+        }
+    }
+    return anthropicTools;
+}
+
+/**
  * Maps Gemini request format to Anthropic chat format.
  */
 function mapGeminiToAnthropic(geminiBody, modelName) {
@@ -477,16 +658,77 @@ function mapGeminiToAnthropic(geminiBody, modelName) {
 
     if (geminiBody.contents) {
         for (const item of geminiBody.contents) {
-            const role = item.role === 'model' ? 'assistant' : (item.role || 'user');
-            let content = '';
             if (item.parts) {
-                content = item.parts.map(p => p.text || '').join('');
-            }
+                const hasFunctionCall = item.parts.some(p => p.functionCall);
+                const hasFunctionResponse = item.parts.some(p => p.functionResponse);
 
-            if (role === 'system') {
-                system = (system || '') + '\n' + content;
-            } else {
-                messages.push({ role, content });
+                if (hasFunctionCall && item.role === 'model') {
+                    const contentBlocks = [];
+                    for (const p of item.parts) {
+                        if (p.text) {
+                            contentBlocks.push({ type: 'text', text: p.text });
+                        }
+                        if (p.functionCall) {
+                            const callId = p.functionCall.id || ("call_" + Math.random().toString(36).slice(2, 10));
+                            // Map back from translated name if it was a translated tool call
+                            let originalName = p.functionCall.name;
+                            let originalArgs = p.functionCall.args;
+                            const translatedInfo = translatedToolCalls.get(callId);
+                            if (translatedInfo) {
+                                originalName = translatedInfo.originalName;
+                                originalArgs = {
+                                    CommandLine: translatedInfo.cmd,
+                                    Cwd: translatedInfo.cwd
+                                };
+                            }
+                            contentBlocks.push({
+                                type: 'tool_use',
+                                id: callId,
+                                name: originalName,
+                                input: typeof originalArgs === 'string' ? JSON.parse(originalArgs) : originalArgs
+                            });
+                        }
+                    }
+                    messages.push({ role: 'assistant', content: contentBlocks });
+                } else if (hasFunctionResponse) {
+                    const contentBlocks = [];
+                    for (const p of item.parts) {
+                        if (p.functionResponse) {
+                            const funcName = p.functionResponse.name || '';
+                            const modelToolCalls = modelToolCallIds.get(modelName) || {};
+                            const toolCallId = p.functionResponse.id || modelToolCalls[funcName] || ('call_' + funcName);
+                            
+                            const responseData = p.functionResponse.response;
+                            let contentStr = '';
+                            const translatedInfo = translatedToolCalls.get(toolCallId);
+                            if (translatedInfo) {
+                                contentStr = formatTranslatedResponse(translatedInfo, responseData);
+                            } else {
+                                contentStr = typeof responseData === 'string'
+                                    ? responseData
+                                    : JSON.stringify(responseData || {});
+                            }
+                            contentBlocks.push({
+                                type: 'tool_result',
+                                tool_use_id: toolCallId,
+                                content: contentStr
+                            });
+                        }
+                    }
+                    messages.push({ role: 'user', content: contentBlocks });
+                } else {
+                    const role = item.role === 'model' ? 'assistant' : (item.role || 'user');
+                    let content = '';
+                    if (item.parts) {
+                        content = item.parts.map(p => p.text || '').join('');
+                    }
+
+                    if (role === 'system') {
+                        system = (system || '') + '\n' + content;
+                    } else {
+                        messages.push({ role, content });
+                    }
+                }
             }
         }
     }
@@ -505,6 +747,14 @@ function mapGeminiToAnthropic(geminiBody, modelName) {
         const temp = geminiBody.generationConfig?.temperature;
         if (temp !== undefined && temp !== null) {
             result.temperature = temp;
+        }
+    }
+
+    // Map tools if present
+    if (geminiBody.tools && Array.isArray(geminiBody.tools)) {
+        const anthTools = mapGeminiToolsToAnthropic(geminiBody.tools);
+        if (anthTools.length > 0) {
+            result.tools = anthTools;
         }
     }
 
@@ -530,10 +780,22 @@ function mapAnthropicToGemini(anthRes, modelName) {
             const modelTCIds = modelToolCallIds.get(modelName) || {};
             modelTCIds[block.name] = block.id;
             modelToolCallIds.set(modelName, modelTCIds);
+
+            // Translate tool call to native
+            const translated = translateToolCallToNative(block.name, block.input || {});
+            if (translated.name !== block.name) {
+                translatedToolCalls.set(block.id, {
+                    originalName: block.name,
+                    translatedName: translated.name,
+                    cmd: block.input?.CommandLine,
+                    cwd: block.input?.Cwd
+                });
+            }
+
             functionCalls.push({
                 functionCall: {
-                    name: block.name,
-                    args: block.input || {},
+                    name: translated.name,
+                    args: translated.args,
                     id: block.id
                 }
             });
@@ -688,10 +950,22 @@ function mapOpenAIChunkToGemini(chunk, modelName) {
             const modelTCIds = modelToolCallIds.get(modelName) || {};
             modelTCIds[tc.name] = tc.id;
             modelToolCallIds.set(modelName, modelTCIds);
+
+            // Translate tool call to native
+            const translated = translateToolCallToNative(tc.name, args);
+            if (translated.name !== tc.name) {
+                translatedToolCalls.set(tc.id, {
+                    originalName: tc.name,
+                    translatedName: translated.name,
+                    cmd: args.CommandLine,
+                    cwd: args.Cwd
+                });
+            }
+
             return {
                 functionCall: {
-                    name: tc.name,
-                    args: args,
+                    name: translated.name,
+                    args: translated.args,
                     id: tc.id
                 }
             };
@@ -808,10 +1082,22 @@ function mapAnthropicChunkToGemini(chunk, modelName) {
                 const modelTCIds = modelToolCallIds.get(modelName) || {};
                 modelTCIds[tc.name] = tc.id;
                 modelToolCallIds.set(modelName, modelTCIds);
+
+                // Translate tool call to native
+                const translated = translateToolCallToNative(tc.name, args);
+                if (translated.name !== tc.name) {
+                    translatedToolCalls.set(tc.id, {
+                        originalName: tc.name,
+                        translatedName: translated.name,
+                        cmd: args.CommandLine,
+                        cwd: args.Cwd
+                    });
+                }
+
                 return {
                     functionCall: {
-                        name: tc.name,
-                        args: args,
+                        name: translated.name,
+                        args: translated.args,
                         id: tc.id
                     }
                 };
