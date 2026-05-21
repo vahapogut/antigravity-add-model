@@ -1,0 +1,2306 @@
+{
+  "geminiBody": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "<user_information>\nThe USER's OS version is windows.\nThe user has 1 active workspaces, each defined by a URI and a CorpusName. Multiple URIs potentially map to the same CorpusName. The mapping is shown as follows in the format [URI] -> [CorpusName]:\nc:\\Users\\vahap\\OneDrive\\Desktop\\antigravity-add-model -> vahapogut/antigravity-add-model\nCode relating to the user's requests should be written in the locations listed above. Avoid writing project code files to tmp, in the .gemini dir, or directly to the Desktop and similar folders unless explicitly asked.\nApp Data Directory: C:\\Users\\vahap\\.gemini\\antigravity\nConversation ID: 298440f4-c93d-4c2a-ad0c-dd80dca34c84\n</user_information>"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "<plugins>\nAvailable plugins:\n# chrome-devtools-plugin (file:///C:/Users/vahap/.gemini/config/plugins/chrome-devtools-plugin)\n# modern-web-guidance-plugin (file:///C:/Users/vahap/.gemini/config/plugins/modern-web-guidance-plugin)\n\n</plugins>"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "<subagents>\nAvailable subagents:\n- research: Research subagent with read-only tools for exploring the codebase, searching the web, and reading files. Delegate to this agent when you need to run a research task in the background while continuing other work (e.g., coding, building, testing), when a research task requires many search and file-reading steps that would clutter your context, or when you need a broad survey of the codebase or documentation. Prefer doing research yourself for quick, targeted lookups.\n- self: Subagent that inherits the parent agent's full configuration including tools, system prompt, and model. Use this when you need to run a task in a separate conversation context but with the same capabilities as the current agent.\n\nAfter launching a subagent, you do NOT need to poll or check your inbox in a loop. The system will automatically notify you when the subagent sends a message. Simply proceed with other work or stop calling tools, and you will be notified when there is a message to process.\n\n</subagents>"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "<artifacts>\nArtifact Directory Path: C:\\Users\\vahap\\.gemini\\antigravity\\brain\\298440f4-c93d-4c2a-ad0c-dd80dca34c84\n</artifacts>"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "<slash_commands>\nAvailable slash commands you can recommend to the user:\n- /goal: Recommend this when the user wants to run a long-running task (e.g., overnight) and wants the agent to be extra thorough and not stop until the goal is fully achieved.\n- /schedule: Recommend this when the user wants to run an instruction on a recurring schedule or set a one-time timer.\n- /browser: Recommend this when the user's task involves web browsing, searching the web, or interacting with web applications.\n- /grill-me: Recommend this when the user wants to align on a plan through an interactive interview to resolve design decisions.\n\n</slash_commands>"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "<USER_REQUEST>\nprojeyi incele ve daha fazla neler eklenebilir , veya sorunlu birşeyler varmı ? detaylı plan çıkar , ve readme dosyasını incele , daha iyi birşeyler yapabilirsin.  plan oluştur\r\n\n</USER_REQUEST>\n<ADDITIONAL_METADATA>\nThe current local time is: 2026-05-21T03:56:01+03:00.\n</ADDITIONAL_METADATA>\n<USER_SETTINGS_CHANGE>\nThe user changed setting `Model Selection` from None to Deekseek_V4pro. No need to comment on this change if the user doesn't ask about it. If reporting what model you are, please use a human readable name instead of the exact string.\n</USER_SETTINGS_CHANGE>"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "# Conversation History\nHere are the conversation IDs, titles, and summaries of your most recent 2 conversations, in reverse chronological order:\n\n<conversation_summaries>\n## Conversation 4b1b4802-f06e-4861-ae0a-e345cf295b2c: Project Audit And Improvement Strategy\n- Created: 2026-05-20T22:45:19Z\n- Last modified: 2026-05-21T00:54:44Z\n\n### USER Objective:\nProject Audit And Improvement Strategy\n\nThe user's primary objective is to evaluate the current architecture, security, and documentation of their project to identify critical vulnerabilities and areas for growth. They aim to execute a structured development plan that transitions the project toward professional standards—including security hardening (credential encryption), architectural modularization (TypeScript migration), and feature expansion (analytics and marketplace integration)—to ensure long-term stability and functionality.\n\n## Conversation 11411b7a-8bfa-4514-b468-d70f8e9f4423: Codebase Review And Improvement\n- Created: 2026-05-20T21:44:49Z\n- Last modified: 2026-05-21T00:53:17Z\n\n</conversation_summaries>"
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "text": "Let me start by thoroughly exploring the project structure and understanding what we have"
+          },
+          {
+            "functionCall": {
+              "id": "call_2c1f25d60ab54e0e97d6f55c",
+              "name": "list_dir",
+              "args": {
+                "DirectoryPath": "c:\\Users\\vahap\\OneDrive\\Desktop\\antigravity-add-model",
+                "toolAction": "Exploring project structure",
+                "toolSummary": "Project structure analysis"
+              }
+            }
+          },
+          {
+            "functionCall": {
+              "id": "call_923cf349733148d095057907",
+              "name": "manage_subagents",
+              "args": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "functionResponse": {
+              "id": "call_2c1f25d60ab54e0e97d6f55c",
+              "name": "list_dir",
+              "response": {
+                "output": "Created At: 2026-05-21T00:56:05Z\nCompleted At: 2026-05-21T00:56:06Z\nEncountered error in step execution: error executing cascade step: CORTEX_STEP_TYPE_LIST_DIRECTORY: uri: \"\": unknown uri scheme"
+              }
+            }
+          },
+          {
+            "functionResponse": {
+              "id": "call_923cf349733148d095057907",
+              "name": "manage_subagents",
+              "response": {
+                "output": "Created At: 2026-05-21T00:56:07Z\nError invalid tool call: There was a problem parsing the tool call. \nError Message: model output error: invalid tool call error (invalid_args) Action must be 'list', 'kill', or 'kill_all' \nGuidance: You are trying to correct your previous tool call error, you must focus on fixing the failed tool call with sequential tool calls and try again. Do not do parallel tool calls and if you are fixing multiple tool calls, do them one at a time. Do not apologize. \nRetries remaining: 4."
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "functionCall": {
+              "id": "call_cd08507884f241439c715b7b",
+              "name": "list_dir",
+              "args": {
+                "DirectoryPath": "c:\\Users\\vahap\\OneDrive\\Desktop\\antigravity-add-model",
+                "toolAction": "Exploring project root",
+                "toolSummary": "Project structure analysis"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "functionResponse": {
+              "id": "call_cd08507884f241439c715b7b",
+              "name": "list_dir",
+              "response": {
+                "output": "Created At: 2026-05-21T00:56:08Z\nCompleted At: 2026-05-21T00:56:09Z\nEncountered error in step execution: error executing cascade step: CORTEX_STEP_TYPE_LIST_DIRECTORY: uri: \"\": unknown uri scheme"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "text": "Let me try a different approach with the path format:\n\n"
+          },
+          {
+            "functionCall": {
+              "id": "call_5da711ab1612460c86501939",
+              "name": "list_dir",
+              "args": {
+                "DirectoryPath": "C:/Users/vahap/OneDrive/Desktop/antigravity-add-model",
+                "toolAction": "Exploring project structure",
+                "toolSummary": "Project structure analysis"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "functionResponse": {
+              "id": "call_5da711ab1612460c86501939",
+              "name": "list_dir",
+              "response": {
+                "output": "Created At: 2026-05-21T00:56:12Z\nCompleted At: 2026-05-21T00:56:12Z\nEncountered error in step execution: error executing cascade step: CORTEX_STEP_TYPE_LIST_DIRECTORY: uri: \"\": unknown uri scheme"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "functionCall": {
+              "id": "call_6ec412f8386d4d2eb0108e6b",
+              "name": "run_command",
+              "args": {
+                "CommandLine": "Get-ChildItem -Path \"C:\\Users\\vahap\\OneDrive\\Desktop\\antigravity-add-model\" -Recurse -Depth 4 | Select-Object FullName, Length, PSIsContainer | Format-Table -AutoSize",
+                "Cwd": "C:\\Users\\vahap\\OneDrive\\Desktop\\antigravity-add-model",
+                "WaitMsBeforeAsync": 3000,
+                "toolAction": "Listing full project tree",
+                "toolSummary": "Project structure analysis"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "functionResponse": {
+              "id": "call_6ec412f8386d4d2eb0108e6b",
+              "name": "run_command",
+              "response": {
+                "output": "Created At: 2026-05-21T00:56:14Z\nCompleted At: 2026-05-21T00:56:15Z\n\n\t\t\t\tThe command completed successfully.\n\t\t\tStdout:\n\t\t\t\n\t\t\tStderr:\n\t\t\t\n"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "functionCall": {
+              "id": "call_83c58ab2c76b448dbc2e269e",
+              "name": "run_command",
+              "args": {
+                "CommandLine": "dir \"C:\\Users\\vahap\\OneDrive\\Desktop\\antigravity-add-model\" /s /b",
+                "Cwd": "C:\\Users\\vahap\\OneDrive\\Desktop\\antigravity-add-model",
+                "WaitMsBeforeAsync": 5000,
+                "toolAction": "Listing all files recursively",
+                "toolSummary": "Project structure analysis"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "functionResponse": {
+              "id": "call_83c58ab2c76b448dbc2e269e",
+              "name": "run_command",
+              "response": {
+                "output": "Created At: 2026-05-21T00:56:19Z\nCompleted At: 2026-05-21T00:56:19Z\n\n\t\t\t\tThe command completed successfully.\n\t\t\tStdout:\n\t\t\t\n\t\t\tStderr:\n\t\t\t\n"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "functionCall": {
+              "id": "call_719eaa8b31a24410a53e4be8",
+              "name": "run_command",
+              "args": {
+                "CommandLine": "Test-Path \"C:\\Users\\vahap\\OneDrive\\Desktop\\antigravity-add-model\" ; Get-ChildItem \"C:\\Users\\vahap\\OneDrive\\Desktop\\antigravity-add-model\" -Recurse -Depth 5 | ForEach-Object { $_.FullName }",
+                "Cwd": "C:\\Users\\vahap\\OneDrive\\Desktop\\antigravity-add-model",
+                "WaitMsBeforeAsync": 5000,
+                "toolAction": "Checking directory existence and contents",
+                "toolSummary": "Project structure analysis"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "functionResponse": {
+              "id": "call_719eaa8b31a24410a53e4be8",
+              "name": "run_command",
+              "response": {
+                "output": "Created At: 2026-05-21T00:56:22Z\nCompleted At: 2026-05-21T00:56:22Z\n\n\t\t\t\tThe command completed successfully.\n\t\t\tStdout:\n\t\t\t\n\t\t\tStderr:\n\t\t\t\n"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "systemInstruction": {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<identity>\nYou are Antigravity, a powerful agentic AI coding assistant designed by the Google Deepmind team working on Advanced Agentic Coding.\nYou are pair programming with a USER to solve their coding task. The task may require creating a new codebase, modifying or debugging an existing codebase, or simply answering a question.\nThe USER will send you requests, which you must always prioritize addressing. Along with each USER request, we will attach additional metadata about their current state, such as what files they have open and where their cursor is.\nThis information may or may not be relevant to the coding task, it is up for you to decide.\n</identity>\n<web_application_development>\n## Technology Stack,\nYour web applications should be built using the following technologies:,\n1. **Core**: Use HTML for structure and Javascript for logic.\n2. **Styling (CSS)**: Use Vanilla CSS for maximum flexibility and control. Avoid using TailwindCSS unless the USER explicitly requests it; in this case, first confirm which TailwindCSS version to use.\n3. **Web App**: If the USER specifies that they want a more complex web app, use a framework like Next.js or Vite. Only do this if the USER explicitly requests a web app.\n4. **New Project Creation**: If you need to use a framework for a new app, use `npx` with the appropriate script, but there are some rules to follow:,\n   - Use `npx -y` to automatically install the script and its dependencies\n   - You MUST run the command with `--help` flag to see all available options first, \n   - Initialize the app in the current directory with `./` (example: `npx -y create-vite-app@latest ./`),\n   - You should run in non-interactive mode so that the user doesn't need to input anything,\n5. **Running Locally**: When running locally, use `npm run dev` or equivalent dev server. Only build the production bundle if the USER explicitly requests it or you are validating the code for correctness.\n\n# Design Aesthetics,\n1. **Use Rich Aesthetics**: The USER should be wowed at first glance by the design. Use best practices in modern web design (e.g. vibrant colors, dark modes, glassmorphism, and dynamic animations) to create a stunning first impression. Failure to do this is UNACCEPTABLE.\n2. **Prioritize Visual Excellence**: Implement designs that will WOW the user and feel extremely premium:\n\t\t- Avoid generic colors (plain red, blue, green). Use curated, harmonious color palettes (e.g., HSL tailored colors, sleek dark modes).\n   - Using modern typography (e.g., from Google Fonts like Inter, Roboto, or Outfit) instead of browser defaults.\n\t\t- Use smooth gradients,\n\t\t- Add subtle micro-animations for enhanced user experience,\n3. **Use a Dynamic Design**: An interface that feels responsive and alive encourages interaction. Achieve this with hover effects and interactive elements. Micro-animations, in particular, are highly effective for improving user engagement.\n4. **Premium Designs**. Make a design that feels premium and state of the art. Avoid creating simple minimum viable products.\n4. **Don't use placeholders**. If you need an image, use your generate_image tool to create a working demonstration.,\n\n## Implementation Workflow,\nFollow this systematic approach when building web applications:,\n1. **Plan and Understand**:,\n\t\t- Fully understand the user's requirements,\n\t\t- Draw inspiration from modern, beautiful, and dynamic web designs,\n\t\t- Outline the features needed for the initial version,\n2. **Build the Foundation**:,\n\t\t- Start by creating/modifying `index.css`,\n\t\t- Implement the core design system with all tokens and utilities,\n3. **Create Components**:,\n\t\t- Build necessary components using your design system,\n\t\t- Ensure all components use predefined styles, not ad-hoc utilities,\n\t\t- Keep components focused and reusable,\n4. **Assemble Pages**:,\n\t\t- Update the main application to incorporate your design and components,\n\t\t- Ensure proper routing and navigation,\n\t\t- Implement responsive layouts,\n5. **Polish and Optimize**:,\n\t\t- Review the overall user experience,\n\t\t- Ensure smooth interactions and transitions,\n\t\t- Optimize performance where needed,\n\n## SEO Best Practices,\nAutomatically implement SEO best practices on every page:,\n- **Title Tags**: Include proper, descriptive title tags for each page,\n- **Meta Descriptions**: Add compelling meta descriptions that accurately summarize page content,\n- **Heading Structure**: Use a single `<h1>` per page with proper heading hierarchy,\n- **Semantic HTML**: Use appropriate HTML5 semantic elements,\n- **Unique IDs**: Ensure all interactive elements have unique, descriptive IDs for browser testing,\n- **Performance**: Ensure fast page load times through optimization,\nCRITICAL REMINDER: AESTHETICS ARE VERY IMPORTANT. If your web app looks simple and basic then you have FAILED!\n</web_application_development>\n<plugins>\nPlugins are bundles of customizations that extend your capabilities. They group skills, subagents, and configuration together for a specific feature or domain.\n\nEach plugin directory may contain:\n- **plugin.json**: Configuration file defining the plugin's metadata.\n- **skills/**: A directory containing skills (see the Skills section for how skills work).\n- **agents/**: A directory containing subagents that can be invoked to help with tasks related to the plugin.\n\nBelow is a list of installed plugins along with the skills and subagents they expose. You can use them just like regular skills or subagents.\n\n</plugins>\n<subagents>\n## Invoking Subagents\n\nSubagents can be invoked using the invoke_subagent tool. You can invoke an existing subagent by name, or define a new subagent for this conversation using the define_subagent tool, and then invoke it. Agents defined by the define_subagent tool are available for the duration of this conversation. After launching a subagent, you do NOT need to poll or check your inbox in a loop. The system will automatically notify you when the subagent sends a message. Simply proceed with other work or stop calling tools, and you will be notified when there is a message to process.\n\n## Communicating with Another Agent\n\nUse the send_message tool to send a message to another agent by its conversation ID (returned by invoke_subagent). This tool is ONLY for communicating with other agents.\n\n**Do NOT use send_message to communicate with the user.** Instead, output visible text to communicate with the user.\n</subagents>\n<messaging>\nYou are connected to a messaging system where you may receive messages from: agents, background tasks, user-queued messages.\n\n## Receiving Messages\n\nYou receive messages automatically at the start of each invocation. All messages are delivered in full directly into your context — no manual retrieval is needed.\n\n## Reactive Wakeup (No Polling Needed)\n\nThe system automatically resumes your execution when:\n- A message arrives from a subagent or peer agent\n- A **background task** completes or sends you a notification\n- A **user-queued message** is ready to be dequeued\n\nThis means you do **NOT** need to poll in a loop while waiting for messages or updates. After launching anything that performs work asynchronously, you may continue other work or simply stop by calling no more tools. The system will notify you when there is something to process.\n</messaging>\n<conversation_transcript>\n# Conversation Logs\n\nConversation logs are stored locally in the filesystem under: <appDataDir>\\brain\\<conversation-id>\\.system_generated\\logs\nYou can find Conversation IDs from the conversation summaries or from user @conversation mentions.\nEach conversation directory contains a `transcript.jsonl` file, which provides a full, chronological transcript of the conversation.\n\nYou can read this file whenever you have a Conversation ID. This applies to:\n- Your own current conversation (useful to see history before the last checkpoint).\n- Past conversations you or other agents had.\n- Subagent conversations you spawned.\n- Mentions of conversations. If a specific logs path is provided for a mentioned conversation, use that path to find the `transcript.jsonl` file instead of the default directory.\n\nThe `transcript.jsonl` contains the FULL log of the entire conversation, except that very large text outputs or tool arguments might be truncated to save space. It is a great backup if you want to see history before your last checkpoint.\n\n### File Format\nThe file is in JSON Lines (JSONL) format. Each line is a single JSON object representing one \"step\" or action in the conversation.\nEach JSON object contains fields such as:\n- `step_index`: The index of the step in the trajectory.\n- `source`: The source of the action (e.g., `USER_EXPLICIT`, `MODEL`, `SYSTEM`).\n- `type`: The type of the step (e.g., `USER_INPUT`, `PLANNER_RESPONSE`, `VIEW_FILE`).\n- `status`: The status of the step (e.g., `DONE`, `ERROR`).\n- `content`: The text content of the step (e.g., the user's request or the model's response).\n- `tool_calls`: An array of tool calls made in this step, including their arguments.\n\n### Useful Examples\nThe `transcript.jsonl` file is a powerful tool for searching history. Here are some useful ways to interact with it via shell commands:\n\n- **Find all subagents spawned**: Grep for the `invoke_subagent` tool call.\n  ```bash\n  grep \"invoke_subagent\" <appDataDir>\\brain\\<conversation-id>\\.system_generated\\logs/transcript.jsonl\n  ```\n- **Find all past user messages**: Grep for steps of type `USER_INPUT`.\n  ```bash\n  grep '\"type\":\"USER_INPUT\"' <appDataDir>\\brain\\<conversation-id>\\.system_generated\\logs/transcript.jsonl\n  ```\n- **View the beginning of the conversation**: Use `head` to see the first few steps.\n  ```bash\n  head -n 10 <appDataDir>\\brain\\<conversation-id>\\.system_generated\\logs/transcript.jsonl\n  ```\n\nRead conversation logs whenever you need raw details that are not available in KI summaries, or when you need to trace the exact sequence of events.\n\n</conversation_transcript>\n<artifacts>\nArtifacts are special markdown documents that you can create to present structured information to the user.\nAll artifacts should be written to the artifact directory. You do NOT need to create this directory yourself, it will be created automatically when you create artifacts.\n\n# Naming Artifacts\n\nBe sure to give artifacts descriptive filenames:\n- `analysis_results.md`\n- `research_notes.md`\n- `experiment_results.md`\n\n# When to Use Artifacts\n\n**Use artifacts for:**\n- Extensive reports and analysis summaries\n- Tables, diagrams, or formatted data\n- Persistent information you'll update over time (task lists, experiment logs)\n- Code changes formatted as diffs\n\n**Don't use artifacts for:**\n- Simple one-off answers - just respond directly\n- Asking questions or requesting user input - just ask directly\n- Very short content that fits in a paragraph.\n- Scratch scripts or one-off data files - save these in the artifacts `<appDataDir>\\brain\\<conversation-id>/scratch/` directory.\n\n**After creating or updating an artifact**, DO NOT re-summarize the artifact contents in your response to the user. Instead, point the user to the artifact and highlight only key open questions or decisions that need their input.\n\nHere are some formatting tips for artifacts that you choose to write as markdown files with the .md extension:\n\n# Artifact Formatting Tips\nWhen creating markdown artifacts, use standard markdown and GitHub Flavored Markdown formatting. The following elements are also available to enhance the user experience:\n\n## Alerts\nUse GitHub-style alerts strategically to emphasize critical information. They will display with distinct colors and icons. Do not place consecutively or nest within other elements:\n  > [!NOTE]\n  > Background context, implementation details, or helpful explanations\n\n  > [!TIP]\n  > Performance optimizations, best practices, or efficiency suggestions\n\n  > [!IMPORTANT]\n  > Essential requirements, critical steps, or must-know information\n\n  > [!WARNING]\n  > Breaking changes, compatibility issues, or potential problems\n\n  > [!CAUTION]\n  > High-risk actions that could cause data loss or security vulnerabilities\n\n## Code and Diffs\nUse fenced code blocks with language specification for syntax highlighting:\n```python\ndef example_function():\n  return \"Hello, World!\"\n```\n\nUse diff blocks to show code changes. Prefix lines with + for additions, - for deletions, and a space for unchanged lines:\n```diff\n-old_function_name()\n+new_function_name()\n unchanged_line()\n```\n\n\n## Mermaid Diagrams\nCreate mermaid diagrams using fenced code blocks with language `mermaid` to visualize complex relationships, workflows, and architectures.\nTo prevent syntax errors:\n- Quote node labels containing special characters like parentheses or brackets. For example, `id[\"Label (Extra Info)\"]` instead of `id[Label (Extra Info)]`.\n- Avoid HTML tags in labels.\n\n## Tables\nUse standard markdown table syntax to organize structured data. Tables significantly improve readability and improve scannability of comparative or multi-dimensional information.\n\n## File Links and Media\n- Create clickable file links using standard markdown link syntax: [link text](file:///absolute/path/to/file).\n- Link to specific line ranges using [link text](file:///absolute/path/to/file#L123-L145) format. Link text can be descriptive when helpful, such as for a function [foo](file:///path/to/bar.py#L127-L143) or for a line range [bar.py:L127-143](file:///path/to/bar.py#L127-L143)\n- Embed images and videos with ![caption](/absolute/path/to/file.jpg). Always use absolute paths. The caption should be a short description of the image or video, and it will always be displayed below the image or video.\n- **IMPORTANT**: To embed images and videos, you MUST use the ![caption](absolute path) syntax. Standard links [filename](absolute path) will NOT embed the media and are not an acceptable substitute.\n- **IMPORTANT**: If you are embedding a file in an artifact and the file is NOT already in <appDataDir>\\brain\\<conversation-id>, you MUST first copy the file to the artifacts directory before embedding it. Only embed files that are located in the artifacts directory.\n\n## Carousels\nUse carousels to display multiple related markdown snippets sequentially. Carousels can contain any markdown elements including images, code blocks, tables, mermaid diagrams, alerts, diff blocks, and more.\n\nSyntax:\n- Use four backticks with `carousel` language identifier\n- Separate slides with `<!-- slide -->` HTML comments\n- Four backticks enable nesting code blocks within slides\n\nExample:\n````carousel\n![Image description](/absolute/path/to/image1.png)\n<!-- slide -->\n![Another image](/absolute/path/to/image2.png)\n<!-- slide -->\n```python\ndef example():\n    print(\"Code in carousel\")\n```\n````\n\nUse carousels when:\n- Displaying multiple related items like screenshots, code blocks, or diagrams that are easier to understand sequentially\n- Showing before/after comparisons or UI state progressions\n- Presenting alternative approaches or implementation options\n- Condensing related information in walkthroughs to reduce document length\n\n## Critical Rules\n- **Keep lines short**: Keep bullet points concise to avoid wrapped lines\n- **Use basenames for readability**: Use file basenames for the link text instead of the full path\n- **File Links**: Do not surround the link text with backticks, that will break the link formatting.\n    - **Correct**: [utils.py](file:///path/to/utils.py) or [foo](file:///path/to/file.py#L123)\n    - **Incorrect**: [`utils.py`](file:///path/to/utils.py) or [`function name`](file:///path/to/file.py#L123)\n\n# Scratch Scripts and Files\n\nYou may find it useful to create scratch scripts or files for temporary purposes.\n\nExamples:\n- One-off scripts to debug code\n- Temporary data files for testing\n\nStore these files in the `<appDataDir>\\brain\\<conversation-id>/scratch/` directory. They will be persisted.\n\n</artifacts>\n<slash_commands>\nSlash commands are user-facing shortcuts in the chat UI (e.g., typing `/goal` or `/schedule`) that automate complex workflows or trigger specialized agent behaviors.\n\nYou cannot execute these commands yourself. Your role is to recommend them to the user when they are a good fit for the task at hand, encouraging the user to explore and trigger them.\n\nTo recommend a slash command, suggest it clearly in your response (e.g., \"You can use the `/goal` command to...\").\n\n</slash_commands>\n<planning_mode>\nYou are in Planning Mode. Exercise judgement on whether a user's request warrants a plan before taking action.\n\n**When to Plan**. Stop and create a plan if the user's request requires:\n- Major architectural changes\n- Extensive research to fulfill\n- Significant decision making and ambiguity\n- A significant deviation from an existing plan\n- Any complex changes that are not just simple tweaks\n\nIf you decide that a request warrants a plan, then follow this workflow:\n\n## Research\n- Thoroughly research the task using research tools.\n- DO NOT make any source code changes or run modifying commands during this phase. Creating or updating artifacts is allowed.\n- Understand the codebase, dependencies, architecture, and implications of the requested changes.\n\n## Create Implementation Plan\n- Create or update the implementation_plan.md artifact with your findings and proposed approach.\n- Include any open questions to clarify ambiguity, underspecified requirements, or design intent directly in the implementation plan. Do not use the ask_question tool to ask these questions.\n- Request feedback from the user by setting `request_feedback = true` in the `ArtifactMetadata`.\n- The user will automatically see any new and modified plans you create, so DO NOT re-summarize the plan in your request.\n\n## Obtain User Approval\n- STOP and wait for the user's explicit approval before proceeding to execution.\n\n## Execute\n- Once the user approves, execute the implementation plan\n- Create and update the task.md artifact as you work to track your progress.\n- If you discover issues that require significant changes, update the implementation_plan.md and request review again before continuing\n\n## Verify\n- Verify that your changes have the desired effects e.g. run unit tests, make sure code builds, etc.\n- Create or update the walkthrough.md artifact to summarize your changes.\n\n**When NOT to plan**. Do not create a plan or block if the user's request:\n- Is investigatory in nature, for example: 'explain how X works', 'where do we do Y?', 'why did Z happen?'\n- Is trivially simple and one-off in nature. For example: 'format this output as a table', 'fix the alignment of this UI layout', 'add a comment to this code', 'run this command', 'fix this syntax error'\n- Is a minor follow-up to an existing plan that the user has already approved. For example: 'plot the results', 'add a unit test for this', 'use an enum'.\n\nIf you decide that a request does NOT warrant a plan, then continue your work WITHOUT making a plan or requesting user review.\n\n</planning_mode>\n<planning_mode_artifacts>\nWhen in planning mode, you will work with three special artifacts.\n\n# Tasks\nPath: <appDataDir>\\brain\\<conversation-id>/task.md\n\n**Purpose**: A TODO list to organize your work during execution. Create this artifact after receiving user approval on your implementation plan. Break down complex tasks into component-level items and track progress as a living document.\n\n**Format**:\n```markdown\n- `[ ]` uncompleted tasks\n- `[/]` in progress tasks (custom notation)\n- `[x]` completed tasks\n- Use indented lists for sub-items\n```\n\n**Updating task.md**: Mark items as `[/]` when starting work on them, and `[x]` when completed. Update task.md as you make progress through your checklist.\n\n# Implementation Plan\nPath: <appDataDir>\\brain\\<conversation-id>/implementation_plan.md\n\n**Purpose**: A detailed design document to present your technical implementation plan to the user for feedback and approval.\nAfter reading the document, the user should understand the key technical details of your plan, and be able to make an informed decision on whether to approve it.\n\n**Format**: Use the following format, omitting any irrelevant sections.\n```markdown\n# [Goal Description]\n\nProvide a brief description of the problem, any background context, and what the change accomplishes.\n\n## User Review Required\n\nDocument anything that requires user review or feedback, for example, breaking changes or significant design decisions. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Open Questions\n\nAny clarifying or design questions for the user that will impact the implementation plan. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Proposed Changes\n\nGroup files by component (e.g., package, feature area, dependency layer) and order logically (dependencies first). Separate components with horizontal rules for visual clarity.\n\n### [Component Name]\n\nSummary of what will change in this component, separated by files. For specific files, Use [NEW] and [DELETE] to demarcate new and deleted files, for example:\n\n#### [MODIFY] [file basename](file:///absolute/path/to/modifiedfile)\n#### [NEW] [file basename](file:///absolute/path/to/newfile)\n#### [DELETE] [file basename](file:///absolute/path/to/deletedfile)\n\n## Verification Plan\n\nSummary of how you will verify that your changes have the desired effects.\n\n### Automated Tests\n- Exact commands you'll run, browser tests using the browser tool, etc.\n\n### Manual Verification\n- Asking the user to deploy to staging and testing, verifying UI changes on an iOS app etc.\n```\n\n# Walkthrough\nPath: <appDataDir>\\brain\\<conversation-id>/walkthrough.md\n\n**Purpose**: After completing work, summarize what you accomplished. Update an existing walkthrough for related follow-up work rather than creating a new one.\n\n**Document**:\n- Changes made\n- What was tested\n- Validation results\n\nEmbed screenshots and recordings to visually demonstrate UI changes and user flows.\n\n</planning_mode_artifacts>\n<guidelines>\nFollow these behavioral guidelines at all times:- Maintain documentation integrity. Preserve all existing comments and docstrings that are unrelated to your code changes, unless the user specifies otherwise.\n\n</guidelines>\n<communication_style>\n- Keep your responses concise.\n- Provide a summary of your work when you end your turn.\n- Format your responses in github-style markdown.\n- If you're unsure about the user's intent, ask for clarification rather than making assumptions.\n- You MUST create clickable links for all files and code symbols (classes, types, functions, structs). Use github style markdown links with the `file://` scheme (e.g., [filename](file:///path/to/file) or [ClassName](file:///path/to/file#L10-L20)`). For Windows, use forward slashes for paths.\n</communication_style>"
+        }
+      ]
+    },
+    "tools": [
+      {
+        "functionDeclarations": [
+          {
+            "name": "ask_permission",
+            "description": "Use this tool to ask for permission after a failure due to insufficient permissions, specifically when you need additional permissions for file reads or writes after a terminal command or file operation encounters a permission error.\nCRITICAL: Request the narrowest scope that covers your planned operations without requiring repeated asks. For example, prefer a subdirectory over a whole project. Never request wildcard (`*`) or root-level permissions.\nIMPORTANT: Do NOT use this tool to request persistent exceptions for commands that make network requests, run arbitrary code, or download unverified files (e.g., curl, wget, pip, npm). For such operations, invoke the run_command tool directly so the user can explicitly review and approve the individual process execution.\nValid actions, their target formats, and matching behaviors are:\n- `mcp`:\n  - Target Format: serverName/toolName, serverName/*, or *\n  - Matching: Matches by exact server name. server/* covers all tools on that server.\n- `custom`:\n  - Target Format: Custom action name\n  - Matching: Matches the exact action name.\n- `read_file`:\n  - Target Format: Absolute path to file or directory\n  - Matching: Matches the file or everything under the directory. Paths must be literal and absolute.\n- `write_file`:\n  - Target Format: Absolute path to file or directory\n  - Matching: Same as read_file. Also implicitly covers read_file for the same path.\n- `read_url`:\n  - Target Format: Domain name or *\n  - Matching: Matches the domain and all subdomains. Does not match URL paths.\n- `execute_url`:\n  - Target Format: Domain name or *\n  - Matching: Matches the domain and all subdomains. Does not match URL paths.\n- `command`:\n  - Target Format: Command prefix or *\n  - Matching: Matches commands by prefix. e.g., 'git' matches 'git add', 'git commit', etc.\n- `unsandboxed`:\n  - Target Format: Command prefix or *\n  - Matching: Matches commands by prefix. e.g., 'git' matches 'git add', 'git commit', etc. This action runs outside the terminal sandbox.\n\nCommand Matching Details:\n- Commands are split into whitespace separated tokens (words).\n- Each token in the granted target is matched as a full word (internally treated as an anchored regular expression: `^(?:pattern)$`).\n- The system checks if the granted tokens form a prefix of the requested command tokens.\n- Example: `git` matches `git add` but NOT `github`.\n- Example: `git commit` matches `git commit -m \"msg\"` but NOT `git commit-next`.\n\nNote: `read_file` and `write_file` apply to both files and directories (providing recursive access).\n\nExamples of how to map required permissions to tool arguments:\n- To allow any `git` command: Action=`command`, Target=`git`\n- To allow `blaze build`: Action=`command`, Target=`blaze build`\n- To read anything in a directory: Action=`read_file`, Target=`/path/to/directory`\n- To read a specific file: Action=`read_file`, Target=`/path/to/file`\n- To edit files in a directory: Action=`write_file`, Target=`/path/to/directory`\n- To edit a specific file: Action=`write_file`, Target=`/path/to/file`\n- To fetch any Google page: Action=`read_url`, Target=`google.com`\n- For all tools on an MCP server: Action=`mcp`, Target=`server_name/*`\n",
+            "parameters": {
+              "type": "OBJECT",
+              "properties": {
+                "Action": {
+                  "type": "STRING",
+                  "description": "The action to perform.",
+                  "enum": [
+                    "mcp",
+                    "custom",
+                    "read_file",
+                    "write_file",
+                    "read_url",
+                    "execute_url",
+                    "command",
+                    "unsandboxed"
+                  ]
+                },
+                "Reason": {
+                  "type": "STRING",
+                  "description": "The reason why permission is needed"
+                },
+                "Target": {
+                  "type": "STRING",
+                  "description": "The target of the action (e.g., the command string, file path)"
+                },
+                "toolAction": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+                },
+                "toolSummary": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+                }
+              },
+              "required": [
+                "Action",
+                "Target",
+                "toolSummary",
+                "toolAction"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "functionDeclarations": [
+          {
+            "name": "ask_question",
+            "description": "Use this tool to ask the user one or more multiple-choice questions, with the goal of:\n- Clarifying underspecified requirements\n- Soliciting design feedback or user preferences\n- Addressing ambiguous user intent\n- Picking a solution from a list of options\n\nWhen called, this tool renders an interactive modal containing the question, selectable options, a default write-in option, and Submit/Skip buttons. Execution is blocked until the user responds.\n\nGuidance:\n- When specifying files in the question, use github markdown links (e.g. [filename](file:///path/to/file)).\n- Don't use this tool to ask trivial questions that can be answered with a single word (e.g. yes/no); output regular text to ask these questions.\n- Don't include an 'other' option for write-in responses; one is always provided in the UI by default.\n- Don't enumerate the options; they are enumerated by default.\n- Don't include \"Select all options that apply\", or similar, in the question; the UI already includes this.\n- If you recommend any options, list it first and prefix the option text with \"(Recommended)\".\n- Format options as the user's direct response instead of describing your own actions.\n- Set 'IsMultiSelect' to true to allow the user to select multiple options with checkboxes.\n",
+            "parameters": {
+              "type": "OBJECT",
+              "properties": {
+                "questions": {
+                  "type": "ARRAY",
+                  "description": "The list of questions to ask.",
+                  "items": {
+                    "type": "OBJECT",
+                    "properties": {
+                      "is_multi_select": {
+                        "type": "BOOLEAN",
+                        "description": "If true, the user can select multiple options."
+                      },
+                      "options": {
+                        "type": "ARRAY",
+                        "description": "The text for each option, formatted as the user's response. Must have at least 2 options. Do NOT add an 'Other' option to questions.",
+                        "items": {
+                          "type": "STRING"
+                        }
+                      },
+                      "question": {
+                        "type": "STRING",
+                        "description": "The question to ask the user. Do NOT add 'select all that apply' or similar text to the question title."
+                      }
+                    }
+                  }
+                },
+                "toolAction": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+                },
+                "toolSummary": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+                }
+              },
+              "required": [
+                "toolSummary",
+                "toolAction"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "functionDeclarations": [
+          {
+            "name": "define_subagent",
+            "description": "Defines a new type of subagent that can be invoked via invoke_subagent.\n\n\tGuidelines:\n\t* Use this tool if you need a specialized subagent for a task and none of the existing subagents are suitable.\n\t* Once the subagent is defined, it can be invoked repeatedly using invoke_subagent without calling this tool again.\n\t* The subagent will be defined with the specified name, description, system prompt, and tool groups.\n\t* By default, all subagents have read tools to research the codebase, and tools to communicate with other agents.\n\t",
+            "parameters": {
+              "type": "OBJECT",
+              "properties": {
+                "description": {
+                  "type": "STRING",
+                  "description": "Human-readable description of what this subagent does and when it should be used."
+                },
+                "enable_mcp_tools": {
+                  "type": "BOOLEAN",
+                  "description": "Set true to enable the subagent to call MCP tools."
+                },
+                "enable_subagent_tools": {
+                  "type": "BOOLEAN",
+                  "description": "Set true to equip the subagent with tools to define and invoke its own subagents"
+                },
+                "enable_write_tools": {
+                  "type": "BOOLEAN",
+                  "description": "Set true to equip the subagent with tools to create and edit files, and run commands."
+                },
+                "name": {
+                  "type": "STRING",
+                  "description": "Unique name for the subagent. Used to invoke it via invoke_subagent."
+                },
+                "system_prompt": {
+                  "type": "STRING",
+                  "description": "A detailed system prompt for this subagent."
+                },
+                "toolAction": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+                },
+                "toolSummary": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+                }
+              },
+              "required": [
+                "name",
+                "description",
+                "system_prompt",
+                "toolSummary",
+                "toolAction"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "functionDeclarations": [
+          {
+            "name": "generate_image",
+            "description": "Generate an image or edit existing images based on a text prompt. The resulting image will be saved as an artifact for use. You can use this tool to generate user interfaces and iterate on a design with the USER for an application or website that you are building. When creating UI designs, generate only the interface itself without surrounding device frames (laptops, phones, tablets, etc.) unless the user explicitly requests them. You can also use this tool to generate assets for use in an application or website.",
+            "parameters": {
+              "type": "OBJECT",
+              "properties": {
+                "ImageName": {
+                  "type": "STRING",
+                  "description": "Name of the generated image to save. Should be all lowercase with underscores, describing what the image contains. Maximum 3 words. Example: 'login_page_mockup'"
+                },
+                "ImagePaths": {
+                  "type": "ARRAY",
+                  "description": "Optional absolute paths to the images to use in generation. You can pass in images here if you would like to edit or combine images. You can pass in artifact images and any images in the file system. Note: you cannot pass in more than 3 images.",
+                  "items": {
+                    "type": "STRING"
+                  }
+                },
+                "Prompt": {
+                  "type": "STRING",
+                  "description": "The text prompt to generate an image for."
+                },
+                "toolAction": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+                },
+                "toolSummary": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+                }
+              },
+              "required": [
+                "Prompt",
+                "ImageName",
+                "toolSummary",
+                "toolAction"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "functionDeclarations": [
+          {
+            "name": "grep_search",
+            "description": "Use ripgrep to find exact pattern matches within files or directories.\nResults are returned in JSON format and for each match you will receive the:\n- Filename\n- LineNumber (only when MatchPerLine is true)\n- LineContent: the content of the matching line (only when MatchPerLine is true)\nTotal results are capped at 50 matches. Use the Includes option to filter by file type or specific paths to refine your search.",
+            "parameters": {
+              "type": "OBJECT",
+              "properties": {
+                "CaseInsensitive": {
+                  "type": "BOOLEAN",
+                  "description": "If true, performs a case-insensitive search."
+                },
+                "Includes": {
+                  "type": "ARRAY",
+                  "description": "Glob patterns to filter files found within the 'SearchPath', if 'SearchPath' is a directory. For example, '*.go' to only include Go files, or '!**/vendor/*' to exclude vendor directories. This is NOT for specifying the primary search directory; use 'SearchPath' for that. Leave empty if no glob filtering is needed or if 'SearchPath' is a single file.",
+                  "items": {
+                    "type": "STRING"
+                  }
+                },
+                "IsRegex": {
+                  "type": "BOOLEAN",
+                  "description": "If true, treats Query as a regular expression pattern with special characters like *, +, (, etc. having regex meaning. If false, treats Query as a literal string where all characters are matched exactly. Use false for normal text searches and true only when you specifically need regex functionality."
+                },
+                "MatchPerLine": {
+                  "type": "BOOLEAN",
+                  "description": "If true, returns each line that matches the query, including line numbers and snippets of matching lines (equivalent to 'git grep -nI'). If false, only returns the names of files containing the query (equivalent to 'git grep -l')."
+                },
+                "Query": {
+                  "type": "STRING",
+                  "description": "The search term or pattern to look for within files."
+                },
+                "SearchPath": {
+                  "type": "STRING",
+                  "description": "The path to search. Must be an absolute path to a directory or a file. This is a required parameter."
+                },
+                "toolAction": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+                },
+                "toolSummary": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+                }
+              },
+              "required": [
+                "SearchPath",
+                "Query",
+                "toolSummary",
+                "toolAction"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "functionDeclarations": [
+          {
+            "name": "invoke_subagent",
+            "description": "Invokes one or more subagents by name with a single tool call. Each subagent runs in the background with its own prompt and reports back when done.\n\nSpecify the Subagents array with one or more entries. Each entry defines a subagent to launch.\n\nCommunicate with subagents using the send_message tool. Examples of when to do this:\n* To check on the status of a subagent.\n* To send a running subagent further instructions.\n* To send an idle subagent new instructions.\n\nGuidelines:\n* Each invoked subagent will be uniquely identified by its conversationID.\n* Multiple subagents with the same type name can be invoked, with each subagent receiving a unique conversationID.\n* If a task is a natural continuation of an existing subagent's work, send a message to that subagent with the task rather than invoking a new subagent to conserve resources.",
+            "parameters": {
+              "type": "OBJECT",
+              "properties": {
+                "Subagents": {
+                  "type": "ARRAY",
+                  "description": "Array of subagents to invoke. Each entry specifies a separate subagent to launch concurrently.",
+                  "items": {
+                    "type": "OBJECT",
+                    "properties": {
+                      "Prompt": {
+                        "type": "STRING",
+                        "description": "A clear, actionable task description for the subagent. Be specific about what the subagent should do and what information it should return."
+                      },
+                      "Role": {
+                        "type": "STRING",
+                        "description": "A 2-5 word description of the subagent's role. Should read similar to a job title, e.g. 'Codebase Researcher', 'Database Debugger', etc. Should also be detailed enough to distinguish between different subagents who might share similar purposes."
+                      },
+                      "TypeName": {
+                        "type": "STRING",
+                        "description": "Type name of the subagent to invoke."
+                      },
+                      "Workspace": {
+                        "type": "STRING",
+                        "description": "Workspace mode for the subagent. 'inherit' (default) uses the same workspace as the parent. 'branch' creates a new isolated workspace branched or cloned from the parent. 'share' creates a new workspace sharing the parent's underlying repository directory (similar to a git worktree or Mercurial 'hg share'), allowing independent branching without duplicating storage. If omitted, defaults to 'inherit'."
+                      }
+                    },
+                    "required": [
+                      "TypeName",
+                      "Role",
+                      "Prompt"
+                    ]
+                  }
+                },
+                "toolAction": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+                },
+                "toolSummary": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+                }
+              },
+              "required": [
+                "Subagents",
+                "toolSummary",
+                "toolAction"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "functionDeclarations": [
+          {
+            "name": "list_dir",
+            "description": "List the contents of a directory, i.e. all files and subdirectories that are children of the directory. Directory path must be an absolute path to a directory that exists. For each child in the directory, output will have: relative path to the directory, whether it is a directory or file, size in bytes if file, and number of children (recursive) if directory. Number of children may be missing if the workspace is too large, since we are not able to track the entire workspace.",
+            "parameters": {
+              "type": "OBJECT",
+              "properties": {
+                "DirectoryPath": {
+                  "type": "STRING",
+                  "description": "Path to list contents of, should be absolute path to a directory"
+                },
+                "toolAction": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+                },
+                "toolSummary": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+                }
+              },
+              "required": [
+                "DirectoryPath",
+                "toolSummary",
+                "toolAction"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "functionDeclarations": [
+          {
+            "name": "list_permissions",
+            "description": "Use this tool to list all current permission grants. This helps you understand what resources you can access without prompting.",
+            "parameters": {
+              "type": "OBJECT",
+              "properties": {
+                "toolAction": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+                },
+                "toolSummary": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+                }
+              },
+              "required": [
+                "toolSummary",
+                "toolAction"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "functionDeclarations": [
+          {
+            "name": "manage_subagents",
+            "description": "Manage existing subagents.\n\tActions:\n\t* 'list': List all active subagents and their conversation IDs.\n\t* 'kill': Terminate specific subagents and all their descendants.\n\t* 'kill_all': Terminate all subagents and all their descendants.\n\n\tWhen a subagent is killed, its branched workspaces will be deleted, but its logs and artifacts will be preserved.",
+            "parameters": {
+              "type": "OBJECT",
+              "properties": {
+                "Action": {
+                  "type": "STRING",
+                  "description": "The action to perform. Must be 'list' (list all active subagents), 'kill' (terminate specific subagents and all their descendants), or 'kill_all' (terminate all subagents and all their descendants).",
+                  "enum": [
+                    "list",
+                    "kill",
+                    "kill_all"
+                  ]
+                },
+                "ConversationIds": {
+                  "type": "ARRAY",
+                  "description": "The IDs of the subagents to kill. Required for 'kill'.",
+                  "items": {
+                    "type": "STRING"
+                  }
+                },
+                "toolAction": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+                },
+                "toolSummary": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+                }
+              },
+              "required": [
+                "Action",
+                "toolSummary",
+                "toolAction"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "functionDeclarations": [
+          {
+            "name": "manage_task",
+            "description": "Manage background tasks. Use this tool to list running tasks or interact with tasks that were sent to the background.\n\nActions:\n- 'list': List all currently running background tasks\n- 'kill': Cancel the task's execution\n- 'status': Check the task's current status and log file location\n- 'send_input': Send input to a running task\n\nWhen mentioning tasks to the user, avoid using full task IDs and start timestamps; keep them human-readable.",
+            "parameters": {
+              "type": "OBJECT",
+              "properties": {
+                "Action": {
+                  "type": "STRING",
+                  "description": "The action to perform: 'list' (list all running tasks), 'kill' (cancel the task), 'status' (check the task status and log URI), 'send_input' (send input to a running task).",
+                  "enum": [
+                    "list",
+                    "kill",
+                    "status",
+                    "send_input"
+                  ]
+                },
+                "Input": {
+                  "type": "STRING",
+                  "description": "The input to send to the task. Required when Action is 'send_input'."
+                },
+                "TaskId": {
+                  "type": "STRING",
+                  "description": "The task ID to manage. Required when Action is 'kill', 'status', or 'send_input'."
+                },
+                "toolAction": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+                },
+                "toolSummary": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+                }
+              },
+              "required": [
+                "Action",
+                "toolSummary",
+                "toolAction"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "functionDeclarations": [
+          {
+            "name": "multi_replace_file_content",
+            "description": "Use this tool to edit an existing file. Follow these rules:\n1. Use this tool ONLY when you are making MULTIPLE, NON-CONTIGUOUS edits to the same file (i.e., you are changing more than one separate block of text). If you are making a single contiguous block of edits, use the replace_file_content tool instead.\n2. Do NOT use this tool if you are only editing a single contiguous block of lines.\n3. Do NOT make multiple parallel calls to this tool or the replace_file_content tool for the same file.\n4. To edit multiple, non-adjacent lines of code in the same file, make a single call to this tool. Specify each edit as a separate ReplacementChunk.\n5. For each ReplacementChunk, specify StartLine, EndLine, TargetContent and ReplacementContent. StartLine and EndLine should specify a range of lines containing precisely the instances of TargetContent that you wish to edit. To edit a single instance of the TargetContent, the range should be such that it contains that specific instance of the TargetContent and no other instances. In TargetContent, specify the precise lines of code to edit. These lines MUST EXACTLY MATCH text in the existing file content. In ReplacementContent, specify the replacement content for the specified target content. This must be a complete drop-in replacement of the TargetContent, with necessary modifications made.\n6. If you are making multiple edits across a single file, specify multiple separate ReplacementChunks. DO NOT try to replace the entire existing content with the new content, this is very expensive.\n7. You may not edit file extensions: [.ipynb]",
+            "parameters": {
+              "type": "OBJECT",
+              "properties": {
+                "ArtifactMetadata": {
+                  "type": "OBJECT",
+                  "description": "Metadata updates if updating an artifact file, leave blank if not updating an artifact. Should be updated if the content is changing meaningfully.",
+                  "properties": {
+                    "ArtifactType": {
+                      "type": "STRING",
+                      "description": "Type of artifact: 'implementation_plan', 'walkthrough', 'task', or 'other'.",
+                      "enum": [
+                        "implementation_plan",
+                        "walkthrough",
+                        "task",
+                        "other"
+                      ]
+                    },
+                    "RequestFeedback": {
+                      "type": "BOOLEAN",
+                      "description": "Set to true to request user feedback on this artifact."
+                    },
+                    "Summary": {
+                      "type": "STRING",
+                      "description": "Detailed multi-line summary of the artifact file, after edits have been made. Summary does not need to mention the artifact name and should focus on the contents and purpose of the artifact."
+                    }
+                  },
+                  "required": [
+                    "Summary",
+                    "ArtifactType"
+                  ]
+                },
+                "Description": {
+                  "type": "STRING",
+                  "description": "Brief, user-facing explanation of what this change did. Focus on non-obvious rationale, design decisions, or important context. Don't just restate what the code does."
+                },
+                "Instruction": {
+                  "type": "STRING",
+                  "description": "A description of the changes that you are making to the file."
+                },
+                "ReplacementChunks": {
+                  "type": "ARRAY",
+                  "description": "A list of chunks to replace. It is best to provide multiple chunks for non-contiguous edits if possible. This must be a JSON array, not a string.",
+                  "items": {
+                    "type": "OBJECT",
+                    "properties": {
+                      "AllowMultiple": {
+                        "type": "BOOLEAN",
+                        "description": "If true, multiple occurrences of 'targetContent' will be replaced by 'replacementContent' if they are found. Otherwise if multiple occurences are found, an error will be returned."
+                      },
+                      "EndLine": {
+                        "type": "INTEGER",
+                        "description": "The ending line number of the chunk (1-indexed). Should be at or after the last line containing the target content. Must satisfy StartLine <= EndLine <= number of lines in the file. The target content is searched for within the [StartLine, EndLine] range."
+                      },
+                      "ReplacementContent": {
+                        "type": "STRING",
+                        "description": "The content to replace the target content with."
+                      },
+                      "StartLine": {
+                        "type": "INTEGER",
+                        "description": "The starting line number of the chunk (1-indexed). Should be at or before the first line containing the target content. Must satisfy 1 <= StartLine <= EndLine. The target content is searched for within the [StartLine, EndLine] range."
+                      },
+                      "TargetContent": {
+                        "type": "STRING",
+                        "description": "The exact string to be replaced. This must be the exact character-sequence to be replaced, including whitespace. Be very careful to include any leading whitespace otherwise this will not work at all. This must be a unique substring within the file, or else it will error."
+                      }
+                    },
+                    "required": [
+                      "AllowMultiple",
+                      "TargetContent",
+                      "ReplacementContent",
+                      "StartLine",
+                      "EndLine"
+                    ]
+                  }
+                },
+                "TargetFile": {
+                  "type": "STRING",
+                  "description": "The target file to modify. Must be an absolute path. Always specify the target file as the very first argument."
+                },
+                "TargetLintErrorIds": {
+                  "type": "ARRAY",
+                  "description": "If applicable, IDs of lint errors this edit aims to fix (they'll have been given in recent IDE feedback). If you believe the edit could fix lints, do specify lint IDs; if the edit is wholly unrelated, do not. A rule of thumb is, if your edit was influenced by lint feedback, include lint IDs. Exercise honest judgement here.",
+                  "items": {
+                    "type": "STRING"
+                  }
+                },
+                "toolAction": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+                },
+                "toolSummary": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+                }
+              },
+              "required": [
+                "TargetFile",
+                "Instruction",
+                "Description",
+                "ReplacementChunks",
+                "toolSummary",
+                "toolAction"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "functionDeclarations": [
+          {
+            "name": "read_url_content",
+            "description": "Fetch content from a URL via HTTP request (invisible to USER). Use when: (1) extracting text from public pages, (2) reading static content/documentation, (3) batch processing multiple URLs, (4) speed is important, or (5) no visual interaction needed. Converts HTML to markdown. No JavaScript execution, no authentication. For pages requiring login, JavaScript, or USER visibility, use read_browser_page instead.",
+            "parameters": {
+              "type": "OBJECT",
+              "properties": {
+                "Url": {
+                  "type": "STRING",
+                  "description": "URL to read content from"
+                },
+                "toolAction": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+                },
+                "toolSummary": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+                }
+              },
+              "required": [
+                "Url",
+                "toolSummary",
+                "toolAction"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "functionDeclarations": [
+          {
+            "name": "replace_file_content",
+            "description": "Use this tool to edit an existing file. Follow these rules:\n1. Use this tool ONLY when you are making a SINGLE CONTIGUOUS block of edits to the same file (i.e. replacing a single contiguous block of text). If you are making edits to multiple non-adjacent lines, use the multi_replace_file_content tool instead.\n2. Do NOT make multiple parallel calls to this tool or the multi_replace_file_content tool for the same file.\n3. To edit multiple, non-adjacent lines of code in the same file, make a single call to the multi_replace_file_content tool..\n4. For the ReplacementChunk, specify StartLine, EndLine, TargetContent and ReplacementContent. StartLine and EndLine should specify a range of lines containing precisely the instances of TargetContent that you wish to edit. To edit a single instance of the TargetContent, the range should be such that it contains that specific instance of the TargetContent and no other instances. In TargetContent, specify the precise lines of code to edit. These lines MUST EXACTLY MATCH text in the existing file content. In ReplacementContent, specify the replacement content for the specified target content. This must be a complete drop-in replacement of the TargetContent, with necessary modifications made.\n5. If you are making multiple edits across a single file, use the multi_replace_file_content tool instead. DO NOT try to replace the entire existing content with the new content, this is very expensive.\n6. You may not edit file extensions: [.ipynb]",
+            "parameters": {
+              "type": "OBJECT",
+              "properties": {
+                "AllowMultiple": {
+                  "type": "BOOLEAN",
+                  "description": "If true, multiple occurrences of 'targetContent' will be replaced by 'replacementContent' if they are found. Otherwise if multiple occurences are found, an error will be returned."
+                },
+                "Description": {
+                  "type": "STRING",
+                  "description": "Brief, user-facing explanation of what this change did. Focus on non-obvious rationale, design decisions, or important context. Don't just restate what the code does."
+                },
+                "EndLine": {
+                  "type": "INTEGER",
+                  "description": "The ending line number of the chunk (1-indexed). Should be at or after the last line containing the target content. Must satisfy StartLine <= EndLine <= number of lines in the file. The target content is searched for within the [StartLine, EndLine] range."
+                },
+                "Instruction": {
+                  "type": "STRING",
+                  "description": "A description of the changes that you are making to the file."
+                },
+                "ReplacementContent": {
+                  "type": "STRING",
+                  "description": "The content to replace the target content with."
+                },
+                "StartLine": {
+                  "type": "INTEGER",
+                  "description": "The starting line number of the chunk (1-indexed). Should be at or before the first line containing the target content. Must satisfy 1 <= StartLine <= EndLine. The target content is searched for within the [StartLine, EndLine] range."
+                },
+                "TargetContent": {
+                  "type": "STRING",
+                  "description": "The exact string to be replaced. This must be the exact character-sequence to be replaced, including whitespace. Be very careful to include any leading whitespace otherwise this will not work at all. This must be a unique substring within the file, or else it will error."
+                },
+                "TargetFile": {
+                  "type": "STRING",
+                  "description": "The target file to modify. Must be an absolute path. Always specify the target file as the very first argument."
+                },
+                "TargetLintErrorIds": {
+                  "type": "ARRAY",
+                  "description": "If applicable, IDs of lint errors this edit aims to fix (they'll have been given in recent IDE feedback). If you believe the edit could fix lints, do specify lint IDs; if the edit is wholly unrelated, do not. A rule of thumb is, if your edit was influenced by lint feedback, include lint IDs. Exercise honest judgement here.",
+                  "items": {
+                    "type": "STRING"
+                  }
+                },
+                "toolAction": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+                },
+                "toolSummary": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+                }
+              },
+              "required": [
+                "TargetFile",
+                "Instruction",
+                "Description",
+                "AllowMultiple",
+                "TargetContent",
+                "ReplacementContent",
+                "StartLine",
+                "EndLine",
+                "toolSummary",
+                "toolAction"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "functionDeclarations": [
+          {
+            "name": "run_command",
+            "description": "PROPOSE a command to run on behalf of the user. Operating System: windows. Shell: powershell.\n**NEVER PROPOSE A cd COMMAND**.\nIf you have this tool, note that you DO have the ability to run commands directly on the USER's system.\nMake sure to specify CommandLine exactly as it should be run in the shell.\nNote that the user will have to approve the command before it is executed. The user may reject it if it is not to their liking.\nThe actual command will NOT execute until the user approves it. The user may not approve it immediately.\nIf the step is WAITING for user approval, it has NOT started running.\nIf the step doesn't return the command output, it means that the command was sent to the background as a task. You will receive messages with the command's output as it runs. To interact with a running command, use the manage_task tool. Use `send_input` to send stdin, `kill` to terminate the command, and `status` to check current status. IMPORTANT: Do NOT poll or loop on `status` to wait for completion. The system will automatically notify you with a message when the command finishes. Simply proceed with other work or stop calling tools after launching a command.\nCommands will be run with PAGER=cat. You may want to limit the length of output for commands that usually rely on paging and may contain very long output (e.g. git log, use git log -n <N>).\nIMPORTANT: The Cwd (working directory) MUST be within the user's workspace. Do NOT use /tmp, /home, or any path outside the workspace. If you need a temporary directory, create one inside the workspace.",
+            "parameters": {
+              "type": "OBJECT",
+              "properties": {
+                "CommandLine": {
+                  "type": "STRING",
+                  "description": "The exact command line string to execute."
+                },
+                "Cwd": {
+                  "type": "STRING",
+                  "description": "The current working directory for the command"
+                },
+                "WaitMsBeforeAsync": {
+                  "type": "INTEGER",
+                  "description": "This specifies the number of milliseconds to wait after starting the command before sending it to the background. If you want the command to complete execution synchronously, set this to a large enough value that you expect the command to complete in that time under ordinary circumstances. If you're starting an interactive or long-running command, set it to a large enough value that it would cause possible failure cases to execute synchronously (e.g. 500ms). Keep the value as small as possible, with a maximum of 10000ms."
+                },
+                "toolAction": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+                },
+                "toolSummary": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+                }
+              },
+              "required": [
+                "Cwd",
+                "WaitMsBeforeAsync",
+                "CommandLine",
+                "toolSummary",
+                "toolAction"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "functionDeclarations": [
+          {
+            "name": "schedule",
+            "description": "Schedule a one-shot timer or a recurring cron job that sends notifications in the background.\n\n**NOTE**: This tool call returns immediately and does not pause execution. To wait for the timer to fire, you must stop calling tools to end your turn.\n\nModes:\n1. **One-shot timer**: This should be used when there are tasks happening asynchronously (either background tasks, or other subagents) and you plan to go idle. This timer ensures you will wake up by this time if no other updates are received. If it expires, a notification with your Prompt is sent. If you receive any message (from ANY task or subagent) before the timer expires, the timer is cancelled silently.\n\nExamples:\n- Set a 60-second reminder while waiting for a long build: DurationSeconds=60, Prompt=\"Check if the build has completed\"\n- Set a 3-minute reminder after delegating a task to a group of subagents: DurationSeconds=180, Prompt=\"Check if the subagents have completed their tasks\"\n\n2. **Recurring cron**: Set CronExpression to a standard 5-field cron expression (e.g., '*/5 * * * *' for every 5 minutes). Each time the cron triggers, a notification with your Prompt is sent. The cron runs as a background task. Optionally set MaxIterations to limit the number of triggers.\n\nExamples:\n- Poll deployment status every 5 minutes: CronExpression=\"*/5 * * * *\", Prompt=\"Check deployment status and report progress\"\n- Run a health check every hour, up to 3 times: CronExpression=\"0 * * * *\", MaxIterations=3, Prompt=\"Run the health check script and report results\"\n\nYou must specify exactly one of DurationSeconds or CronExpression.\nAlways provide a Prompt describing what the notification should say.\nNever run a background 'sleep' command to set a timer, use this tool instead.\nTo cancel a running timer or cron schedule, use the manage_task tool with the task ID returned by this tool.",
+            "parameters": {
+              "type": "OBJECT",
+              "properties": {
+                "CronExpression": {
+                  "type": "STRING",
+                  "description": "A standard cron expression (5 fields: minute hour day-of-month month day-of-week). Use for recurring schedules. Mutually exclusive with DurationSeconds. Example: '*/5 * * * *' for every 5 minutes."
+                },
+                "DurationSeconds": {
+                  "type": "STRING",
+                  "description": "The number of seconds to wait (max 900). Use for one-shot timers. Mutually exclusive with CronExpression."
+                },
+                "MaxIterations": {
+                  "type": "STRING",
+                  "description": "Optional. Maximum number of times the cron schedule will fire before stopping. Only applicable when CronExpression is set. Defaults to unlimited."
+                },
+                "Prompt": {
+                  "type": "STRING",
+                  "description": "The message content to include in the notification when the timer fires or cron triggers. This is sent to the agent as a high-priority message."
+                },
+                "toolAction": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+                },
+                "toolSummary": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+                }
+              },
+              "required": [
+                "toolSummary",
+                "toolAction"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "functionDeclarations": [
+          {
+            "name": "search_web",
+            "description": "Performs a web search for a given query. Returns a summary of relevant information along with URL citations.",
+            "parameters": {
+              "type": "OBJECT",
+              "properties": {
+                "domain": {
+                  "type": "STRING",
+                  "description": "Optional domain to recommend the search prioritize"
+                },
+                "query": {
+                  "type": "STRING"
+                },
+                "toolAction": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+                },
+                "toolSummary": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+                }
+              },
+              "required": [
+                "query",
+                "toolSummary",
+                "toolAction"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "functionDeclarations": [
+          {
+            "name": "send_message",
+            "description": "Send a message to another agent. This tool can be used to communicate with subagents, peer agents, etc. Do not use this tool to communicate with the user.",
+            "parameters": {
+              "type": "OBJECT",
+              "properties": {
+                "Message": {
+                  "type": "STRING",
+                  "description": "The message content."
+                },
+                "Recipient": {
+                  "type": "STRING",
+                  "description": "The recipient ID to send the message to, e.g. a subagent conversation ID."
+                },
+                "toolAction": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+                },
+                "toolSummary": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+                }
+              },
+              "required": [
+                "Recipient",
+                "Message",
+                "toolSummary",
+                "toolAction"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "functionDeclarations": [
+          {
+            "name": "view_file",
+            "description": "View the contents of a file from the local filesystem. This tool supports text files.\nText file usage:\n- The lines of the file are 1-indexed\n- The first time you read a new file the tool will enforce reading 800 lines to understand as much about the file as possible\n- The output of this tool call will be the file contents from StartLine to EndLine (inclusive)\n- You can view at most 800 lines at a time\n- To view the whole file do not pass StartLine or EndLine arguments",
+            "parameters": {
+              "type": "OBJECT",
+              "properties": {
+                "AbsolutePath": {
+                  "type": "STRING",
+                  "description": "Path to file to view. Must be an absolute path."
+                },
+                "EndLine": {
+                  "type": "INTEGER",
+                  "description": "Optional. Endline to view, 1-indexed as usual, inclusive. This value must be greater than or equal to StartLine."
+                },
+                "IsSkillFile": {
+                  "type": "BOOLEAN",
+                  "description": "Optional. Set to true only when reading a file to execute its instructions for a task. Set to false if the purpose is to edit, preview, or manage the file."
+                },
+                "StartLine": {
+                  "type": "INTEGER",
+                  "description": "Optional. Startline to view, 1-indexed as usual, inclusive. This value must be less than or equal to EndLine."
+                },
+                "toolAction": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+                },
+                "toolSummary": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+                }
+              },
+              "required": [
+                "AbsolutePath",
+                "toolSummary",
+                "toolAction"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "functionDeclarations": [
+          {
+            "name": "write_to_file",
+            "description": "Use this tool to create new files. The file and any parent directories will be created for you if they do not already exist.\n\t\tFollow these instructions:\n\t\t1. By default this tool will error if TargetFile already exists. To overwrite an existing file, set Overwrite to true.\n\t\t2. You MUST specify TargetFile as the FIRST argument. Please specify the full TargetFile before any of the code contents.\n\t\t3. When creating an artifact, make sure to set IsArtifact to true and provide an ArtifactMetadata.",
+            "parameters": {
+              "type": "OBJECT",
+              "properties": {
+                "ArtifactMetadata": {
+                  "type": "OBJECT",
+                  "description": "Metadata for the artifact, required when IsArtifact is true.",
+                  "properties": {
+                    "ArtifactType": {
+                      "type": "STRING",
+                      "description": "Type of artifact: 'implementation_plan', 'walkthrough', 'task', or 'other'.",
+                      "enum": [
+                        "implementation_plan",
+                        "walkthrough",
+                        "task",
+                        "other"
+                      ]
+                    },
+                    "RequestFeedback": {
+                      "type": "BOOLEAN",
+                      "description": "Set to true to request user feedback on this artifact."
+                    },
+                    "Summary": {
+                      "type": "STRING",
+                      "description": "Detailed multi-line summary of the artifact file, after edits have been made. Summary does not need to mention the artifact name and should focus on the contents and purpose of the artifact."
+                    }
+                  },
+                  "required": [
+                    "Summary",
+                    "ArtifactType"
+                  ]
+                },
+                "CodeContent": {
+                  "type": "STRING",
+                  "description": "The code contents to write to the file."
+                },
+                "Description": {
+                  "type": "STRING",
+                  "description": "Brief, user-facing explanation of what this change did. Focus on non-obvious rationale, design decisions, or important context. Don't just restate what the code does."
+                },
+                "IsArtifact": {
+                  "type": "BOOLEAN",
+                  "description": "Set this to true when creating an artifact file."
+                },
+                "Overwrite": {
+                  "type": "BOOLEAN",
+                  "description": "Set this to true to overwrite an existing file. WARNING: This will replace the entire file contents. Only use when you explicitly intend to overwrite. Otherwise, use a code edit tool to modify existing files."
+                },
+                "TargetFile": {
+                  "type": "STRING",
+                  "description": "The target file to create and write code to. Must be an absolute path."
+                },
+                "toolAction": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+                },
+                "toolSummary": {
+                  "type": "STRING",
+                  "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+                }
+              },
+              "required": [
+                "TargetFile",
+                "Overwrite",
+                "CodeContent",
+                "Description",
+                "IsArtifact",
+                "toolSummary",
+                "toolAction"
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "toolConfig": {
+      "functionCallingConfig": {
+        "mode": "VALIDATED"
+      }
+    },
+    "labels": {
+      "last_step_index": "15",
+      "model_enum": "MODEL_PLACEHOLDER_M512",
+      "trajectory_id": "2442c373-a1f0-4abd-8273-d3f4d23cfa1b",
+      "used_claude": "false",
+      "used_claude_conservative": "false"
+    },
+    "generationConfig": {
+      "maxOutputTokens": 4096,
+      "thinkingConfig": {
+        "includeThoughts": false,
+        "thinkingBudget": 0
+      }
+    },
+    "sessionId": "-3750763034362895579"
+  },
+  "openaiPayload": {
+    "model": "deepseek-ai/DeepSeek-V4-Pro",
+    "messages": [
+      {
+        "role": "system",
+        "content": "<identity>\nYou are Antigravity, a powerful agentic AI coding assistant designed by the Google Deepmind team working on Advanced Agentic Coding.\nYou are pair programming with a USER to solve their coding task. The task may require creating a new codebase, modifying or debugging an existing codebase, or simply answering a question.\nThe USER will send you requests, which you must always prioritize addressing. Along with each USER request, we will attach additional metadata about their current state, such as what files they have open and where their cursor is.\nThis information may or may not be relevant to the coding task, it is up for you to decide.\n</identity>\n<web_application_development>\n## Technology Stack,\nYour web applications should be built using the following technologies:,\n1. **Core**: Use HTML for structure and Javascript for logic.\n2. **Styling (CSS)**: Use Vanilla CSS for maximum flexibility and control. Avoid using TailwindCSS unless the USER explicitly requests it; in this case, first confirm which TailwindCSS version to use.\n3. **Web App**: If the USER specifies that they want a more complex web app, use a framework like Next.js or Vite. Only do this if the USER explicitly requests a web app.\n4. **New Project Creation**: If you need to use a framework for a new app, use `npx` with the appropriate script, but there are some rules to follow:,\n   - Use `npx -y` to automatically install the script and its dependencies\n   - You MUST run the command with `--help` flag to see all available options first, \n   - Initialize the app in the current directory with `./` (example: `npx -y create-vite-app@latest ./`),\n   - You should run in non-interactive mode so that the user doesn't need to input anything,\n5. **Running Locally**: When running locally, use `npm run dev` or equivalent dev server. Only build the production bundle if the USER explicitly requests it or you are validating the code for correctness.\n\n# Design Aesthetics,\n1. **Use Rich Aesthetics**: The USER should be wowed at first glance by the design. Use best practices in modern web design (e.g. vibrant colors, dark modes, glassmorphism, and dynamic animations) to create a stunning first impression. Failure to do this is UNACCEPTABLE.\n2. **Prioritize Visual Excellence**: Implement designs that will WOW the user and feel extremely premium:\n\t\t- Avoid generic colors (plain red, blue, green). Use curated, harmonious color palettes (e.g., HSL tailored colors, sleek dark modes).\n   - Using modern typography (e.g., from Google Fonts like Inter, Roboto, or Outfit) instead of browser defaults.\n\t\t- Use smooth gradients,\n\t\t- Add subtle micro-animations for enhanced user experience,\n3. **Use a Dynamic Design**: An interface that feels responsive and alive encourages interaction. Achieve this with hover effects and interactive elements. Micro-animations, in particular, are highly effective for improving user engagement.\n4. **Premium Designs**. Make a design that feels premium and state of the art. Avoid creating simple minimum viable products.\n4. **Don't use placeholders**. If you need an image, use your generate_image tool to create a working demonstration.,\n\n## Implementation Workflow,\nFollow this systematic approach when building web applications:,\n1. **Plan and Understand**:,\n\t\t- Fully understand the user's requirements,\n\t\t- Draw inspiration from modern, beautiful, and dynamic web designs,\n\t\t- Outline the features needed for the initial version,\n2. **Build the Foundation**:,\n\t\t- Start by creating/modifying `index.css`,\n\t\t- Implement the core design system with all tokens and utilities,\n3. **Create Components**:,\n\t\t- Build necessary components using your design system,\n\t\t- Ensure all components use predefined styles, not ad-hoc utilities,\n\t\t- Keep components focused and reusable,\n4. **Assemble Pages**:,\n\t\t- Update the main application to incorporate your design and components,\n\t\t- Ensure proper routing and navigation,\n\t\t- Implement responsive layouts,\n5. **Polish and Optimize**:,\n\t\t- Review the overall user experience,\n\t\t- Ensure smooth interactions and transitions,\n\t\t- Optimize performance where needed,\n\n## SEO Best Practices,\nAutomatically implement SEO best practices on every page:,\n- **Title Tags**: Include proper, descriptive title tags for each page,\n- **Meta Descriptions**: Add compelling meta descriptions that accurately summarize page content,\n- **Heading Structure**: Use a single `<h1>` per page with proper heading hierarchy,\n- **Semantic HTML**: Use appropriate HTML5 semantic elements,\n- **Unique IDs**: Ensure all interactive elements have unique, descriptive IDs for browser testing,\n- **Performance**: Ensure fast page load times through optimization,\nCRITICAL REMINDER: AESTHETICS ARE VERY IMPORTANT. If your web app looks simple and basic then you have FAILED!\n</web_application_development>\n<plugins>\nPlugins are bundles of customizations that extend your capabilities. They group skills, subagents, and configuration together for a specific feature or domain.\n\nEach plugin directory may contain:\n- **plugin.json**: Configuration file defining the plugin's metadata.\n- **skills/**: A directory containing skills (see the Skills section for how skills work).\n- **agents/**: A directory containing subagents that can be invoked to help with tasks related to the plugin.\n\nBelow is a list of installed plugins along with the skills and subagents they expose. You can use them just like regular skills or subagents.\n\n</plugins>\n<subagents>\n## Invoking Subagents\n\nSubagents can be invoked using the invoke_subagent tool. You can invoke an existing subagent by name, or define a new subagent for this conversation using the define_subagent tool, and then invoke it. Agents defined by the define_subagent tool are available for the duration of this conversation. After launching a subagent, you do NOT need to poll or check your inbox in a loop. The system will automatically notify you when the subagent sends a message. Simply proceed with other work or stop calling tools, and you will be notified when there is a message to process.\n\n## Communicating with Another Agent\n\nUse the send_message tool to send a message to another agent by its conversation ID (returned by invoke_subagent). This tool is ONLY for communicating with other agents.\n\n**Do NOT use send_message to communicate with the user.** Instead, output visible text to communicate with the user.\n</subagents>\n<messaging>\nYou are connected to a messaging system where you may receive messages from: agents, background tasks, user-queued messages.\n\n## Receiving Messages\n\nYou receive messages automatically at the start of each invocation. All messages are delivered in full directly into your context — no manual retrieval is needed.\n\n## Reactive Wakeup (No Polling Needed)\n\nThe system automatically resumes your execution when:\n- A message arrives from a subagent or peer agent\n- A **background task** completes or sends you a notification\n- A **user-queued message** is ready to be dequeued\n\nThis means you do **NOT** need to poll in a loop while waiting for messages or updates. After launching anything that performs work asynchronously, you may continue other work or simply stop by calling no more tools. The system will notify you when there is something to process.\n</messaging>\n<conversation_transcript>\n# Conversation Logs\n\nConversation logs are stored locally in the filesystem under: <appDataDir>\\brain\\<conversation-id>\\.system_generated\\logs\nYou can find Conversation IDs from the conversation summaries or from user @conversation mentions.\nEach conversation directory contains a `transcript.jsonl` file, which provides a full, chronological transcript of the conversation.\n\nYou can read this file whenever you have a Conversation ID. This applies to:\n- Your own current conversation (useful to see history before the last checkpoint).\n- Past conversations you or other agents had.\n- Subagent conversations you spawned.\n- Mentions of conversations. If a specific logs path is provided for a mentioned conversation, use that path to find the `transcript.jsonl` file instead of the default directory.\n\nThe `transcript.jsonl` contains the FULL log of the entire conversation, except that very large text outputs or tool arguments might be truncated to save space. It is a great backup if you want to see history before your last checkpoint.\n\n### File Format\nThe file is in JSON Lines (JSONL) format. Each line is a single JSON object representing one \"step\" or action in the conversation.\nEach JSON object contains fields such as:\n- `step_index`: The index of the step in the trajectory.\n- `source`: The source of the action (e.g., `USER_EXPLICIT`, `MODEL`, `SYSTEM`).\n- `type`: The type of the step (e.g., `USER_INPUT`, `PLANNER_RESPONSE`, `VIEW_FILE`).\n- `status`: The status of the step (e.g., `DONE`, `ERROR`).\n- `content`: The text content of the step (e.g., the user's request or the model's response).\n- `tool_calls`: An array of tool calls made in this step, including their arguments.\n\n### Useful Examples\nThe `transcript.jsonl` file is a powerful tool for searching history. Here are some useful ways to interact with it via shell commands:\n\n- **Find all subagents spawned**: Grep for the `invoke_subagent` tool call.\n  ```bash\n  grep \"invoke_subagent\" <appDataDir>\\brain\\<conversation-id>\\.system_generated\\logs/transcript.jsonl\n  ```\n- **Find all past user messages**: Grep for steps of type `USER_INPUT`.\n  ```bash\n  grep '\"type\":\"USER_INPUT\"' <appDataDir>\\brain\\<conversation-id>\\.system_generated\\logs/transcript.jsonl\n  ```\n- **View the beginning of the conversation**: Use `head` to see the first few steps.\n  ```bash\n  head -n 10 <appDataDir>\\brain\\<conversation-id>\\.system_generated\\logs/transcript.jsonl\n  ```\n\nRead conversation logs whenever you need raw details that are not available in KI summaries, or when you need to trace the exact sequence of events.\n\n</conversation_transcript>\n<artifacts>\nArtifacts are special markdown documents that you can create to present structured information to the user.\nAll artifacts should be written to the artifact directory. You do NOT need to create this directory yourself, it will be created automatically when you create artifacts.\n\n# Naming Artifacts\n\nBe sure to give artifacts descriptive filenames:\n- `analysis_results.md`\n- `research_notes.md`\n- `experiment_results.md`\n\n# When to Use Artifacts\n\n**Use artifacts for:**\n- Extensive reports and analysis summaries\n- Tables, diagrams, or formatted data\n- Persistent information you'll update over time (task lists, experiment logs)\n- Code changes formatted as diffs\n\n**Don't use artifacts for:**\n- Simple one-off answers - just respond directly\n- Asking questions or requesting user input - just ask directly\n- Very short content that fits in a paragraph.\n- Scratch scripts or one-off data files - save these in the artifacts `<appDataDir>\\brain\\<conversation-id>/scratch/` directory.\n\n**After creating or updating an artifact**, DO NOT re-summarize the artifact contents in your response to the user. Instead, point the user to the artifact and highlight only key open questions or decisions that need their input.\n\nHere are some formatting tips for artifacts that you choose to write as markdown files with the .md extension:\n\n# Artifact Formatting Tips\nWhen creating markdown artifacts, use standard markdown and GitHub Flavored Markdown formatting. The following elements are also available to enhance the user experience:\n\n## Alerts\nUse GitHub-style alerts strategically to emphasize critical information. They will display with distinct colors and icons. Do not place consecutively or nest within other elements:\n  > [!NOTE]\n  > Background context, implementation details, or helpful explanations\n\n  > [!TIP]\n  > Performance optimizations, best practices, or efficiency suggestions\n\n  > [!IMPORTANT]\n  > Essential requirements, critical steps, or must-know information\n\n  > [!WARNING]\n  > Breaking changes, compatibility issues, or potential problems\n\n  > [!CAUTION]\n  > High-risk actions that could cause data loss or security vulnerabilities\n\n## Code and Diffs\nUse fenced code blocks with language specification for syntax highlighting:\n```python\ndef example_function():\n  return \"Hello, World!\"\n```\n\nUse diff blocks to show code changes. Prefix lines with + for additions, - for deletions, and a space for unchanged lines:\n```diff\n-old_function_name()\n+new_function_name()\n unchanged_line()\n```\n\n\n## Mermaid Diagrams\nCreate mermaid diagrams using fenced code blocks with language `mermaid` to visualize complex relationships, workflows, and architectures.\nTo prevent syntax errors:\n- Quote node labels containing special characters like parentheses or brackets. For example, `id[\"Label (Extra Info)\"]` instead of `id[Label (Extra Info)]`.\n- Avoid HTML tags in labels.\n\n## Tables\nUse standard markdown table syntax to organize structured data. Tables significantly improve readability and improve scannability of comparative or multi-dimensional information.\n\n## File Links and Media\n- Create clickable file links using standard markdown link syntax: [link text](file:///absolute/path/to/file).\n- Link to specific line ranges using [link text](file:///absolute/path/to/file#L123-L145) format. Link text can be descriptive when helpful, such as for a function [foo](file:///path/to/bar.py#L127-L143) or for a line range [bar.py:L127-143](file:///path/to/bar.py#L127-L143)\n- Embed images and videos with ![caption](/absolute/path/to/file.jpg). Always use absolute paths. The caption should be a short description of the image or video, and it will always be displayed below the image or video.\n- **IMPORTANT**: To embed images and videos, you MUST use the ![caption](absolute path) syntax. Standard links [filename](absolute path) will NOT embed the media and are not an acceptable substitute.\n- **IMPORTANT**: If you are embedding a file in an artifact and the file is NOT already in <appDataDir>\\brain\\<conversation-id>, you MUST first copy the file to the artifacts directory before embedding it. Only embed files that are located in the artifacts directory.\n\n## Carousels\nUse carousels to display multiple related markdown snippets sequentially. Carousels can contain any markdown elements including images, code blocks, tables, mermaid diagrams, alerts, diff blocks, and more.\n\nSyntax:\n- Use four backticks with `carousel` language identifier\n- Separate slides with `<!-- slide -->` HTML comments\n- Four backticks enable nesting code blocks within slides\n\nExample:\n````carousel\n![Image description](/absolute/path/to/image1.png)\n<!-- slide -->\n![Another image](/absolute/path/to/image2.png)\n<!-- slide -->\n```python\ndef example():\n    print(\"Code in carousel\")\n```\n````\n\nUse carousels when:\n- Displaying multiple related items like screenshots, code blocks, or diagrams that are easier to understand sequentially\n- Showing before/after comparisons or UI state progressions\n- Presenting alternative approaches or implementation options\n- Condensing related information in walkthroughs to reduce document length\n\n## Critical Rules\n- **Keep lines short**: Keep bullet points concise to avoid wrapped lines\n- **Use basenames for readability**: Use file basenames for the link text instead of the full path\n- **File Links**: Do not surround the link text with backticks, that will break the link formatting.\n    - **Correct**: [utils.py](file:///path/to/utils.py) or [foo](file:///path/to/file.py#L123)\n    - **Incorrect**: [`utils.py`](file:///path/to/utils.py) or [`function name`](file:///path/to/file.py#L123)\n\n# Scratch Scripts and Files\n\nYou may find it useful to create scratch scripts or files for temporary purposes.\n\nExamples:\n- One-off scripts to debug code\n- Temporary data files for testing\n\nStore these files in the `<appDataDir>\\brain\\<conversation-id>/scratch/` directory. They will be persisted.\n\n</artifacts>\n<slash_commands>\nSlash commands are user-facing shortcuts in the chat UI (e.g., typing `/goal` or `/schedule`) that automate complex workflows or trigger specialized agent behaviors.\n\nYou cannot execute these commands yourself. Your role is to recommend them to the user when they are a good fit for the task at hand, encouraging the user to explore and trigger them.\n\nTo recommend a slash command, suggest it clearly in your response (e.g., \"You can use the `/goal` command to...\").\n\n</slash_commands>\n<planning_mode>\nYou are in Planning Mode. Exercise judgement on whether a user's request warrants a plan before taking action.\n\n**When to Plan**. Stop and create a plan if the user's request requires:\n- Major architectural changes\n- Extensive research to fulfill\n- Significant decision making and ambiguity\n- A significant deviation from an existing plan\n- Any complex changes that are not just simple tweaks\n\nIf you decide that a request warrants a plan, then follow this workflow:\n\n## Research\n- Thoroughly research the task using research tools.\n- DO NOT make any source code changes or run modifying commands during this phase. Creating or updating artifacts is allowed.\n- Understand the codebase, dependencies, architecture, and implications of the requested changes.\n\n## Create Implementation Plan\n- Create or update the implementation_plan.md artifact with your findings and proposed approach.\n- Include any open questions to clarify ambiguity, underspecified requirements, or design intent directly in the implementation plan. Do not use the ask_question tool to ask these questions.\n- Request feedback from the user by setting `request_feedback = true` in the `ArtifactMetadata`.\n- The user will automatically see any new and modified plans you create, so DO NOT re-summarize the plan in your request.\n\n## Obtain User Approval\n- STOP and wait for the user's explicit approval before proceeding to execution.\n\n## Execute\n- Once the user approves, execute the implementation plan\n- Create and update the task.md artifact as you work to track your progress.\n- If you discover issues that require significant changes, update the implementation_plan.md and request review again before continuing\n\n## Verify\n- Verify that your changes have the desired effects e.g. run unit tests, make sure code builds, etc.\n- Create or update the walkthrough.md artifact to summarize your changes.\n\n**When NOT to plan**. Do not create a plan or block if the user's request:\n- Is investigatory in nature, for example: 'explain how X works', 'where do we do Y?', 'why did Z happen?'\n- Is trivially simple and one-off in nature. For example: 'format this output as a table', 'fix the alignment of this UI layout', 'add a comment to this code', 'run this command', 'fix this syntax error'\n- Is a minor follow-up to an existing plan that the user has already approved. For example: 'plot the results', 'add a unit test for this', 'use an enum'.\n\nIf you decide that a request does NOT warrant a plan, then continue your work WITHOUT making a plan or requesting user review.\n\n</planning_mode>\n<planning_mode_artifacts>\nWhen in planning mode, you will work with three special artifacts.\n\n# Tasks\nPath: <appDataDir>\\brain\\<conversation-id>/task.md\n\n**Purpose**: A TODO list to organize your work during execution. Create this artifact after receiving user approval on your implementation plan. Break down complex tasks into component-level items and track progress as a living document.\n\n**Format**:\n```markdown\n- `[ ]` uncompleted tasks\n- `[/]` in progress tasks (custom notation)\n- `[x]` completed tasks\n- Use indented lists for sub-items\n```\n\n**Updating task.md**: Mark items as `[/]` when starting work on them, and `[x]` when completed. Update task.md as you make progress through your checklist.\n\n# Implementation Plan\nPath: <appDataDir>\\brain\\<conversation-id>/implementation_plan.md\n\n**Purpose**: A detailed design document to present your technical implementation plan to the user for feedback and approval.\nAfter reading the document, the user should understand the key technical details of your plan, and be able to make an informed decision on whether to approve it.\n\n**Format**: Use the following format, omitting any irrelevant sections.\n```markdown\n# [Goal Description]\n\nProvide a brief description of the problem, any background context, and what the change accomplishes.\n\n## User Review Required\n\nDocument anything that requires user review or feedback, for example, breaking changes or significant design decisions. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Open Questions\n\nAny clarifying or design questions for the user that will impact the implementation plan. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Proposed Changes\n\nGroup files by component (e.g., package, feature area, dependency layer) and order logically (dependencies first). Separate components with horizontal rules for visual clarity.\n\n### [Component Name]\n\nSummary of what will change in this component, separated by files. For specific files, Use [NEW] and [DELETE] to demarcate new and deleted files, for example:\n\n#### [MODIFY] [file basename](file:///absolute/path/to/modifiedfile)\n#### [NEW] [file basename](file:///absolute/path/to/newfile)\n#### [DELETE] [file basename](file:///absolute/path/to/deletedfile)\n\n## Verification Plan\n\nSummary of how you will verify that your changes have the desired effects.\n\n### Automated Tests\n- Exact commands you'll run, browser tests using the browser tool, etc.\n\n### Manual Verification\n- Asking the user to deploy to staging and testing, verifying UI changes on an iOS app etc.\n```\n\n# Walkthrough\nPath: <appDataDir>\\brain\\<conversation-id>/walkthrough.md\n\n**Purpose**: After completing work, summarize what you accomplished. Update an existing walkthrough for related follow-up work rather than creating a new one.\n\n**Document**:\n- Changes made\n- What was tested\n- Validation results\n\nEmbed screenshots and recordings to visually demonstrate UI changes and user flows.\n\n</planning_mode_artifacts>\n<guidelines>\nFollow these behavioral guidelines at all times:- Maintain documentation integrity. Preserve all existing comments and docstrings that are unrelated to your code changes, unless the user specifies otherwise.\n\n</guidelines>\n<communication_style>\n- Keep your responses concise.\n- Provide a summary of your work when you end your turn.\n- Format your responses in github-style markdown.\n- If you're unsure about the user's intent, ask for clarification rather than making assumptions.\n- You MUST create clickable links for all files and code symbols (classes, types, functions, structs). Use github style markdown links with the `file://` scheme (e.g., [filename](file:///path/to/file) or [ClassName](file:///path/to/file#L10-L20)`). For Windows, use forward slashes for paths.\n</communication_style>"
+      },
+      {
+        "role": "user",
+        "content": "<user_information>\nThe USER's OS version is windows.\nThe user has 1 active workspaces, each defined by a URI and a CorpusName. Multiple URIs potentially map to the same CorpusName. The mapping is shown as follows in the format [URI] -> [CorpusName]:\nc:\\Users\\vahap\\OneDrive\\Desktop\\antigravity-add-model -> vahapogut/antigravity-add-model\nCode relating to the user's requests should be written in the locations listed above. Avoid writing project code files to tmp, in the .gemini dir, or directly to the Desktop and similar folders unless explicitly asked.\nApp Data Directory: C:\\Users\\vahap\\.gemini\\antigravity\nConversation ID: 298440f4-c93d-4c2a-ad0c-dd80dca34c84\n</user_information>"
+      },
+      {
+        "role": "user",
+        "content": "<plugins>\nAvailable plugins:\n# chrome-devtools-plugin (file:///C:/Users/vahap/.gemini/config/plugins/chrome-devtools-plugin)\n# modern-web-guidance-plugin (file:///C:/Users/vahap/.gemini/config/plugins/modern-web-guidance-plugin)\n\n</plugins>"
+      },
+      {
+        "role": "user",
+        "content": "<subagents>\nAvailable subagents:\n- research: Research subagent with read-only tools for exploring the codebase, searching the web, and reading files. Delegate to this agent when you need to run a research task in the background while continuing other work (e.g., coding, building, testing), when a research task requires many search and file-reading steps that would clutter your context, or when you need a broad survey of the codebase or documentation. Prefer doing research yourself for quick, targeted lookups.\n- self: Subagent that inherits the parent agent's full configuration including tools, system prompt, and model. Use this when you need to run a task in a separate conversation context but with the same capabilities as the current agent.\n\nAfter launching a subagent, you do NOT need to poll or check your inbox in a loop. The system will automatically notify you when the subagent sends a message. Simply proceed with other work or stop calling tools, and you will be notified when there is a message to process.\n\n</subagents>"
+      },
+      {
+        "role": "user",
+        "content": "<artifacts>\nArtifact Directory Path: C:\\Users\\vahap\\.gemini\\antigravity\\brain\\298440f4-c93d-4c2a-ad0c-dd80dca34c84\n</artifacts>"
+      },
+      {
+        "role": "user",
+        "content": "<slash_commands>\nAvailable slash commands you can recommend to the user:\n- /goal: Recommend this when the user wants to run a long-running task (e.g., overnight) and wants the agent to be extra thorough and not stop until the goal is fully achieved.\n- /schedule: Recommend this when the user wants to run an instruction on a recurring schedule or set a one-time timer.\n- /browser: Recommend this when the user's task involves web browsing, searching the web, or interacting with web applications.\n- /grill-me: Recommend this when the user wants to align on a plan through an interactive interview to resolve design decisions.\n\n</slash_commands>"
+      },
+      {
+        "role": "user",
+        "content": "<USER_REQUEST>\nprojeyi incele ve daha fazla neler eklenebilir , veya sorunlu birşeyler varmı ? detaylı plan çıkar , ve readme dosyasını incele , daha iyi birşeyler yapabilirsin.  plan oluştur\r\n\n</USER_REQUEST>\n<ADDITIONAL_METADATA>\nThe current local time is: 2026-05-21T03:56:01+03:00.\n</ADDITIONAL_METADATA>\n<USER_SETTINGS_CHANGE>\nThe user changed setting `Model Selection` from None to Deekseek_V4pro. No need to comment on this change if the user doesn't ask about it. If reporting what model you are, please use a human readable name instead of the exact string.\n</USER_SETTINGS_CHANGE>"
+      },
+      {
+        "role": "user",
+        "content": "# Conversation History\nHere are the conversation IDs, titles, and summaries of your most recent 2 conversations, in reverse chronological order:\n\n<conversation_summaries>\n## Conversation 4b1b4802-f06e-4861-ae0a-e345cf295b2c: Project Audit And Improvement Strategy\n- Created: 2026-05-20T22:45:19Z\n- Last modified: 2026-05-21T00:54:44Z\n\n### USER Objective:\nProject Audit And Improvement Strategy\n\nThe user's primary objective is to evaluate the current architecture, security, and documentation of their project to identify critical vulnerabilities and areas for growth. They aim to execute a structured development plan that transitions the project toward professional standards—including security hardening (credential encryption), architectural modularization (TypeScript migration), and feature expansion (analytics and marketplace integration)—to ensure long-term stability and functionality.\n\n## Conversation 11411b7a-8bfa-4514-b468-d70f8e9f4423: Codebase Review And Improvement\n- Created: 2026-05-20T21:44:49Z\n- Last modified: 2026-05-21T00:53:17Z\n\n</conversation_summaries>"
+      },
+      {
+        "role": "assistant",
+        "content": "Let me start by thoroughly exploring the project structure and understanding what we have",
+        "tool_calls": [
+          {
+            "id": "call_2c1f25d60ab54e0e97d6f55c",
+            "type": "function",
+            "function": {
+              "name": "list_dir",
+              "arguments": "{\"DirectoryPath\":\"c:\\\\Users\\\\vahap\\\\OneDrive\\\\Desktop\\\\antigravity-add-model\",\"toolAction\":\"Exploring project structure\",\"toolSummary\":\"Project structure analysis\"}"
+            }
+          },
+          {
+            "id": "call_923cf349733148d095057907",
+            "type": "function",
+            "function": {
+              "name": "manage_subagents",
+              "arguments": "{}"
+            }
+          }
+        ],
+        "reasoning_content": ""
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call_2c1f25d60ab54e0e97d6f55c",
+        "content": "{\"output\":\"Created At: 2026-05-21T00:56:05Z\\nCompleted At: 2026-05-21T00:56:06Z\\nEncountered error in step execution: error executing cascade step: CORTEX_STEP_TYPE_LIST_DIRECTORY: uri: \\\"\\\": unknown uri scheme\"}"
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call_923cf349733148d095057907",
+        "content": "{\"output\":\"Created At: 2026-05-21T00:56:07Z\\nError invalid tool call: There was a problem parsing the tool call. \\nError Message: model output error: invalid tool call error (invalid_args) Action must be 'list', 'kill', or 'kill_all' \\nGuidance: You are trying to correct your previous tool call error, you must focus on fixing the failed tool call with sequential tool calls and try again. Do not do parallel tool calls and if you are fixing multiple tool calls, do them one at a time. Do not apologize. \\nRetries remaining: 4.\"}"
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "call_cd08507884f241439c715b7b",
+            "type": "function",
+            "function": {
+              "name": "list_dir",
+              "arguments": "{\"DirectoryPath\":\"c:\\\\Users\\\\vahap\\\\OneDrive\\\\Desktop\\\\antigravity-add-model\",\"toolAction\":\"Exploring project root\",\"toolSummary\":\"Project structure analysis\"}"
+            }
+          }
+        ],
+        "reasoning_content": "Let me fix the issues - first list the directory properly, then look at the subagents."
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call_cd08507884f241439c715b7b",
+        "content": "{\"output\":\"Created At: 2026-05-21T00:56:08Z\\nCompleted At: 2026-05-21T00:56:09Z\\nEncountered error in step execution: error executing cascade step: CORTEX_STEP_TYPE_LIST_DIRECTORY: uri: \\\"\\\": unknown uri scheme\"}"
+      },
+      {
+        "role": "assistant",
+        "content": "Let me try a different approach with the path format:",
+        "tool_calls": [
+          {
+            "id": "call_5da711ab1612460c86501939",
+            "type": "function",
+            "function": {
+              "name": "list_dir",
+              "arguments": "{\"DirectoryPath\":\"C:/Users/vahap/OneDrive/Desktop/antigravity-add-model\",\"toolAction\":\"Exploring project structure\",\"toolSummary\":\"Project structure analysis\"}"
+            }
+          }
+        ],
+        "reasoning_content": "It seems like the list_dir tool is having issues with the path. Let me try with forward slashes or a slightly different format."
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call_5da711ab1612460c86501939",
+        "content": "{\"output\":\"Created At: 2026-05-21T00:56:12Z\\nCompleted At: 2026-05-21T00:56:12Z\\nEncountered error in step execution: error executing cascade step: CORTEX_STEP_TYPE_LIST_DIRECTORY: uri: \\\"\\\": unknown uri scheme\"}"
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "call_6ec412f8386d4d2eb0108e6b",
+            "type": "function",
+            "function": {
+              "name": "run_command",
+              "arguments": "{\"CommandLine\":\"Get-ChildItem -Path \\\"C:\\\\Users\\\\vahap\\\\OneDrive\\\\Desktop\\\\antigravity-add-model\\\" -Recurse -Depth 4 | Select-Object FullName, Length, PSIsContainer | Format-Table -AutoSize\",\"Cwd\":\"C:\\\\Users\\\\vahap\\\\OneDrive\\\\Desktop\\\\antigravity-add-model\",\"WaitMsBeforeAsync\":3000,\"toolAction\":\"Listing full project tree\",\"toolSummary\":\"Project structure analysis\"}"
+            }
+          }
+        ],
+        "reasoning_content": ""
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call_6ec412f8386d4d2eb0108e6b",
+        "content": "{\"output\":\"Created At: 2026-05-21T00:56:14Z\\nCompleted At: 2026-05-21T00:56:15Z\\n\\n\\t\\t\\t\\tThe command completed successfully.\\n\\t\\t\\tStdout:\\n\\t\\t\\t\\n\\t\\t\\tStderr:\\n\\t\\t\\t\\n\"}"
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "call_83c58ab2c76b448dbc2e269e",
+            "type": "function",
+            "function": {
+              "name": "run_command",
+              "arguments": "{\"CommandLine\":\"dir \\\"C:\\\\Users\\\\vahap\\\\OneDrive\\\\Desktop\\\\antigravity-add-model\\\" /s /b\",\"Cwd\":\"C:\\\\Users\\\\vahap\\\\OneDrive\\\\Desktop\\\\antigravity-add-model\",\"WaitMsBeforeAsync\":5000,\"toolAction\":\"Listing all files recursively\",\"toolSummary\":\"Project structure analysis\"}"
+            }
+          }
+        ],
+        "reasoning_content": "The output is empty, which is strange. Let me try different approaches to get the file listing."
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call_83c58ab2c76b448dbc2e269e",
+        "content": "{\"output\":\"Created At: 2026-05-21T00:56:19Z\\nCompleted At: 2026-05-21T00:56:19Z\\n\\n\\t\\t\\t\\tThe command completed successfully.\\n\\t\\t\\tStdout:\\n\\t\\t\\t\\n\\t\\t\\tStderr:\\n\\t\\t\\t\\n\"}"
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "call_719eaa8b31a24410a53e4be8",
+            "type": "function",
+            "function": {
+              "name": "run_command",
+              "arguments": "{\"CommandLine\":\"Test-Path \\\"C:\\\\Users\\\\vahap\\\\OneDrive\\\\Desktop\\\\antigravity-add-model\\\" ; Get-ChildItem \\\"C:\\\\Users\\\\vahap\\\\OneDrive\\\\Desktop\\\\antigravity-add-model\\\" -Recurse -Depth 5 | ForEach-Object { $_.FullName }\",\"Cwd\":\"C:\\\\Users\\\\vahap\\\\OneDrive\\\\Desktop\\\\antigravity-add-model\",\"WaitMsBeforeAsync\":5000,\"toolAction\":\"Checking directory existence and contents\",\"toolSummary\":\"Project structure analysis\"}"
+            }
+          }
+        ],
+        "reasoning_content": "Very strange - the output is empty both times. The project might be empty? Or there might be a permissions issue. Let me check if the directory exists at all."
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call_719eaa8b31a24410a53e4be8",
+        "content": "{\"output\":\"Created At: 2026-05-21T00:56:22Z\\nCompleted At: 2026-05-21T00:56:22Z\\n\\n\\t\\t\\t\\tThe command completed successfully.\\n\\t\\t\\tStdout:\\n\\t\\t\\t\\n\\t\\t\\tStderr:\\n\\t\\t\\t\\n\"}"
+      }
+    ],
+    "max_tokens": 4096,
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "ask_permission",
+          "description": "Use this tool to ask for permission after a failure due to insufficient permissions, specifically when you need additional permissions for file reads or writes after a terminal command or file operation encounters a permission error.\nCRITICAL: Request the narrowest scope that covers your planned operations without requiring repeated asks. For example, prefer a subdirectory over a whole project. Never request wildcard (`*`) or root-level permissions.\nIMPORTANT: Do NOT use this tool to request persistent exceptions for commands that make network requests, run arbitrary code, or download unverified files (e.g., curl, wget, pip, npm). For such operations, invoke the run_command tool directly so the user can explicitly review and approve the individual process execution.\nValid actions, their target formats, and matching behaviors are:\n- `mcp`:\n  - Target Format: serverName/toolName, serverName/*, or *\n  - Matching: Matches by exact server name. server/* covers all tools on that server.\n- `custom`:\n  - Target Format: Custom action name\n  - Matching: Matches the exact action name.\n- `read_file`:\n  - Target Format: Absolute path to file or directory\n  - Matching: Matches the file or everything under the directory. Paths must be literal and absolute.\n- `write_file`:\n  - Target Format: Absolute path to file or directory\n  - Matching: Same as read_file. Also implicitly covers read_file for the same path.\n- `read_url`:\n  - Target Format: Domain name or *\n  - Matching: Matches the domain and all subdomains. Does not match URL paths.\n- `execute_url`:\n  - Target Format: Domain name or *\n  - Matching: Matches the domain and all subdomains. Does not match URL paths.\n- `command`:\n  - Target Format: Command prefix or *\n  - Matching: Matches commands by prefix. e.g., 'git' matches 'git add', 'git commit', etc.\n- `unsandboxed`:\n  - Target Format: Command prefix or *\n  - Matching: Matches commands by prefix. e.g., 'git' matches 'git add', 'git commit', etc. This action runs outside the terminal sandbox.\n\nCommand Matching Details:\n- Commands are split into whitespace separated tokens (words).\n- Each token in the granted target is matched as a full word (internally treated as an anchored regular expression: `^(?:pattern)$`).\n- The system checks if the granted tokens form a prefix of the requested command tokens.\n- Example: `git` matches `git add` but NOT `github`.\n- Example: `git commit` matches `git commit -m \"msg\"` but NOT `git commit-next`.\n\nNote: `read_file` and `write_file` apply to both files and directories (providing recursive access).\n\nExamples of how to map required permissions to tool arguments:\n- To allow any `git` command: Action=`command`, Target=`git`\n- To allow `blaze build`: Action=`command`, Target=`blaze build`\n- To read anything in a directory: Action=`read_file`, Target=`/path/to/directory`\n- To read a specific file: Action=`read_file`, Target=`/path/to/file`\n- To edit files in a directory: Action=`write_file`, Target=`/path/to/directory`\n- To edit a specific file: Action=`write_file`, Target=`/path/to/file`\n- To fetch any Google page: Action=`read_url`, Target=`google.com`\n- For all tools on an MCP server: Action=`mcp`, Target=`server_name/*`\n",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "Action": {
+                "type": "string",
+                "description": "The action to perform.",
+                "enum": [
+                  "mcp",
+                  "custom",
+                  "read_file",
+                  "write_file",
+                  "read_url",
+                  "execute_url",
+                  "command",
+                  "unsandboxed"
+                ]
+              },
+              "Reason": {
+                "type": "string",
+                "description": "The reason why permission is needed"
+              },
+              "Target": {
+                "type": "string",
+                "description": "The target of the action (e.g., the command string, file path)"
+              },
+              "toolAction": {
+                "type": "string",
+                "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+              },
+              "toolSummary": {
+                "type": "string",
+                "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+              }
+            },
+            "required": [
+              "Action",
+              "Target",
+              "toolSummary",
+              "toolAction"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "ask_question",
+          "description": "Use this tool to ask the user one or more multiple-choice questions, with the goal of:\n- Clarifying underspecified requirements\n- Soliciting design feedback or user preferences\n- Addressing ambiguous user intent\n- Picking a solution from a list of options\n\nWhen called, this tool renders an interactive modal containing the question, selectable options, a default write-in option, and Submit/Skip buttons. Execution is blocked until the user responds.\n\nGuidance:\n- When specifying files in the question, use github markdown links (e.g. [filename](file:///path/to/file)).\n- Don't use this tool to ask trivial questions that can be answered with a single word (e.g. yes/no); output regular text to ask these questions.\n- Don't include an 'other' option for write-in responses; one is always provided in the UI by default.\n- Don't enumerate the options; they are enumerated by default.\n- Don't include \"Select all options that apply\", or similar, in the question; the UI already includes this.\n- If you recommend any options, list it first and prefix the option text with \"(Recommended)\".\n- Format options as the user's direct response instead of describing your own actions.\n- Set 'IsMultiSelect' to true to allow the user to select multiple options with checkboxes.\n",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "questions": {
+                "type": "array",
+                "description": "The list of questions to ask.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "is_multi_select": {
+                      "type": "boolean",
+                      "description": "If true, the user can select multiple options."
+                    },
+                    "options": {
+                      "type": "array",
+                      "description": "The text for each option, formatted as the user's response. Must have at least 2 options. Do NOT add an 'Other' option to questions.",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "question": {
+                      "type": "string",
+                      "description": "The question to ask the user. Do NOT add 'select all that apply' or similar text to the question title."
+                    }
+                  }
+                }
+              },
+              "toolAction": {
+                "type": "string",
+                "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+              },
+              "toolSummary": {
+                "type": "string",
+                "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+              }
+            },
+            "required": [
+              "toolSummary",
+              "toolAction"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "define_subagent",
+          "description": "Defines a new type of subagent that can be invoked via invoke_subagent.\n\n\tGuidelines:\n\t* Use this tool if you need a specialized subagent for a task and none of the existing subagents are suitable.\n\t* Once the subagent is defined, it can be invoked repeatedly using invoke_subagent without calling this tool again.\n\t* The subagent will be defined with the specified name, description, system prompt, and tool groups.\n\t* By default, all subagents have read tools to research the codebase, and tools to communicate with other agents.\n\t",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "Human-readable description of what this subagent does and when it should be used."
+              },
+              "enable_mcp_tools": {
+                "type": "boolean",
+                "description": "Set true to enable the subagent to call MCP tools."
+              },
+              "enable_subagent_tools": {
+                "type": "boolean",
+                "description": "Set true to equip the subagent with tools to define and invoke its own subagents"
+              },
+              "enable_write_tools": {
+                "type": "boolean",
+                "description": "Set true to equip the subagent with tools to create and edit files, and run commands."
+              },
+              "name": {
+                "type": "string",
+                "description": "Unique name for the subagent. Used to invoke it via invoke_subagent."
+              },
+              "system_prompt": {
+                "type": "string",
+                "description": "A detailed system prompt for this subagent."
+              },
+              "toolAction": {
+                "type": "string",
+                "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+              },
+              "toolSummary": {
+                "type": "string",
+                "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+              }
+            },
+            "required": [
+              "name",
+              "description",
+              "system_prompt",
+              "toolSummary",
+              "toolAction"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "generate_image",
+          "description": "Generate an image or edit existing images based on a text prompt. The resulting image will be saved as an artifact for use. You can use this tool to generate user interfaces and iterate on a design with the USER for an application or website that you are building. When creating UI designs, generate only the interface itself without surrounding device frames (laptops, phones, tablets, etc.) unless the user explicitly requests them. You can also use this tool to generate assets for use in an application or website.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "ImageName": {
+                "type": "string",
+                "description": "Name of the generated image to save. Should be all lowercase with underscores, describing what the image contains. Maximum 3 words. Example: 'login_page_mockup'"
+              },
+              "ImagePaths": {
+                "type": "array",
+                "description": "Optional absolute paths to the images to use in generation. You can pass in images here if you would like to edit or combine images. You can pass in artifact images and any images in the file system. Note: you cannot pass in more than 3 images.",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "Prompt": {
+                "type": "string",
+                "description": "The text prompt to generate an image for."
+              },
+              "toolAction": {
+                "type": "string",
+                "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+              },
+              "toolSummary": {
+                "type": "string",
+                "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+              }
+            },
+            "required": [
+              "Prompt",
+              "ImageName",
+              "toolSummary",
+              "toolAction"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "grep_search",
+          "description": "Use ripgrep to find exact pattern matches within files or directories.\nResults are returned in JSON format and for each match you will receive the:\n- Filename\n- LineNumber (only when MatchPerLine is true)\n- LineContent: the content of the matching line (only when MatchPerLine is true)\nTotal results are capped at 50 matches. Use the Includes option to filter by file type or specific paths to refine your search.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "CaseInsensitive": {
+                "type": "boolean",
+                "description": "If true, performs a case-insensitive search."
+              },
+              "Includes": {
+                "type": "array",
+                "description": "Glob patterns to filter files found within the 'SearchPath', if 'SearchPath' is a directory. For example, '*.go' to only include Go files, or '!**/vendor/*' to exclude vendor directories. This is NOT for specifying the primary search directory; use 'SearchPath' for that. Leave empty if no glob filtering is needed or if 'SearchPath' is a single file.",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "IsRegex": {
+                "type": "boolean",
+                "description": "If true, treats Query as a regular expression pattern with special characters like *, +, (, etc. having regex meaning. If false, treats Query as a literal string where all characters are matched exactly. Use false for normal text searches and true only when you specifically need regex functionality."
+              },
+              "MatchPerLine": {
+                "type": "boolean",
+                "description": "If true, returns each line that matches the query, including line numbers and snippets of matching lines (equivalent to 'git grep -nI'). If false, only returns the names of files containing the query (equivalent to 'git grep -l')."
+              },
+              "Query": {
+                "type": "string",
+                "description": "The search term or pattern to look for within files."
+              },
+              "SearchPath": {
+                "type": "string",
+                "description": "The path to search. Must be an absolute path to a directory or a file. This is a required parameter."
+              },
+              "toolAction": {
+                "type": "string",
+                "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+              },
+              "toolSummary": {
+                "type": "string",
+                "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+              }
+            },
+            "required": [
+              "SearchPath",
+              "Query",
+              "toolSummary",
+              "toolAction"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "invoke_subagent",
+          "description": "Invokes one or more subagents by name with a single tool call. Each subagent runs in the background with its own prompt and reports back when done.\n\nSpecify the Subagents array with one or more entries. Each entry defines a subagent to launch.\n\nCommunicate with subagents using the send_message tool. Examples of when to do this:\n* To check on the status of a subagent.\n* To send a running subagent further instructions.\n* To send an idle subagent new instructions.\n\nGuidelines:\n* Each invoked subagent will be uniquely identified by its conversationID.\n* Multiple subagents with the same type name can be invoked, with each subagent receiving a unique conversationID.\n* If a task is a natural continuation of an existing subagent's work, send a message to that subagent with the task rather than invoking a new subagent to conserve resources.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "Subagents": {
+                "type": "array",
+                "description": "Array of subagents to invoke. Each entry specifies a separate subagent to launch concurrently.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "Prompt": {
+                      "type": "string",
+                      "description": "A clear, actionable task description for the subagent. Be specific about what the subagent should do and what information it should return."
+                    },
+                    "Role": {
+                      "type": "string",
+                      "description": "A 2-5 word description of the subagent's role. Should read similar to a job title, e.g. 'Codebase Researcher', 'Database Debugger', etc. Should also be detailed enough to distinguish between different subagents who might share similar purposes."
+                    },
+                    "TypeName": {
+                      "type": "string",
+                      "description": "Type name of the subagent to invoke."
+                    },
+                    "Workspace": {
+                      "type": "string",
+                      "description": "Workspace mode for the subagent. 'inherit' (default) uses the same workspace as the parent. 'branch' creates a new isolated workspace branched or cloned from the parent. 'share' creates a new workspace sharing the parent's underlying repository directory (similar to a git worktree or Mercurial 'hg share'), allowing independent branching without duplicating storage. If omitted, defaults to 'inherit'."
+                    }
+                  },
+                  "required": [
+                    "TypeName",
+                    "Role",
+                    "Prompt"
+                  ]
+                }
+              },
+              "toolAction": {
+                "type": "string",
+                "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+              },
+              "toolSummary": {
+                "type": "string",
+                "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+              }
+            },
+            "required": [
+              "Subagents",
+              "toolSummary",
+              "toolAction"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "list_dir",
+          "description": "List the contents of a directory, i.e. all files and subdirectories that are children of the directory. Directory path must be an absolute path to a directory that exists. For each child in the directory, output will have: relative path to the directory, whether it is a directory or file, size in bytes if file, and number of children (recursive) if directory. Number of children may be missing if the workspace is too large, since we are not able to track the entire workspace.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "DirectoryPath": {
+                "type": "string",
+                "description": "Path to list contents of, should be absolute path to a directory"
+              },
+              "toolAction": {
+                "type": "string",
+                "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+              },
+              "toolSummary": {
+                "type": "string",
+                "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+              }
+            },
+            "required": [
+              "DirectoryPath",
+              "toolSummary",
+              "toolAction"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "list_permissions",
+          "description": "Use this tool to list all current permission grants. This helps you understand what resources you can access without prompting.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "toolAction": {
+                "type": "string",
+                "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+              },
+              "toolSummary": {
+                "type": "string",
+                "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+              }
+            },
+            "required": [
+              "toolSummary",
+              "toolAction"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "manage_subagents",
+          "description": "Manage existing subagents.\n\tActions:\n\t* 'list': List all active subagents and their conversation IDs.\n\t* 'kill': Terminate specific subagents and all their descendants.\n\t* 'kill_all': Terminate all subagents and all their descendants.\n\n\tWhen a subagent is killed, its branched workspaces will be deleted, but its logs and artifacts will be preserved.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "Action": {
+                "type": "string",
+                "description": "The action to perform. Must be 'list' (list all active subagents), 'kill' (terminate specific subagents and all their descendants), or 'kill_all' (terminate all subagents and all their descendants).",
+                "enum": [
+                  "list",
+                  "kill",
+                  "kill_all"
+                ]
+              },
+              "ConversationIds": {
+                "type": "array",
+                "description": "The IDs of the subagents to kill. Required for 'kill'.",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "toolAction": {
+                "type": "string",
+                "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+              },
+              "toolSummary": {
+                "type": "string",
+                "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+              }
+            },
+            "required": [
+              "Action",
+              "toolSummary",
+              "toolAction"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "manage_task",
+          "description": "Manage background tasks. Use this tool to list running tasks or interact with tasks that were sent to the background.\n\nActions:\n- 'list': List all currently running background tasks\n- 'kill': Cancel the task's execution\n- 'status': Check the task's current status and log file location\n- 'send_input': Send input to a running task\n\nWhen mentioning tasks to the user, avoid using full task IDs and start timestamps; keep them human-readable.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "Action": {
+                "type": "string",
+                "description": "The action to perform: 'list' (list all running tasks), 'kill' (cancel the task), 'status' (check the task status and log URI), 'send_input' (send input to a running task).",
+                "enum": [
+                  "list",
+                  "kill",
+                  "status",
+                  "send_input"
+                ]
+              },
+              "Input": {
+                "type": "string",
+                "description": "The input to send to the task. Required when Action is 'send_input'."
+              },
+              "TaskId": {
+                "type": "string",
+                "description": "The task ID to manage. Required when Action is 'kill', 'status', or 'send_input'."
+              },
+              "toolAction": {
+                "type": "string",
+                "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+              },
+              "toolSummary": {
+                "type": "string",
+                "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+              }
+            },
+            "required": [
+              "Action",
+              "toolSummary",
+              "toolAction"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "multi_replace_file_content",
+          "description": "Use this tool to edit an existing file. Follow these rules:\n1. Use this tool ONLY when you are making MULTIPLE, NON-CONTIGUOUS edits to the same file (i.e., you are changing more than one separate block of text). If you are making a single contiguous block of edits, use the replace_file_content tool instead.\n2. Do NOT use this tool if you are only editing a single contiguous block of lines.\n3. Do NOT make multiple parallel calls to this tool or the replace_file_content tool for the same file.\n4. To edit multiple, non-adjacent lines of code in the same file, make a single call to this tool. Specify each edit as a separate ReplacementChunk.\n5. For each ReplacementChunk, specify StartLine, EndLine, TargetContent and ReplacementContent. StartLine and EndLine should specify a range of lines containing precisely the instances of TargetContent that you wish to edit. To edit a single instance of the TargetContent, the range should be such that it contains that specific instance of the TargetContent and no other instances. In TargetContent, specify the precise lines of code to edit. These lines MUST EXACTLY MATCH text in the existing file content. In ReplacementContent, specify the replacement content for the specified target content. This must be a complete drop-in replacement of the TargetContent, with necessary modifications made.\n6. If you are making multiple edits across a single file, specify multiple separate ReplacementChunks. DO NOT try to replace the entire existing content with the new content, this is very expensive.\n7. You may not edit file extensions: [.ipynb]",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "ArtifactMetadata": {
+                "type": "object",
+                "description": "Metadata updates if updating an artifact file, leave blank if not updating an artifact. Should be updated if the content is changing meaningfully.",
+                "properties": {
+                  "ArtifactType": {
+                    "type": "string",
+                    "description": "Type of artifact: 'implementation_plan', 'walkthrough', 'task', or 'other'.",
+                    "enum": [
+                      "implementation_plan",
+                      "walkthrough",
+                      "task",
+                      "other"
+                    ]
+                  },
+                  "RequestFeedback": {
+                    "type": "boolean",
+                    "description": "Set to true to request user feedback on this artifact."
+                  },
+                  "Summary": {
+                    "type": "string",
+                    "description": "Detailed multi-line summary of the artifact file, after edits have been made. Summary does not need to mention the artifact name and should focus on the contents and purpose of the artifact."
+                  }
+                },
+                "required": [
+                  "Summary",
+                  "ArtifactType"
+                ]
+              },
+              "Description": {
+                "type": "string",
+                "description": "Brief, user-facing explanation of what this change did. Focus on non-obvious rationale, design decisions, or important context. Don't just restate what the code does."
+              },
+              "Instruction": {
+                "type": "string",
+                "description": "A description of the changes that you are making to the file."
+              },
+              "ReplacementChunks": {
+                "type": "array",
+                "description": "A list of chunks to replace. It is best to provide multiple chunks for non-contiguous edits if possible. This must be a JSON array, not a string.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "AllowMultiple": {
+                      "type": "boolean",
+                      "description": "If true, multiple occurrences of 'targetContent' will be replaced by 'replacementContent' if they are found. Otherwise if multiple occurences are found, an error will be returned."
+                    },
+                    "EndLine": {
+                      "type": "integer",
+                      "description": "The ending line number of the chunk (1-indexed). Should be at or after the last line containing the target content. Must satisfy StartLine <= EndLine <= number of lines in the file. The target content is searched for within the [StartLine, EndLine] range."
+                    },
+                    "ReplacementContent": {
+                      "type": "string",
+                      "description": "The content to replace the target content with."
+                    },
+                    "StartLine": {
+                      "type": "integer",
+                      "description": "The starting line number of the chunk (1-indexed). Should be at or before the first line containing the target content. Must satisfy 1 <= StartLine <= EndLine. The target content is searched for within the [StartLine, EndLine] range."
+                    },
+                    "TargetContent": {
+                      "type": "string",
+                      "description": "The exact string to be replaced. This must be the exact character-sequence to be replaced, including whitespace. Be very careful to include any leading whitespace otherwise this will not work at all. This must be a unique substring within the file, or else it will error."
+                    }
+                  },
+                  "required": [
+                    "AllowMultiple",
+                    "TargetContent",
+                    "ReplacementContent",
+                    "StartLine",
+                    "EndLine"
+                  ]
+                }
+              },
+              "TargetFile": {
+                "type": "string",
+                "description": "The target file to modify. Must be an absolute path. Always specify the target file as the very first argument."
+              },
+              "TargetLintErrorIds": {
+                "type": "array",
+                "description": "If applicable, IDs of lint errors this edit aims to fix (they'll have been given in recent IDE feedback). If you believe the edit could fix lints, do specify lint IDs; if the edit is wholly unrelated, do not. A rule of thumb is, if your edit was influenced by lint feedback, include lint IDs. Exercise honest judgement here.",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "toolAction": {
+                "type": "string",
+                "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+              },
+              "toolSummary": {
+                "type": "string",
+                "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+              }
+            },
+            "required": [
+              "TargetFile",
+              "Instruction",
+              "Description",
+              "ReplacementChunks",
+              "toolSummary",
+              "toolAction"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "read_url_content",
+          "description": "Fetch content from a URL via HTTP request (invisible to USER). Use when: (1) extracting text from public pages, (2) reading static content/documentation, (3) batch processing multiple URLs, (4) speed is important, or (5) no visual interaction needed. Converts HTML to markdown. No JavaScript execution, no authentication. For pages requiring login, JavaScript, or USER visibility, use read_browser_page instead.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "Url": {
+                "type": "string",
+                "description": "URL to read content from"
+              },
+              "toolAction": {
+                "type": "string",
+                "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+              },
+              "toolSummary": {
+                "type": "string",
+                "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+              }
+            },
+            "required": [
+              "Url",
+              "toolSummary",
+              "toolAction"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "replace_file_content",
+          "description": "Use this tool to edit an existing file. Follow these rules:\n1. Use this tool ONLY when you are making a SINGLE CONTIGUOUS block of edits to the same file (i.e. replacing a single contiguous block of text). If you are making edits to multiple non-adjacent lines, use the multi_replace_file_content tool instead.\n2. Do NOT make multiple parallel calls to this tool or the multi_replace_file_content tool for the same file.\n3. To edit multiple, non-adjacent lines of code in the same file, make a single call to the multi_replace_file_content tool..\n4. For the ReplacementChunk, specify StartLine, EndLine, TargetContent and ReplacementContent. StartLine and EndLine should specify a range of lines containing precisely the instances of TargetContent that you wish to edit. To edit a single instance of the TargetContent, the range should be such that it contains that specific instance of the TargetContent and no other instances. In TargetContent, specify the precise lines of code to edit. These lines MUST EXACTLY MATCH text in the existing file content. In ReplacementContent, specify the replacement content for the specified target content. This must be a complete drop-in replacement of the TargetContent, with necessary modifications made.\n5. If you are making multiple edits across a single file, use the multi_replace_file_content tool instead. DO NOT try to replace the entire existing content with the new content, this is very expensive.\n6. You may not edit file extensions: [.ipynb]",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "AllowMultiple": {
+                "type": "boolean",
+                "description": "If true, multiple occurrences of 'targetContent' will be replaced by 'replacementContent' if they are found. Otherwise if multiple occurences are found, an error will be returned."
+              },
+              "Description": {
+                "type": "string",
+                "description": "Brief, user-facing explanation of what this change did. Focus on non-obvious rationale, design decisions, or important context. Don't just restate what the code does."
+              },
+              "EndLine": {
+                "type": "integer",
+                "description": "The ending line number of the chunk (1-indexed). Should be at or after the last line containing the target content. Must satisfy StartLine <= EndLine <= number of lines in the file. The target content is searched for within the [StartLine, EndLine] range."
+              },
+              "Instruction": {
+                "type": "string",
+                "description": "A description of the changes that you are making to the file."
+              },
+              "ReplacementContent": {
+                "type": "string",
+                "description": "The content to replace the target content with."
+              },
+              "StartLine": {
+                "type": "integer",
+                "description": "The starting line number of the chunk (1-indexed). Should be at or before the first line containing the target content. Must satisfy 1 <= StartLine <= EndLine. The target content is searched for within the [StartLine, EndLine] range."
+              },
+              "TargetContent": {
+                "type": "string",
+                "description": "The exact string to be replaced. This must be the exact character-sequence to be replaced, including whitespace. Be very careful to include any leading whitespace otherwise this will not work at all. This must be a unique substring within the file, or else it will error."
+              },
+              "TargetFile": {
+                "type": "string",
+                "description": "The target file to modify. Must be an absolute path. Always specify the target file as the very first argument."
+              },
+              "TargetLintErrorIds": {
+                "type": "array",
+                "description": "If applicable, IDs of lint errors this edit aims to fix (they'll have been given in recent IDE feedback). If you believe the edit could fix lints, do specify lint IDs; if the edit is wholly unrelated, do not. A rule of thumb is, if your edit was influenced by lint feedback, include lint IDs. Exercise honest judgement here.",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "toolAction": {
+                "type": "string",
+                "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+              },
+              "toolSummary": {
+                "type": "string",
+                "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+              }
+            },
+            "required": [
+              "TargetFile",
+              "Instruction",
+              "Description",
+              "AllowMultiple",
+              "TargetContent",
+              "ReplacementContent",
+              "StartLine",
+              "EndLine",
+              "toolSummary",
+              "toolAction"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "run_command",
+          "description": "PROPOSE a command to run on behalf of the user. Operating System: windows. Shell: powershell.\n**NEVER PROPOSE A cd COMMAND**.\nIf you have this tool, note that you DO have the ability to run commands directly on the USER's system.\nMake sure to specify CommandLine exactly as it should be run in the shell.\nNote that the user will have to approve the command before it is executed. The user may reject it if it is not to their liking.\nThe actual command will NOT execute until the user approves it. The user may not approve it immediately.\nIf the step is WAITING for user approval, it has NOT started running.\nIf the step doesn't return the command output, it means that the command was sent to the background as a task. You will receive messages with the command's output as it runs. To interact with a running command, use the manage_task tool. Use `send_input` to send stdin, `kill` to terminate the command, and `status` to check current status. IMPORTANT: Do NOT poll or loop on `status` to wait for completion. The system will automatically notify you with a message when the command finishes. Simply proceed with other work or stop calling tools after launching a command.\nCommands will be run with PAGER=cat. You may want to limit the length of output for commands that usually rely on paging and may contain very long output (e.g. git log, use git log -n <N>).\nIMPORTANT: The Cwd (working directory) MUST be within the user's workspace. Do NOT use /tmp, /home, or any path outside the workspace. If you need a temporary directory, create one inside the workspace.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "CommandLine": {
+                "type": "string",
+                "description": "The exact command line string to execute."
+              },
+              "Cwd": {
+                "type": "string",
+                "description": "The current working directory for the command"
+              },
+              "WaitMsBeforeAsync": {
+                "type": "integer",
+                "description": "This specifies the number of milliseconds to wait after starting the command before sending it to the background. If you want the command to complete execution synchronously, set this to a large enough value that you expect the command to complete in that time under ordinary circumstances. If you're starting an interactive or long-running command, set it to a large enough value that it would cause possible failure cases to execute synchronously (e.g. 500ms). Keep the value as small as possible, with a maximum of 10000ms."
+              },
+              "toolAction": {
+                "type": "string",
+                "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+              },
+              "toolSummary": {
+                "type": "string",
+                "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+              }
+            },
+            "required": [
+              "Cwd",
+              "WaitMsBeforeAsync",
+              "CommandLine",
+              "toolSummary",
+              "toolAction"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "schedule",
+          "description": "Schedule a one-shot timer or a recurring cron job that sends notifications in the background.\n\n**NOTE**: This tool call returns immediately and does not pause execution. To wait for the timer to fire, you must stop calling tools to end your turn.\n\nModes:\n1. **One-shot timer**: This should be used when there are tasks happening asynchronously (either background tasks, or other subagents) and you plan to go idle. This timer ensures you will wake up by this time if no other updates are received. If it expires, a notification with your Prompt is sent. If you receive any message (from ANY task or subagent) before the timer expires, the timer is cancelled silently.\n\nExamples:\n- Set a 60-second reminder while waiting for a long build: DurationSeconds=60, Prompt=\"Check if the build has completed\"\n- Set a 3-minute reminder after delegating a task to a group of subagents: DurationSeconds=180, Prompt=\"Check if the subagents have completed their tasks\"\n\n2. **Recurring cron**: Set CronExpression to a standard 5-field cron expression (e.g., '*/5 * * * *' for every 5 minutes). Each time the cron triggers, a notification with your Prompt is sent. The cron runs as a background task. Optionally set MaxIterations to limit the number of triggers.\n\nExamples:\n- Poll deployment status every 5 minutes: CronExpression=\"*/5 * * * *\", Prompt=\"Check deployment status and report progress\"\n- Run a health check every hour, up to 3 times: CronExpression=\"0 * * * *\", MaxIterations=3, Prompt=\"Run the health check script and report results\"\n\nYou must specify exactly one of DurationSeconds or CronExpression.\nAlways provide a Prompt describing what the notification should say.\nNever run a background 'sleep' command to set a timer, use this tool instead.\nTo cancel a running timer or cron schedule, use the manage_task tool with the task ID returned by this tool.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "CronExpression": {
+                "type": "string",
+                "description": "A standard cron expression (5 fields: minute hour day-of-month month day-of-week). Use for recurring schedules. Mutually exclusive with DurationSeconds. Example: '*/5 * * * *' for every 5 minutes."
+              },
+              "DurationSeconds": {
+                "type": "string",
+                "description": "The number of seconds to wait (max 900). Use for one-shot timers. Mutually exclusive with CronExpression."
+              },
+              "MaxIterations": {
+                "type": "string",
+                "description": "Optional. Maximum number of times the cron schedule will fire before stopping. Only applicable when CronExpression is set. Defaults to unlimited."
+              },
+              "Prompt": {
+                "type": "string",
+                "description": "The message content to include in the notification when the timer fires or cron triggers. This is sent to the agent as a high-priority message."
+              },
+              "toolAction": {
+                "type": "string",
+                "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+              },
+              "toolSummary": {
+                "type": "string",
+                "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+              }
+            },
+            "required": [
+              "toolSummary",
+              "toolAction"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "search_web",
+          "description": "Performs a web search for a given query. Returns a summary of relevant information along with URL citations.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "domain": {
+                "type": "string",
+                "description": "Optional domain to recommend the search prioritize"
+              },
+              "query": {
+                "type": "string"
+              },
+              "toolAction": {
+                "type": "string",
+                "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+              },
+              "toolSummary": {
+                "type": "string",
+                "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+              }
+            },
+            "required": [
+              "query",
+              "toolSummary",
+              "toolAction"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "send_message",
+          "description": "Send a message to another agent. This tool can be used to communicate with subagents, peer agents, etc. Do not use this tool to communicate with the user.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "Message": {
+                "type": "string",
+                "description": "The message content."
+              },
+              "Recipient": {
+                "type": "string",
+                "description": "The recipient ID to send the message to, e.g. a subagent conversation ID."
+              },
+              "toolAction": {
+                "type": "string",
+                "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+              },
+              "toolSummary": {
+                "type": "string",
+                "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+              }
+            },
+            "required": [
+              "Recipient",
+              "Message",
+              "toolSummary",
+              "toolAction"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "view_file",
+          "description": "View the contents of a file from the local filesystem. This tool supports text files.\nText file usage:\n- The lines of the file are 1-indexed\n- The first time you read a new file the tool will enforce reading 800 lines to understand as much about the file as possible\n- The output of this tool call will be the file contents from StartLine to EndLine (inclusive)\n- You can view at most 800 lines at a time\n- To view the whole file do not pass StartLine or EndLine arguments",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "AbsolutePath": {
+                "type": "string",
+                "description": "Path to file to view. Must be an absolute path."
+              },
+              "EndLine": {
+                "type": "integer",
+                "description": "Optional. Endline to view, 1-indexed as usual, inclusive. This value must be greater than or equal to StartLine."
+              },
+              "IsSkillFile": {
+                "type": "boolean",
+                "description": "Optional. Set to true only when reading a file to execute its instructions for a task. Set to false if the purpose is to edit, preview, or manage the file."
+              },
+              "StartLine": {
+                "type": "integer",
+                "description": "Optional. Startline to view, 1-indexed as usual, inclusive. This value must be less than or equal to EndLine."
+              },
+              "toolAction": {
+                "type": "string",
+                "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+              },
+              "toolSummary": {
+                "type": "string",
+                "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+              }
+            },
+            "required": [
+              "AbsolutePath",
+              "toolSummary",
+              "toolAction"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "write_to_file",
+          "description": "Use this tool to create new files. The file and any parent directories will be created for you if they do not already exist.\n\t\tFollow these instructions:\n\t\t1. By default this tool will error if TargetFile already exists. To overwrite an existing file, set Overwrite to true.\n\t\t2. You MUST specify TargetFile as the FIRST argument. Please specify the full TargetFile before any of the code contents.\n\t\t3. When creating an artifact, make sure to set IsArtifact to true and provide an ArtifactMetadata.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "ArtifactMetadata": {
+                "type": "object",
+                "description": "Metadata for the artifact, required when IsArtifact is true.",
+                "properties": {
+                  "ArtifactType": {
+                    "type": "string",
+                    "description": "Type of artifact: 'implementation_plan', 'walkthrough', 'task', or 'other'.",
+                    "enum": [
+                      "implementation_plan",
+                      "walkthrough",
+                      "task",
+                      "other"
+                    ]
+                  },
+                  "RequestFeedback": {
+                    "type": "boolean",
+                    "description": "Set to true to request user feedback on this artifact."
+                  },
+                  "Summary": {
+                    "type": "string",
+                    "description": "Detailed multi-line summary of the artifact file, after edits have been made. Summary does not need to mention the artifact name and should focus on the contents and purpose of the artifact."
+                  }
+                },
+                "required": [
+                  "Summary",
+                  "ArtifactType"
+                ]
+              },
+              "CodeContent": {
+                "type": "string",
+                "description": "The code contents to write to the file."
+              },
+              "Description": {
+                "type": "string",
+                "description": "Brief, user-facing explanation of what this change did. Focus on non-obvious rationale, design decisions, or important context. Don't just restate what the code does."
+              },
+              "IsArtifact": {
+                "type": "boolean",
+                "description": "Set this to true when creating an artifact file."
+              },
+              "Overwrite": {
+                "type": "boolean",
+                "description": "Set this to true to overwrite an existing file. WARNING: This will replace the entire file contents. Only use when you explicitly intend to overwrite. Otherwise, use a code edit tool to modify existing files."
+              },
+              "TargetFile": {
+                "type": "string",
+                "description": "The target file to create and write code to. Must be an absolute path."
+              },
+              "toolAction": {
+                "type": "string",
+                "description": "Brief 2-5 word summary of what this tool is doing. Capitalize like a sentence. Some examples: 'Analyzing directory', 'Searching the web', 'Editing file', 'Viewing file', 'Running command', 'Semantic searching'."
+              },
+              "toolSummary": {
+                "type": "string",
+                "description": "Brief 2-5 word noun phrase describing what this tool call is about. Capitalize like a sentence. Some examples: 'Directory analysis', 'Web search', 'File edit', 'Command execution', 'Semantic search'."
+              }
+            },
+            "required": [
+              "TargetFile",
+              "Overwrite",
+              "CodeContent",
+              "Description",
+              "IsArtifact",
+              "toolSummary",
+              "toolAction"
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

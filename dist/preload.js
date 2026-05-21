@@ -52,6 +52,7 @@ const storageAPI = {
     getCustomModels: () => electron_1.ipcRenderer.invoke('storage:get-custom-models'),
     saveCustomModel: (model) => electron_1.ipcRenderer.invoke('storage:save-custom-model', model),
     deleteCustomModel: (modelName) => electron_1.ipcRenderer.invoke('storage:delete-custom-model', modelName),
+    testModelConnection: (model) => electron_1.ipcRenderer.invoke('storage:test-model-connection', model),
 };
 const logsAPI = {
     getElectronLogs: () => electron_1.ipcRenderer.invoke('logs:electron'),
@@ -134,6 +135,31 @@ window.addEventListener('DOMContentLoaded', () => {
         };
     }
     
+    // ─── Provider Icons & Status Helpers ──────────────────────────────
+    const PROVIDER_ICONS = {
+        openai: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>`,
+        anthropic: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="8" width="4" height="8" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="10" y="5" width="4" height="14" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="17" y="2" width="4" height="20" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>`,
+        google: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M12 4a8 8 0 0 1 5.66 13.66L12 12V4z" fill="currentColor" fill-opacity="0.2"/></svg>`,
+        ollama: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.5"/><circle cx="9" cy="10" r="1.5" fill="currentColor"/><circle cx="15" cy="10" r="1.5" fill="currentColor"/><path d="M8 15c1 1.5 3 2 4 2s3-.5 4-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+        custom: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`
+    };
+
+    const PROVIDER_COLORS = {
+        openai: '#10a37f',
+        anthropic: '#d97757',
+        google: '#4285f4',
+        ollama: '#f0f0f0',
+        custom: '#a855f7'
+    };
+
+    function getProviderIcon(provider) {
+        return PROVIDER_ICONS[provider] || PROVIDER_ICONS.custom;
+    }
+
+    function getProviderColor(provider) {
+        return PROVIDER_COLORS[provider] || PROVIDER_COLORS.custom;
+    }
+
     async function renderCustomModelsList() {
         const contentArea = document.getElementById('agy-custom-models-content');
         if (!contentArea) return;
@@ -169,20 +195,58 @@ window.addEventListener('DOMContentLoaded', () => {
                     item.style.backgroundColor = '#18181b';
                     item.style.border = '1px solid #27272a';
                     item.style.borderRadius = '8px';
-                    item.style.transition = 'border-color 0.15s ease';
+                    item.style.transition = 'border-color 0.15s ease, background-color 0.15s ease';
                     item.style.marginBottom = '8px';
                     
                     item.addEventListener('mouseenter', () => {
                         item.style.borderColor = '#3f3f46';
+                        item.style.backgroundColor = '#1c1c1f';
                     });
                     item.addEventListener('mouseleave', () => {
                         item.style.borderColor = '#27272a';
+                        item.style.backgroundColor = '#18181b';
                     });
                     
+                    // ─── Left: Provider icon + model info ────────────
+                    const left = document.createElement('div');
+                    left.style.display = 'flex';
+                    left.style.alignItems = 'center';
+                    left.style.gap = '12px';
+                    
+                    // Provider icon bubble
+                    const iconWrapper = document.createElement('div');
+                    iconWrapper.style.width = '32px';
+                    iconWrapper.style.height = '32px';
+                    iconWrapper.style.borderRadius = '8px';
+                    iconWrapper.style.display = 'flex';
+                    iconWrapper.style.alignItems = 'center';
+                    iconWrapper.style.justifyContent = 'center';
+                    iconWrapper.style.backgroundColor = getProviderColor(model.provider) + '18';
+                    iconWrapper.style.color = getProviderColor(model.provider);
+                    iconWrapper.style.flexShrink = '0';
+                    iconWrapper.innerHTML = getProviderIcon(model.provider);
+                    
+                    // Text info
                     const info = document.createElement('div');
                     info.style.display = 'flex';
                     info.style.flexDirection = 'column';
                     info.style.gap = '2px';
+                    
+                    // Title row with status dot
+                    const titleRow = document.createElement('div');
+                    titleRow.style.display = 'flex';
+                    titleRow.style.alignItems = 'center';
+                    titleRow.style.gap = '6px';
+                    
+                    // Status indicator dot
+                    const statusDot = document.createElement('span');
+                    statusDot.style.width = '6px';
+                    statusDot.style.height = '6px';
+                    statusDot.style.borderRadius = '50%';
+                    statusDot.style.flexShrink = '0';
+                    statusDot.style.backgroundColor = '#71717a'; // neutral = unknown
+                    statusDot.title = 'Connection status unknown (test to verify)';
+                    statusDot.style.transition = 'background-color 0.3s ease';
                     
                     const title = document.createElement('div');
                     title.style.fontSize = '14px';
@@ -190,15 +254,115 @@ window.addEventListener('DOMContentLoaded', () => {
                     title.style.color = '#f4f4f5';
                     title.textContent = model.displayName || model.name;
                     
+                    titleRow.appendChild(statusDot);
+                    titleRow.appendChild(title);
+                    
+                    // Subtitle with provider badge
                     const sub = document.createElement('div');
                     sub.style.fontSize = '12px';
                     sub.style.color = '#a1a1aa';
-                    const providerText = model.provider.toUpperCase();
-                    sub.textContent = `${providerText} • ${model.apiUrl}`;
+                    sub.style.display = 'flex';
+                    sub.style.alignItems = 'center';
+                    sub.style.gap = '8px';
                     
-                    info.appendChild(title);
+                    // Provider badge
+                    const badge = document.createElement('span');
+                    badge.style.fontSize = '10px';
+                    badge.style.fontWeight = '600';
+                    badge.style.textTransform = 'uppercase';
+                    badge.style.letterSpacing = '0.5px';
+                    badge.style.padding = '2px 6px';
+                    badge.style.borderRadius = '4px';
+                    badge.style.backgroundColor = getProviderColor(model.provider) + '22';
+                    badge.style.color = getProviderColor(model.provider);
+                    badge.textContent = model.provider;
+                    
+                    sub.appendChild(badge);
+                    sub.appendChild(document.createTextNode(model.apiUrl));
+                    
+                    info.appendChild(titleRow);
                     info.appendChild(sub);
                     
+                    left.appendChild(iconWrapper);
+                    left.appendChild(info);
+                    
+                    // ─── Right: Action buttons ──────────────────
+                    const actions = document.createElement('div');
+                    actions.style.display = 'flex';
+                    actions.style.gap = '4px';
+                    actions.style.alignItems = 'center';
+                    
+                    // Test Connection button
+                    const testBtn = document.createElement('button');
+                    testBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+                    testBtn.style.background = 'transparent';
+                    testBtn.style.border = 'none';
+                    testBtn.style.color = '#a1a1aa';
+                    testBtn.style.cursor = 'pointer';
+                    testBtn.style.padding = '6px';
+                    testBtn.style.borderRadius = '4px';
+                    testBtn.style.display = 'flex';
+                    testBtn.style.alignItems = 'center';
+                    testBtn.style.justifyContent = 'center';
+                    testBtn.style.transition = 'color 0.15s ease, background-color 0.15s ease';
+                    testBtn.title = 'Test connection';
+                    
+                    testBtn.addEventListener('mouseenter', () => {
+                        testBtn.style.color = '#22c55e';
+                        testBtn.style.backgroundColor = 'rgba(34, 197, 94, 0.1)';
+                    });
+                    testBtn.addEventListener('mouseleave', () => {
+                        testBtn.style.color = '#a1a1aa';
+                        testBtn.style.backgroundColor = 'transparent';
+                    });
+                    
+                    testBtn.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        // Show loading spinner
+                        testBtn.style.color = '#fbbf24';
+                        testBtn.style.cursor = 'wait';
+                        testBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>`;
+                        
+                        try {
+                            const result = await storageAPI.testModelConnection(model);
+                            
+                            if (result.success) {
+                                statusDot.style.backgroundColor = '#22c55e'; // green
+                                statusDot.title = result.message || 'Connected';
+                                testBtn.title = 'Connected ✓';
+                                testBtn.style.color = '#22c55e';
+                                testBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+                            } else {
+                                statusDot.style.backgroundColor = '#ef4444'; // red
+                                const errMsg = result.error || 'Connection failed';
+                                statusDot.title = errMsg;
+                                testBtn.title = errMsg;
+                                testBtn.style.color = '#ef4444';
+                                testBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
+                            }
+                        } catch (err) {
+                            statusDot.style.backgroundColor = '#ef4444';
+                            statusDot.title = 'Connection test failed';
+                            testBtn.title = 'Connection test failed';
+                            testBtn.style.color = '#ef4444';
+                            testBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
+                        }
+                        
+                        testBtn.style.cursor = 'pointer';
+                        
+                        // Reset to neutral after 5 seconds
+                        setTimeout(() => {
+                            if (statusDot.style.backgroundColor === '#22c55e') {
+                                statusDot.style.backgroundColor = '#71717a';
+                                statusDot.title = 'Connection status unknown (click test to verify)';
+                            }
+                            testBtn.style.color = '#a1a1aa';
+                            testBtn.title = 'Test connection';
+                            testBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+                        }, 5000);
+                    });
+                    
+                    // Delete button
                     const deleteBtn = document.createElement('button');
                     deleteBtn.innerHTML = `
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -239,8 +403,11 @@ window.addEventListener('DOMContentLoaded', () => {
                         }
                     });
                     
-                    item.appendChild(info);
-                    item.appendChild(deleteBtn);
+                    actions.appendChild(testBtn);
+                    actions.appendChild(deleteBtn);
+                    
+                    item.appendChild(left);
+                    item.appendChild(actions);
                     contentArea.appendChild(item);
                 });
             }
@@ -351,20 +518,25 @@ window.addEventListener('DOMContentLoaded', () => {
         // Modal card container
         const modal = document.createElement('div');
         modal.id = 'agy-modal-card';
-        modal.style.width = '480px';
-        modal.style.backgroundColor = '#18181b'; // zinc-900 background
-        modal.style.border = '1px solid #27272a'; // zinc-800 border
+        modal.style.width = '520px';
+        modal.style.maxHeight = '90vh';
+        modal.style.overflowY = 'auto';
+        modal.style.backgroundColor = '#18181b';
+        modal.style.border = '1px solid #27272a';
         modal.style.borderRadius = '16px';
         modal.style.padding = '32px';
         modal.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.5)';
-        modal.style.color = '#f4f4f5'; // zinc-100 text
+        modal.style.color = '#f4f4f5';
         modal.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
         modal.style.transform = 'scale(0.9) translateY(20px)';
         modal.style.transition = 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)';
         
         modal.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                <h3 style="margin: 0; font-size: 20px; font-weight: 600; color: #f4f4f5;">Add Custom AI Model</h3>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div id="agy-modal-provider-icon" style="width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; background-color: #10a37f18; color: #10a37f;">${PROVIDER_ICONS.openai}</div>
+                    <h3 style="margin: 0; font-size: 20px; font-weight: 600; color: #f4f4f5;">Add Custom AI Model</h3>
+                </div>
                 <button id="agy-modal-close" style="background: transparent; border: none; color: #a1a1aa; cursor: pointer; font-size: 20px; line-height: 1; padding: 4px; display: flex; align-items: center; justify-content: center; transition: color 0.15s ease;">&times;</button>
             </div>
             
@@ -383,8 +555,9 @@ window.addEventListener('DOMContentLoaded', () => {
                 
                 <!-- Model ID -->
                 <div style="display: flex; flex-direction: column; gap: 6px;">
-                    <label style="font-size: 13px; font-weight: 500; color: #a1a1aa;">Model Name / ID</label>
+                    <label style="font-size: 13px; font-weight: 500; color: #a1a1aa;">Model Name / ID <span style="color: #ef4444;">*</span></label>
                     <input type="text" id="agy-model-id" placeholder="e.g. gpt-4o" style="background-color: #27272a; border: 1px solid #3f3f46; border-radius: 8px; color: #f4f4f5; padding: 10px 12px; font-size: 14px; outline: none; transition: border-color 0.15s ease;" required />
+                    <div id="agy-model-id-error" style="font-size: 11px; color: #ef4444; display: none; margin-top: 2px;"></div>
                 </div>
                 
                 <!-- Friendly Display Name -->
@@ -395,20 +568,30 @@ window.addEventListener('DOMContentLoaded', () => {
                 
                 <!-- API Key -->
                 <div id="agy-key-container" style="display: flex; flex-direction: column; gap: 6px;">
-                    <label style="font-size: 13px; font-weight: 500; color: #a1a1aa;">API Key</label>
+                    <label style="font-size: 13px; font-weight: 500; color: #a1a1aa;">API Key <span id="agy-key-required" style="color: #ef4444;">*</span></label>
                     <input type="password" id="agy-api-key" placeholder="Enter API key" style="background-color: #27272a; border: 1px solid #3f3f46; border-radius: 8px; color: #f4f4f5; padding: 10px 12px; font-size: 14px; outline: none; transition: border-color 0.15s ease;" />
                 </div>
                 
                 <!-- API URL -->
                 <div style="display: flex; flex-direction: column; gap: 6px;">
-                    <label style="font-size: 13px; font-weight: 500; color: #a1a1aa;">API URL</label>
-                    <input type="text" id="agy-api-url" placeholder="https://api.openai.com/v1/chat/completions" style="background-color: #27272a; border: 1px solid #3f3f46; border-radius: 8px; color: #f4f4f5; padding: 10px 12px; font-size: 14px; outline: none; transition: border-color 0.15s ease;" required />
+                    <label style="font-size: 13px; font-weight: 500; color: #a1a1aa;">API URL <span style="color: #ef4444;">*</span></label>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <input type="text" id="agy-api-url" placeholder="https://api.openai.com/v1/chat/completions" style="flex: 1; background-color: #27272a; border: 1px solid #3f3f46; border-radius: 8px; color: #f4f4f5; padding: 10px 12px; font-size: 14px; outline: none; transition: border-color 0.15s ease;" required />
+                        <div id="agy-url-status" style="width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background-color: #71717a; transition: background-color 0.3s ease;" title="URL not yet validated"></div>
+                    </div>
+                    <div id="agy-url-error" style="font-size: 11px; color: #ef4444; display: none; margin-top: 2px;"></div>
                 </div>
             </div>
             
-            <div style="display: flex; justify-content: flex-end; gap: 12px;">
-                <button id="agy-btn-cancel" style="background-color: #27272a; border: 1px solid #3f3f46; border-radius: 8px; color: #e4e4e7; padding: 10px 18px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background-color 0.15s ease, color 0.15s ease;">Cancel</button>
-                <button id="agy-btn-save" style="background-color: #e4e4e7; border: none; border-radius: 8px; color: #18181b; padding: 10px 22px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background-color 0.15s ease, opacity 0.15s ease;">Save Model</button>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <button id="agy-btn-test" style="background-color: transparent; border: 1px solid #3f3f46; border-radius: 8px; color: #a1a1aa; padding: 10px 14px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s ease; display: flex; align-items: center; gap: 6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    Test Connection
+                </button>
+                <div style="display: flex; gap: 12px;">
+                    <button id="agy-btn-cancel" style="background-color: #27272a; border: 1px solid #3f3f46; border-radius: 8px; color: #e4e4e7; padding: 10px 18px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background-color 0.15s ease, color 0.15s ease;">Cancel</button>
+                    <button id="agy-btn-save" style="background-color: #e4e4e7; border: none; border-radius: 8px; color: #18181b; padding: 10px 22px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background-color 0.15s ease, opacity 0.15s ease;">Save Model</button>
+                </div>
             </div>
         `;
         
@@ -426,6 +609,12 @@ window.addEventListener('DOMContentLoaded', () => {
         const keyInput = document.getElementById('agy-api-key');
         const modelInput = document.getElementById('agy-model-id');
         const nameInput = document.getElementById('agy-display-name');
+        const urlStatus = document.getElementById('agy-url-status');
+        const urlError = document.getElementById('agy-url-error');
+        const modelIdError = document.getElementById('agy-model-id-error');
+        const providerIcon = document.getElementById('agy-modal-provider-icon');
+        const keyRequired = document.getElementById('agy-key-required');
+        const testBtn = document.getElementById('agy-btn-test');
         
         const prefilledUrls = {
             openai: 'https://api.openai.com/v1/chat/completions',
@@ -433,6 +622,55 @@ window.addEventListener('DOMContentLoaded', () => {
             ollama: 'http://localhost:11434/v1/chat/completions',
             custom: ''
         };
+        
+        // Real-time URL validation
+        const validateUrl = () => {
+            const val = urlInput.value.trim();
+            if (!val) {
+                urlStatus.style.backgroundColor = '#71717a';
+                urlStatus.title = 'URL required';
+                return;
+            }
+            try {
+                const u = new URL(val);
+                if (['http:', 'https:'].includes(u.protocol)) {
+                    urlStatus.style.backgroundColor = '#22c55e';
+                    urlStatus.title = 'Valid URL format';
+                    urlError.style.display = 'none';
+                } else {
+                    urlStatus.style.backgroundColor = '#fbbf24';
+                    urlStatus.title = 'URL must use http or https';
+                }
+            } catch (e) {
+                urlStatus.style.backgroundColor = '#ef4444';
+                urlStatus.title = 'Invalid URL format';
+                urlError.textContent = 'Please enter a valid URL (e.g. https://api.openai.com/v1)';
+                urlError.style.display = 'block';
+            }
+        };
+        
+        // Model ID validation
+        const validateModelId = () => {
+            const val = modelInput.value.trim();
+            if (val && !/^[a-zA-Z0-9._-]+$/.test(val)) {
+                modelIdError.textContent = 'Use only letters, numbers, dots, hyphens, underscores';
+                modelIdError.style.display = 'block';
+                modelInput.style.borderColor = '#ef4444';
+            } else {
+                modelIdError.style.display = 'none';
+                modelInput.style.borderColor = '#3f3f46';
+            }
+        };
+        
+        urlInput.addEventListener('input', validateUrl);
+        modelInput.addEventListener('input', () => {
+            validateModelId();
+            if (providerSelect.value === 'google') {
+                const modelId = modelInput.value.trim() || 'model-name';
+                urlInput.value = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`;
+                validateUrl();
+            }
+        });
         
         const updatePrefills = () => {
             const val = providerSelect.value;
@@ -444,13 +682,21 @@ window.addEventListener('DOMContentLoaded', () => {
                 urlInput.value = prefilledUrls[val] || '';
             }
             
+            // Update provider icon
+            providerIcon.style.backgroundColor = getProviderColor(val) + '18';
+            providerIcon.style.color = getProviderColor(val);
+            providerIcon.innerHTML = getProviderIcon(val);
+            
+            // Update key requirement indicator
             if (val === 'ollama') {
                 keyContainer.style.display = 'none';
                 keyInput.value = '';
+                keyRequired.style.display = 'none';
                 modelInput.placeholder = 'e.g. llama3';
                 nameInput.placeholder = 'e.g. Llama 3 (Ollama)';
             } else {
                 keyContainer.style.display = 'flex';
+                keyRequired.style.display = 'inline';
                 if (val === 'openai') {
                     modelInput.placeholder = 'e.g. gpt-4o';
                     nameInput.placeholder = 'e.g. GPT-4o (OpenAI)';
@@ -465,15 +711,9 @@ window.addEventListener('DOMContentLoaded', () => {
                     nameInput.placeholder = 'e.g. My Custom Model';
                 }
             }
+            
+            validateUrl();
         };
-        
-        // Listen for input on modelId to update Google URL dynamically!
-        modelInput.addEventListener('input', () => {
-            if (providerSelect.value === 'google') {
-                const modelId = modelInput.value.trim() || 'model-name';
-                urlInput.value = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`;
-            }
-        });
         
         providerSelect.addEventListener('change', updatePrefills);
         updatePrefills();
@@ -503,11 +743,69 @@ window.addEventListener('DOMContentLoaded', () => {
         closeBtn.addEventListener('mouseenter', () => { closeBtn.style.color = '#f4f4f5'; });
         closeBtn.addEventListener('mouseleave', () => { closeBtn.style.color = '#a1a1aa'; });
         
-        // Focus Highlights - Native matching slate outline focus
+        // Test button hover
+        testBtn.addEventListener('mouseenter', () => { 
+            testBtn.style.color = '#22c55e'; 
+            testBtn.style.borderColor = '#22c55e44';
+        });
+        testBtn.addEventListener('mouseleave', () => { 
+            testBtn.style.color = '#a1a1aa'; 
+            testBtn.style.borderColor = '#3f3f46';
+        });
+        
+        // Focus Highlights
         const inputs = [providerSelect, urlInput, keyInput, modelInput, nameInput];
         inputs.forEach(input => {
             input.addEventListener('focus', () => { input.style.borderColor = '#71717a'; });
             input.addEventListener('blur', () => { input.style.borderColor = '#3f3f46'; });
+        });
+        
+        // ─── Test Connection Button ──────────────────────────────
+        testBtn.addEventListener('click', async () => {
+            const provider = providerSelect.value;
+            const apiUrl = urlInput.value.trim();
+            const apiKey = keyInput.value.trim();
+            
+            if (!apiUrl) {
+                urlError.textContent = 'Please enter an API URL first';
+                urlError.style.display = 'block';
+                return;
+            }
+            
+            const originalHtml = testBtn.innerHTML;
+            testBtn.disabled = true;
+            testBtn.style.cursor = 'wait';
+            testBtn.style.color = '#fbbf24';
+            testBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Testing...`;
+            
+            try {
+                const proxyPort = 50999;
+                const resp = await fetch(`http://127.0.0.1:${proxyPort}/health`);
+                if (resp.ok) {
+                    const health = await resp.json();
+                    testBtn.style.color = '#22c55e';
+                    testBtn.style.borderColor = '#22c55e44';
+                    testBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Proxy Active ✓`;
+                    urlStatus.style.backgroundColor = '#22c55e';
+                    urlStatus.title = 'Proxy reachable';
+                } else {
+                    testBtn.style.color = '#ef4444';
+                    testBtn.style.borderColor = '#ef444444';
+                    testBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> Check Failed`;
+                }
+            } catch (err) {
+                testBtn.style.color = '#ef4444';
+                testBtn.style.borderColor = '#ef444444';
+                testBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> No Connection`;
+            }
+            
+            setTimeout(() => {
+                testBtn.disabled = false;
+                testBtn.style.cursor = 'pointer';
+                testBtn.style.color = '#a1a1aa';
+                testBtn.style.borderColor = '#3f3f46';
+                testBtn.innerHTML = originalHtml;
+            }, 3000);
         });
         
         saveBtn.addEventListener('click', async () => {
@@ -517,20 +815,54 @@ window.addEventListener('DOMContentLoaded', () => {
             const apiKey = keyInput.value.trim();
             const apiUrl = urlInput.value.trim();
             
+            // Clear previous errors
+            modelIdError.style.display = 'none';
+            urlError.style.display = 'none';
+            modelInput.style.borderColor = '#3f3f46';
+            urlInput.style.borderColor = '#3f3f46';
+            
+            let hasError = false;
+            
             if (!modelId) {
-                alert('Model ID is required.');
-                return;
+                modelIdError.textContent = 'Model ID is required';
+                modelIdError.style.display = 'block';
+                modelInput.style.borderColor = '#ef4444';
+                hasError = true;
+            } else if (!/^[a-zA-Z0-9._-]+$/.test(modelId)) {
+                modelIdError.textContent = 'Use only letters, numbers, dots, hyphens, underscores';
+                modelIdError.style.display = 'block';
+                modelInput.style.borderColor = '#ef4444';
+                hasError = true;
             }
             
             if (provider !== 'ollama' && !apiKey) {
                 alert('API Key is required.');
-                return;
+                hasError = true;
             }
             
             if (!apiUrl) {
-                alert('API URL is required.');
-                return;
+                urlError.textContent = 'API URL is required';
+                urlError.style.display = 'block';
+                urlInput.style.borderColor = '#ef4444';
+                hasError = true;
+            } else {
+                try {
+                    const u = new URL(apiUrl);
+                    if (!['http:', 'https:'].includes(u.protocol)) {
+                        urlError.textContent = 'URL must start with http:// or https://';
+                        urlError.style.display = 'block';
+                        urlInput.style.borderColor = '#ef4444';
+                        hasError = true;
+                    }
+                } catch (e) {
+                    urlError.textContent = 'Invalid URL format';
+                    urlError.style.display = 'block';
+                    urlInput.style.borderColor = '#ef4444';
+                    hasError = true;
+                }
             }
+            
+            if (hasError) return;
             
             if (!displayName) {
                 const providerNames = {

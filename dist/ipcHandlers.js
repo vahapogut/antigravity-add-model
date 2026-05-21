@@ -226,6 +226,104 @@ function registerIpcHandlers(storageManager) {
             return { success: false, error: err.message };
         }
     });
+    // P3-17: Test model connectivity — sends a lightweight HEAD/GET to the model endpoint
+    electron_1.ipcMain.handle('storage:test-model-connection', async (_event, model) => {
+        const https = require('https');
+        const http = require('http');
+        
+        return new Promise((resolve) => {
+            try {
+                let urlStr = model.apiUrl;
+                // Normalize URL for chat API endpoints
+                if (model.provider === 'openai' || model.provider === 'custom' || model.provider === 'ollama') {
+                    if (!urlStr.toLowerCase().includes('/chat/completions') && !urlStr.toLowerCase().includes('/completions')) {
+                        if (urlStr.endsWith('/v1')) {
+                            urlStr += '/chat/completions';
+                        } else if (!urlStr.endsWith('/')) {
+                            urlStr += '/v1/chat/completions';
+                        } else {
+                            urlStr += 'v1/chat/completions';
+                        }
+                    }
+                }
+                
+                const url = new URL(urlStr);
+                const client = url.protocol === 'https:' ? https : http;
+                
+                const options = {
+                    method: 'HEAD',
+                    hostname: url.hostname,
+                    port: url.port || (url.protocol === 'https:' ? 443 : 80),
+                    path: url.pathname + url.search,
+                    timeout: 10000,
+                    rejectUnauthorized: !model.allowUnauthorized,
+                };
+                
+                // Add auth header
+                if (model.apiKey && model.apiKey !== 'none') {
+                    const cryptoStore = require('./cryptoStore');
+                    let key = model.apiKey;
+                    try {
+                        key = cryptoStore.decryptString(model.apiKey);
+                    } catch { /* key might not be encrypted */ }
+                    
+                    if (model.provider === 'anthropic') {
+                        options.headers = {
+                            'x-api-key': key,
+                            'anthropic-version': '2025-04-01',
+                        };
+                    } else if (model.provider === 'google') {
+                        options.headers = {
+                            'x-goog-api-key': key,
+                        };
+                    } else {
+                        options.headers = {
+                            'Authorization': `Bearer ${key}`,
+                        };
+                    }
+                }
+                
+                const req = client.request(options, (res) => {
+                    // Any response (even 401/403) means the endpoint is reachable
+                    if (res.statusCode >= 200 && res.statusCode < 500) {
+                        resolve({ 
+                            success: true, 
+                            status: res.statusCode,
+                            message: `Endpoint reachable (HTTP ${res.statusCode})` 
+                        });
+                    } else {
+                        resolve({ 
+                            success: false, 
+                            status: res.statusCode,
+                            error: `Server returned HTTP ${res.statusCode}` 
+                        });
+                    }
+                    res.resume(); // consume response to free memory
+                });
+                
+                req.setTimeout(10000, () => {
+                    req.destroy();
+                    resolve({ success: false, error: 'Connection timed out after 10 seconds' });
+                });
+                
+                req.on('error', (err) => {
+                    let message = err.message;
+                    if (message.includes('ECONNREFUSED')) {
+                        message = 'Connection refused — server may not be running';
+                    } else if (message.includes('ENOTFOUND') || message.includes('getaddrinfo')) {
+                        message = 'Host not found — check the API URL';
+                    } else if (message.includes('CERT') || message.includes('certificate') || message.includes('SSL')) {
+                        message = 'SSL/TLS error — try enabling "allowUnauthorized" for self-signed certs';
+                    }
+                    resolve({ success: false, error: message });
+                });
+                
+                req.end();
+            } catch (err) {
+                resolve({ success: false, error: `Invalid URL: ${err.message}` });
+            }
+        });
+    });
     // Logs
     electron_1.ipcMain.handle('logs:electron', async () => {
         try {

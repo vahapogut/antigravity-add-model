@@ -8,11 +8,16 @@
     "name": "Google",
     "email": "antigravity-support@google.com"
   },
+  "license": "Apache-2.0",
   "main": "dist/main.js",
   "dependencies": {
     "chrome-devtools-mcp": "^0.23.0",
     "electron-log": "^5.4.3",
     "electron-updater": "^6.8.3",
     "shell-env": "^4.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3"
   }
 }

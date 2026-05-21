@@ -15,7 +15,8 @@ Start-Sleep -Seconds 3
 Write-Host "   OK" -ForegroundColor Green
 
 # 2. Yollari tanimla
-$ProjectDir = "c:\Users\vahap\OneDrive\Desktop\antigravity-add-model"
+# P2-10: Use script's own directory instead of hardcoded developer path
+$ProjectDir = $PSScriptRoot
 $AsarPath = "$env:LOCALAPPDATA\Programs\antigravity\resources\app.asar"
 $BackupAsar = "$AsarPath.backup"
 $TempDir = Join-Path $env:TEMP "antigravity_safe_deploy"

@@ -224,7 +224,9 @@ function startLanguageServer(port, csrf, headless) {
         if (headless) {
             args.push('--headless');
         }
-        console.log(`\nSpawning: ${exports.LS_BINARY} ${args.join(' ')}\n`);
+        // P0-3: Mask CSRF token in terminal output
+        const safeArgs = args.map(a => a === csrf ? '***' : a);
+        console.log(`\nSpawning: ${exports.LS_BINARY} ${safeArgs.join(' ')}\n`);
         // Electron apps don't inherit shell environment variables when they are not launched through the terminal.
         // We need to load the shell env explicitly so the language server can discover tools in the user's environment.
         const env = { ...process.env, ...(0, shell_env_1.shellEnvSync)() };
