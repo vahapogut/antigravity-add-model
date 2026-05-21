@@ -244,8 +244,22 @@ function mapGeminiToOpenAI(geminiBody, modelName) {
                     // Regular text message
                     const role = item.role === 'model' ? 'assistant' : (item.role || 'user');
                     let content = '';
-                    content = item.parts.map(p => p.text || '').join('');
-                    messages.push({ role, content });
+                    let reasoning_content = '';
+                    
+                    if (role === 'assistant') {
+                        const regularParts = item.parts.filter(p => !p.thought);
+                        const thoughtParts = item.parts.filter(p => p.thought);
+                        content = regularParts.map(p => p.text || '').join('');
+                        reasoning_content = thoughtParts.map(p => p.text || '').join('');
+                    } else {
+                        content = item.parts.map(p => p.text || '').join('');
+                    }
+                    
+                    const msg = { role, content };
+                    if (reasoning_content) {
+                        msg.reasoning_content = reasoning_content;
+                    }
+                    messages.push(msg);
                 }
             }
         }
@@ -421,11 +435,20 @@ function mapOpenAIToGemini(openAiRes, modelName) {
         };
     }
 
+    const reasoning = choice?.message?.reasoning_content || choice?.message?.reasoning || '';
+    const parts = [];
+    if (reasoning) {
+        parts.push({ text: reasoning, thought: true });
+    }
+    if (text) {
+        parts.push({ text });
+    }
+
     return {
         candidates: [
             {
                 content: {
-                    parts: [{ text }],
+                    parts: parts,
                     role: 'model'
                 },
                 finishReason: finishReason,
@@ -500,6 +523,8 @@ function mapAnthropicToGemini(anthRes, modelName) {
     for (const block of contentBlocks) {
         if (block.type === 'text' && block.text) {
             parts.push({ text: block.text });
+        } else if (block.type === 'thinking' && block.thinking) {
+            parts.push({ text: block.thinking, thought: true });
         } else if (block.type === 'tool_use') {
             // Store tool_call_id for later matching with functionResponse
             const modelTCIds = modelToolCallIds.get(modelName) || {};
@@ -595,7 +620,16 @@ function mapOpenAIChunkToGemini(chunk, modelName) {
     
     if (reasoning) {
         context.accumulatedReasoning += reasoning;
-        text = `\n> **Thinking Process:**\n> ${reasoning.replace(/\n/g, '\n> ')}\n`;
+        return {
+            candidates: [{
+                content: {
+                    parts: [{ text: reasoning, thought: true }],
+                    role: 'model'
+                },
+                finishReason: 'OTHER',
+                index: 0
+            }]
+        };
     }
     
     if (text) {
@@ -733,6 +767,19 @@ function mapAnthropicChunkToGemini(chunk, modelName) {
                 candidates: [{
                     content: {
                         parts: [{ text }],
+                        role: 'model'
+                    },
+                    finishReason: 'OTHER',
+                    index: 0
+                }]
+            };
+        } else if (delta?.type === 'thinking_delta') {
+            const thinkingText = delta.thinking || '';
+            context.accumulatedReasoning += thinkingText;
+            return {
+                candidates: [{
+                    content: {
+                        parts: [{ text: thinkingText, thought: true }],
                         role: 'model'
                     },
                     finishReason: 'OTHER',
@@ -1142,27 +1189,45 @@ function handleRequest(req, res) {
 
                         const mergeModels = (target) => {
                             if (Array.isArray(target)) {
-                                const mapped = customModels.map((m, idx) => ({
-                                    name: "models/" + generateModelPlaceholderId(m),
-                                    version: "1.0",
-                                    displayName: m.displayName,
-                                    description: m.description,
-                                    inputTokenLimit: 1048576,
-                                    outputTokenLimit: 4096,
-                                    supportedGenerationMethods: ["generateContent", "countTokens"],
-                                    temperature: 0.7,
-                                    topP: 0.9,
-                                    topK: 40
-                                }));
+                                const mapped = customModels.map((m, idx) => {
+                                    const nameLower = (m.name || '').toLowerCase();
+                                    const extLower = (m.externalModelName || '').toLowerCase();
+                                    const displayLower = (m.displayName || '').toLowerCase();
+                                    const isThinking = m.provider === 'anthropic' || m.provider === 'openai' ||
+                                        /thinking|reasoning|reasoner|o1|o3|r1|opus-4|sonnet-4|claude-4|3-7|4-7|3\.7|4\.7/i.test(nameLower) ||
+                                        /thinking|reasoning|reasoner|o1|o3|r1|opus-4|sonnet-4|claude-4|3-7|4-7|3\.7|4\.7/i.test(extLower) ||
+                                        /thinking|reasoning|reasoner|o1|o3|r1|opus-4|sonnet-4|claude-4|3-7|4-7|3\.7|4\.7/i.test(displayLower);
+                                    
+                                    return {
+                                        name: "models/" + generateModelPlaceholderId(m),
+                                        version: "1.0",
+                                        displayName: m.displayName,
+                                        description: m.description,
+                                        inputTokenLimit: 1048576,
+                                        outputTokenLimit: 4096,
+                                        supportedGenerationMethods: ["generateContent", "countTokens"],
+                                        temperature: isThinking ? undefined : 0.7,
+                                        topP: isThinking ? undefined : 0.9,
+                                        topK: isThinking ? undefined : 40
+                                    };
+                                });
                                 return [...mapped, ...target];
                             } else if (target && typeof target === 'object') {
                                 const result = { ...target };
                                 customModels.forEach((m, idx) => {
                                     const slug = toSlug(m);
+                                    const nameLower = (m.name || '').toLowerCase();
+                                    const extLower = (m.externalModelName || '').toLowerCase();
+                                    const displayLower = (m.displayName || '').toLowerCase();
+                                    const isThinking = m.provider === 'anthropic' || m.provider === 'openai' ||
+                                        /thinking|reasoning|reasoner|o1|o3|r1|opus-4|sonnet-4|claude-4|3-7|4-7|3\.7|4\.7/i.test(nameLower) ||
+                                        /thinking|reasoning|reasoner|o1|o3|r1|opus-4|sonnet-4|claude-4|3-7|4-7|3\.7|4\.7/i.test(extLower) ||
+                                        /thinking|reasoning|reasoner|o1|o3|r1|opus-4|sonnet-4|claude-4|3-7|4-7|3\.7|4\.7/i.test(displayLower);
+
                                     result[slug] = {
                                         displayName: m.displayName,
                                         supportsImages: false,
-                                        supportsThinking: false,
+                                        supportsThinking: isThinking,
                                         recommended: true,
                                         maxTokens: 1048576,
                                         maxOutputTokens: 4096,
@@ -1172,7 +1237,7 @@ function handleRequest(req, res) {
                                         modelProvider: "MODEL_PROVIDER_GOOGLE"
                                     };
                                     m._slug = slug;
-                                    console.log(`[Proxy] Custom model "${m.displayName}" => slug: ${slug} => model: ${generateModelPlaceholderId(m)}`);
+                                    console.log(`[Proxy] Custom model "${m.displayName}" => slug: ${slug} => model: ${generateModelPlaceholderId(m)} => supportsThinking: ${isThinking}`);
                                 });
                                 return result;
                             }
