@@ -491,30 +491,30 @@ Set `DEBUG=antigravity:*` for verbose logging (debug level captures stream parse
 ## Changelog
 
 ### v2.0.3
-- 🏗️ **Architecture**: Extracted Google AI Studio translator to dedicated module
-- 🏗️ **Architecture**: Managed proxy state cleanup with proper interval lifecycle
-- ✨ **New**: Model connectivity test in Settings (green/red status indicator)
-- ✨ **New**: Automatic request retry with exponential backoff (429/5xx)
-- ✨ **New**: Configurable `maxRetries` per model
-- 🔒 **Security**: Removed automatic SSL bypass for custom providers
-- 🔒 **Security**: Added 10MB request body size limit (413 on overflow)
-- 🔒 **Security**: Masked CSRF token in console output
-- 🔒 **Security**: Added timeouts to all Google proxy requests (30-60s)
-- 🛡️ **Error handling**: Added debug logging to 6 previously-silent catch blocks
-- 🛡️ **Error handling**: Proper error propagation in streaming response handlers
-- 🐛 **Fixed**: `deploy.ps1` now uses `$PSScriptRoot` (portable, no hardcoded paths)
-- 📝 **Documentation**: Updated README with TypeScript architecture, security defaults, troubleshooting
-- 📦 **Package**: Added `Apache-2.0` license field to `package.json`
+- **Architecture**: Extracted Google AI Studio translator to dedicated module
+- **Architecture**: Managed proxy state cleanup with proper interval lifecycle
+- **New**: Model connectivity test in Settings (green/red status indicator)
+- **New**: Automatic request retry with exponential backoff (429/5xx)
+- **New**: Configurable `maxRetries` per model
+- **Security**: Removed automatic SSL bypass for custom providers
+- **Security**: Added 10MB request body size limit (413 on overflow)
+- **Security**: Masked CSRF token in console output
+- **Security**: Added timeouts to all Google proxy requests (30-60s)
+- **Error handling**: Added debug logging to 6 previously-silent catch blocks
+- **Error handling**: Proper error propagation in streaming response handlers
+- **Fixed**: `deploy.ps1` now uses `$PSScriptRoot` (portable, no hardcoded paths)
+- **Documentation**: Updated README with TypeScript architecture, security defaults, troubleshooting
+- **Package**: Added `Apache-2.0` license field to `package.json`
 
 ### v2.0.2
-- 🔒 **Security**: Replaced `eval()` with safe `repairPartialJson()` (code injection fix)
-- 🔒 **Security**: SSL bypass now only when `allowUnauthorized: true` (not all custom providers)
-- 🔒 **Security**: Removed diagnostic `api_response_raw.json` disk writes
-- 🔒 **Security**: Added 10MB request body size limit
-- 🔒 **Security**: Added 120s configurable API request timeout
-- 🛡️ Added error handlers for streaming and non-streaming API responses
-- 🐛 Fixed `deploy.ps1` hardcoded path → now uses `$PSScriptRoot`
-- 📝 Added Security Considerations, Troubleshooting, and Developer Guide
+- **Security**: Replaced `eval()` with safe `repairPartialJson()` (code injection fix)
+- **Security**: SSL bypass now only when `allowUnauthorized: true` (not all custom providers)
+- **Security**: Removed diagnostic `api_response_raw.json` disk writes
+- **Security**: Added 10MB request body size limit
+- **Security**: Added 120s configurable API request timeout
+- **Error handling**: Added error handlers for streaming and non-streaming API responses
+- **Fixed**: `deploy.ps1` hardcoded path to now uses `$PSScriptRoot`
+- **Documentation**: Added Security Considerations, Troubleshooting, and Developer Guide
 
 ### v2.0.0
 - Initial release: multi-provider proxy, API key encryption, streaming, tool calls, custom UI
@@ -534,3 +534,11 @@ Pull requests welcome. Please ensure:
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE) for details.
+
+---
+
+## Developer
+
+**Abdulvahap OGUT**
+
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/abdulvahap-ogut-343992398/)
