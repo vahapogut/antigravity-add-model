@@ -16,22 +16,43 @@ Antigravity IDE
 
 ### Key Components
 
-| `src/proxy.ts` | Local HTTP proxy: intercepts Cloud Code API, merges custom models, translates formats, wraps responses |
-| `src/proxy/registry.ts` | Auto-discovery translator registry — loads `openai`, `anthropic`, `google`, `ollama` translators dynamically |
-| `src/proxy/translators/openai.ts` | OpenAI ↔ Gemini format translation (request, response, streaming chunks, tool calls) |
-| `src/proxy/translators/anthropic.ts` | Anthropic ↔ Gemini format translation (Claude tool_use, SSE streaming, thinking support) |
-| `src/proxy/translators/google.ts` | Google AI Studio passthrough + streaming endpoint routing |
-| `src/proxy/translators/utils.ts` | Shared translator utilities (tool call mapping, DSML parsing, parameter type fixing) |
-| `src/proxy/shared.ts` | Cross-turn state management with automatic TTL cleanup |
-| `src/proxy/modelUtils.ts` | Centralized model capability detection (thinking, DeepSeek, Claude) |
-| `src/languageServer.ts` | Modified language server manager, starts proxy on app launch |
-| `src/ipcHandlers.ts` | Backend IPC: `storage:get-custom-models`, `storage:save-custom-model`, `storage:delete-custom-model`, `storage:test-model-connection` |
-| `src/cryptoStore.ts` | AES-256-GCM API key encryption via Electron `safeStorage` |
-| `src/schemaValidator.ts` | Runtime schema validation for API responses, custom models, and streaming chunks |
-| `src/preload.ts` | UI injection: "Custom Models" dashboard in Settings → Models tab, inline Add Model modal with animations, connectivity test button |
-| `src/main.ts` | App lifecycle: intercepts & blocks `SetCloudCodeURL` requests to prevent frontend from overriding proxy endpoint |
-| `deploy.ps1` | PowerShell script: stop Antigravity, pack `dist/` into `app.asar`, restart (portable via `$PSScriptRoot`) |
-| `repack.ps1` | Repack script: re-package existing `app.asar` with updated `dist/` files |
+#### Proxy Core
+| File | Role |
+|---|---|
+| [proxy.ts](src/proxy.ts) | Local HTTP proxy: intercepts Cloud Code API, merges custom models, translates provider formats, wraps responses |
+| [registry.ts](src/proxy/registry.ts) | Auto-discovery translator registry that dynamically loads `openai`, `anthropic`, `google`, and `ollama` translators |
+| [shared.ts](src/proxy/shared.ts) | Cross-turn state management with automatic TTL cleanup |
+| [modelUtils.ts](src/proxy/modelUtils.ts) | Centralized model capability detection (thinking, DeepSeek, Claude) |
+
+#### Format Translators
+| File | Role |
+|---|---|
+| [openai.ts](src/proxy/translators/openai.ts) | OpenAI ↔ Gemini format translation (request, response, streaming chunks, tool calls) |
+| [anthropic.ts](src/proxy/translators/anthropic.ts) | Anthropic ↔ Gemini format translation (Claude tool_use, SSE streaming, thinking support) |
+| [google.ts](src/proxy/translators/google.ts) | Google AI Studio passthrough with streaming endpoint routing |
+| [utils.ts](src/proxy/translators/utils.ts) | Shared translator utilities (tool call mapping, DSML parsing, parameter type fixing) |
+
+#### Security & Data
+| File | Role |
+|---|---|
+| [cryptoStore.ts](src/cryptoStore.ts) | AES-256-GCM API key encryption via Electron `safeStorage` |
+| [schemaValidator.ts](src/schemaValidator.ts) | Runtime schema validation for API responses, custom models, and streaming chunks |
+
+#### UI & App Integration
+| File | Role |
+|---|---|
+| [preload.ts](src/preload.ts) | UI injection: Custom Models dashboard in Settings → Models, inline Add Model modal with animations, connectivity test button |
+| [main.ts](src/main.ts) | App lifecycle: intercepts and blocks `SetCloudCodeURL` requests to prevent the frontend from overriding the proxy endpoint |
+| [ipcHandlers.ts](src/ipcHandlers.ts) | Backend IPC: `storage:get-custom-models`, `storage:save-custom-model`, `storage:delete-custom-model`, `storage:test-model-connection` |
+| [languageServer.ts](src/languageServer.ts) | Modified language server manager, starts proxy on app launch |
+
+#### Deployment Scripts
+| File | Platform |
+|---|---|
+| [deploy.ps1](deploy.ps1) | Windows — stops Antigravity, packs `dist/` into `app.asar`, restarts |
+| [deploy.sh](deploy.sh) | macOS — extracts `app.asar` from `/Applications/`, replaces `dist/`, repacks and relaunches |
+| [deploy_linux.sh](deploy_linux.sh) | Linux — auto-detects installation path across standard Electron app directories |
+| [repack.ps1](repack.ps1) | Repacks existing `app.asar` with updated `dist/` files |
 
 > [!NOTE]
 > The codebase was migrated from JavaScript (`dist/`) to **TypeScript** (`src/`) in v2.0.3. All source code lives under `src/` and compiles to `dist/` via `npx tsc`. The compiled `dist/` files are what get packed into `app.asar`.
@@ -126,9 +147,9 @@ If the default port `50999` is already in use (e.g., by another instance or stal
 
 Multiple models can now make simultaneous requests without cross-contamination. Previously, global variables like `lastToolCallIds` and `lastReasoningContent` could be overwritten by concurrent requests from different models. These have been migrated to **per-model `Map` structures**:
 
-- `modelToolCallIds` (`Map<modelName, { fnName: toolCallId }>`) — scoped tool call ID tracking
-- `modelReasoningContent` (`Map<modelName, string>`) — scoped DeepSeek reasoning state
-- `activeStreamContexts` (`Map<streamId, context>`) — scoped streaming accumulator
+- `modelToolCallIds` (`Map<modelName, { fnName: toolCallId }>`) keeps tool call ID tracking scoped per model
+- `modelReasoningContent` (`Map<modelName, string>`) keeps DeepSeek reasoning state scoped per model
+- `activeStreamContexts` (`Map<streamId, context>`) keeps streaming accumulator scoped per stream
 
 ### Automatic State Cleanup
 
@@ -251,7 +272,7 @@ You can configure **multiple models from different providers simultaneously**. A
 This stops Antigravity, packs the project's `dist/` into `app.asar`, deploys to `%LOCALAPPDATA%\Programs\antigravity\resources\`, and restarts the app.
 
 > [!TIP]
-> The deploy script uses `$PSScriptRoot` (script's own directory). Run it from anywhere — it always finds the project.
+> The deploy script uses `$PSScriptRoot` (script's own directory). You can run it from anywhere; it always finds the project.
 
 ### Automatic (macOS)
 
@@ -489,7 +510,7 @@ npx tsc --watch      # Watch mode for development
    - `mapGeminiTo<Provider>(geminiBody, modelName)` → provider-format request
    - `map<Provider>ToGemini(providerRes, modelName)` → Gemini-format response
    - `map<Provider>ChunkToGemini(chunk, modelName)` → streaming chunk handler
-2. The registry auto-discovers new translator modules — no config changes needed
+2. The registry auto-discovers new translator modules, so no config changes are needed
 3. Add provider to `getProviderHeaders()` in `registry.ts` if authentication differs
 4. Add provider option to UI dropdown in `src/preload.ts`
 5. Update `supportsStreaming()` in `registry.ts` if applicable
@@ -555,7 +576,7 @@ Pull requests welcome. Please ensure:
 
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE) for details.
+Apache License 2.0. See [LICENSE](LICENSE) for details.
 
 ---
 
