@@ -341,23 +341,6 @@ function handleCustomModelRequest(res, model, geminiBody, isStream, retryCount =
             }
         });
         if (isStream) {
-            // Check for API errors BEFORE writing streaming headers
-            if (apiRes.statusCode >= 400) {
-                let errorBody = '';
-                apiRes.on('data', (chunk) => errorBody += chunk.toString());
-                apiRes.on('end', () => {
-                    electron_log_1.default.error(`[Proxy] Stream API error (${apiRes.statusCode}) for ${model.name}: ${errorBody.substring(0, 300)}`);
-                    if (retryCount < MAX_RETRIES) {
-                        electron_log_1.default.warn(`[Proxy] Stream error, retrying (${retryCount + 1}/${MAX_RETRIES})...`);
-                        setTimeout(() => handleCustomModelRequest(res, model, geminiBody, isStream, retryCount + 1), 1000 * (retryCount + 1));
-                        return;
-                    }
-                    res.writeHead(apiRes.statusCode, { 'Content-Type': 'application/json' });
-                    res.end(errorBody);
-                });
-                return;
-            }
-
             res.writeHead(200, {
                 'Content-Type': 'text/event-stream',
                 'Cache-Control': 'no-cache',
@@ -382,7 +365,7 @@ function handleCustomModelRequest(res, model, geminiBody, isStream, retryCount =
                             const mapped = registry.translateStreamChunk(provider, parsed, model.name);
                             if (mapped) {
                                 const cloudCodeResponse = {
-                                    response: { candidates: [mapped] },
+                                    response: mapped,
                                     traceId: '',
                                     metadata: {},
                                 };
@@ -405,7 +388,7 @@ function handleCustomModelRequest(res, model, geminiBody, isStream, retryCount =
                             const mapped = registry.translateStreamChunk(provider, parsed, model.name);
                             if (mapped) {
                                 const cloudCodeResponse = {
-                                    response: { candidates: [mapped] },
+                                    response: mapped,
                                     traceId: '',
                                     metadata: {},
                                 };

@@ -101,7 +101,7 @@ export function validateCustomModel(model: unknown): ValidationResult {
 
   const provider = m.provider as string;
   // Validate provider is one of the supported types
-  const validProviders = ['openai', 'anthropic', 'google', 'ollama', 'custom'];
+  const validProviders = ['openai', 'anthropic', 'google', 'ollama', 'custom', 'openrouter'];
   if (!validProviders.includes(provider)) {
     return { valid: false, error: `Unsupported provider: ${provider}. Must be one of: ${validProviders.join(', ')}` };
   }
