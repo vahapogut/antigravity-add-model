@@ -1,4 +1,7 @@
 "use strict";
+/**
+ * IDE Install — Constants, platform helpers, and condition checks.
+ */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -41,21 +44,14 @@ exports.fetchIdeDownloadUrl = fetchIdeDownloadUrl;
 exports.getPlatformKey = getPlatformKey;
 exports.getIdeInstallPath = getIdeInstallPath;
 exports.shouldShowIdeInstallWizard = shouldShowIdeInstallWizard;
-/**
- * IDE Install — Constants, platform helpers, and condition checks.
- */
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const os = __importStar(require("os"));
 const main_1 = __importDefault(require("electron-log/main"));
 const paths_1 = require("../paths");
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
+// ─── Constants ──────────────────────────────────────────────────────────────
 exports.WIZARD_SHOWN_KEY = 'ide-install-wizard-shown';
-/**
- * Fetches the latest stable IDE download URL for a given platform.
- */
+/** Fetches the latest stable IDE download URL for a given platform. */
 async function fetchIdeDownloadUrl(platformKey) {
     const url = `https://antigravity-ide-auto-updater-974169037036.us-central1.run.app/api/update/${platformKey}/stable/latest`;
     const response = await fetch(url);
@@ -68,9 +64,7 @@ async function fetchIdeDownloadUrl(platformKey) {
     }
     return data.url;
 }
-// ---------------------------------------------------------------------------
-// Platform Helpers
-// ---------------------------------------------------------------------------
+// ─── Platform Helpers ──────────────────────────────────────────────────────
 function getPlatformKey() {
     if (process.platform === 'darwin' && process.arch === 'x64') {
         return 'darwin';
@@ -81,9 +75,7 @@ function getPlatformKey() {
     }
     return `${process.platform}-${process.arch}${suffix}`;
 }
-/**
- * Returns the expected installation path for the IDE.
- */
+/** Returns the expected installation path for the IDE. */
 function getIdeInstallPath() {
     switch (process.platform) {
         case 'darwin':
@@ -96,9 +88,7 @@ function getIdeInstallPath() {
             return path.join(os.homedir(), 'antigravity-ide');
     }
 }
-// ---------------------------------------------------------------------------
-// Condition Checks
-// ---------------------------------------------------------------------------
+// ─── Condition Checks ──────────────────────────────────────────────────────
 /**
  * Determines whether the IDE install wizard should be shown.
  *
@@ -129,3 +119,4 @@ async function shouldShowIdeInstallWizard(storageManager) {
     main_1.default.info('[IDE Wizard] All conditions met — will show wizard.');
     return true;
 }
+//# sourceMappingURL=constants.js.map

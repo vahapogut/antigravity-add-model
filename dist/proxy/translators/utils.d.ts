@@ -41,6 +41,10 @@ export interface FileListResponse {
 }
 export type ToolResponse = string | DirectoryItem[] | MatchResult[] | FileListResponse;
 /**
+ * Normalizes parameter names from external models to match Antigravity's expected PascalCase format.
+ */
+export declare function normalizeToolArgs(name: string, args: Record<string, unknown> | null | undefined): Record<string, unknown>;
+/**
  * Recursively converts Gemini parameter types (UPPERCASE) to lowercase format.
  * Gemini uses uppercase (STRING, NUMBER); OpenAI/Anthropic need lowercase.
  */

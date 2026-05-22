@@ -11,6 +11,9 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
+# Development artifacts
+scratch/
+
 # Compiled binary mocks
 dist/__mocks__/
 dist/*.test.js

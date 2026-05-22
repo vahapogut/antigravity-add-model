@@ -3,11 +3,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as shared from '../proxy/shared';
-import {
-  mapGeminiToOpenAI,
-  mapOpenAIToGemini,
-  mapOpenAIChunkToGemini,
-} from '../proxy/translators/openai';
+import { mapGeminiToOpenAI, mapOpenAIToGemini, mapOpenAIChunkToGemini } from '../proxy/translators/openai';
 
 // Reset shared state before each test
 beforeEach(() => {
@@ -51,12 +47,16 @@ describe('mapGeminiToOpenAI', () => {
 
   it('should handle functionCall parts as tool_calls', () => {
     const body = {
-      contents: [{
-        role: 'model',
-        parts: [{
-          functionCall: { name: 'search', args: { query: 'test' }, id: 'call_123' },
-        }],
-      }],
+      contents: [
+        {
+          role: 'model',
+          parts: [
+            {
+              functionCall: { name: 'search', args: { query: 'test' }, id: 'call_123' },
+            },
+          ],
+        },
+      ],
     };
     const result = mapGeminiToOpenAI(body, 'gpt-4o');
     expect(result.messages[0].role).toBe('assistant');
@@ -67,11 +67,15 @@ describe('mapGeminiToOpenAI', () => {
 
   it('should handle functionResponse parts as tool messages', () => {
     const body = {
-      contents: [{
-        parts: [{
-          functionResponse: { name: 'search', response: 'result data' },
-        }],
-      }],
+      contents: [
+        {
+          parts: [
+            {
+              functionResponse: { name: 'search', response: 'result data' },
+            },
+          ],
+        },
+      ],
     };
     const result = mapGeminiToOpenAI(body, 'gpt-4o');
     expect(result.messages[0].role).toBe('tool');
@@ -98,13 +102,17 @@ describe('mapGeminiToOpenAI', () => {
   it('should convert Gemini tools to OpenAI format', () => {
     const body = {
       contents: [],
-      tools: [{
-        functionDeclarations: [{
-          name: 'get_weather',
-          description: 'Get weather',
-          parameters: { type: 'OBJECT', properties: { city: { type: 'STRING' } } },
-        }],
-      }],
+      tools: [
+        {
+          functionDeclarations: [
+            {
+              name: 'get_weather',
+              description: 'Get weather',
+              parameters: { type: 'OBJECT', properties: { city: { type: 'STRING' } } },
+            },
+          ],
+        },
+      ],
     };
     const result = mapGeminiToOpenAI(body, 'gpt-4o');
     expect(result.tools).toHaveLength(1);
@@ -116,11 +124,17 @@ describe('mapGeminiToOpenAI', () => {
   it('should include reasoning_content on assistant messages', () => {
     const body = {
       contents: [
-        { role: 'model', parts: [{ text: 'answer', thought: false }, { text: 'thinking...', thought: true }] },
+        {
+          role: 'model',
+          parts: [
+            { text: 'answer', thought: false },
+            { text: 'thinking...', thought: true },
+          ],
+        },
       ],
     };
     const result = mapGeminiToOpenAI(body, 'deepseek-model');
-    const assistant = result.messages.find(m => m.role === 'assistant')!;
+    const assistant = result.messages.find((m) => m.role === 'assistant')!;
     expect(assistant.content).toBe('answer');
     expect(assistant.reasoning_content).toBe('thinking...');
   });
@@ -156,16 +170,20 @@ describe('mapOpenAIToGemini', () => {
 
   it('should convert tool_calls to functionCall parts', () => {
     const res = {
-      choices: [{
-        message: {
-          tool_calls: [{
-            id: 'call_1',
-            type: 'function' as const,
-            function: { name: 'search', arguments: '{"query":"test"}' },
-          }],
+      choices: [
+        {
+          message: {
+            tool_calls: [
+              {
+                id: 'call_1',
+                type: 'function' as const,
+                function: { name: 'search', arguments: '{"query":"test"}' },
+              },
+            ],
+          },
+          finish_reason: 'tool_calls',
         },
-        finish_reason: 'tool_calls',
-      }],
+      ],
       usage: { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 },
     };
     const result = mapOpenAIToGemini(res, 'gpt-4o');
@@ -176,33 +194,38 @@ describe('mapOpenAIToGemini', () => {
 
   it('should parse DSML tool calls from text content', () => {
     const res = {
-      choices: [{
-        message: {
-          content: 'Here is result\n<DSML|invoke name="search_web">\n<DSML|parameter name="query" string="true">news</DSML|parameter>\n</DSML|invoke>',
+      choices: [
+        {
+          message: {
+            content:
+              'Here is result\n<DSML|invoke name="search_web">\n<DSML|parameter name="query" string="true">news</DSML|parameter>\n</DSML|invoke>',
+          },
+          finish_reason: 'stop',
         },
-        finish_reason: 'stop',
-      }],
+      ],
       usage: { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 },
     };
     const result = mapOpenAIToGemini(res, 'deepseek-v4');
     expect(result.candidates[0].finishReason).toBe('TOOL_CALL');
-    const fcParts = result.candidates[0].content.parts.filter(p => p.functionCall);
+    const fcParts = result.candidates[0].content.parts.filter((p) => p.functionCall);
     expect(fcParts.length).toBeGreaterThan(0);
   });
 
   it('should include reasoning_content as thought part', () => {
     const res = {
-      choices: [{
-        message: { content: 'answer', reasoning_content: 'thinking...' },
-        finish_reason: 'stop',
-      }],
+      choices: [
+        {
+          message: { content: 'answer', reasoning_content: 'thinking...' },
+          finish_reason: 'stop',
+        },
+      ],
       usage: { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 },
     };
     const result = mapOpenAIToGemini(res, 'deepseek-v4');
     const parts = result.candidates[0].content.parts;
-    expect(parts.some(p => p.thought)).toBe(true);
-    expect(parts.some(p => p.text === 'thinking...')).toBe(true);
-    expect(parts.some(p => p.text === 'answer')).toBe(true);
+    expect(parts.some((p) => p.thought)).toBe(true);
+    expect(parts.some((p) => p.text === 'thinking...')).toBe(true);
+    expect(parts.some((p) => p.text === 'answer')).toBe(true);
   });
 
   it('should handle empty choices gracefully', () => {
@@ -252,43 +275,71 @@ describe('mapOpenAIChunkToGemini', () => {
 
   it('should accumulate and emit tool calls on finish_reason tool_calls', () => {
     // Accumulate tool call fragments
-    mapOpenAIChunkToGemini({
-      id: 'stream_tc',
-      choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_1', function: { name: 'search', arguments: '{"q"' } }] }, index: 0 }],
-    }, 'gpt-4o');
-    mapOpenAIChunkToGemini({
-      id: 'stream_tc',
-      choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: ':"test"}' } }] }, index: 0 }],
-    }, 'gpt-4o');
+    mapOpenAIChunkToGemini(
+      {
+        id: 'stream_tc',
+        choices: [
+          {
+            delta: { tool_calls: [{ index: 0, id: 'call_1', function: { name: 'search', arguments: '{"q"' } }] },
+            index: 0,
+          },
+        ],
+      },
+      'gpt-4o',
+    );
+    mapOpenAIChunkToGemini(
+      {
+        id: 'stream_tc',
+        choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: ':"test"}' } }] }, index: 0 }],
+      },
+      'gpt-4o',
+    );
 
     // Final chunk with tool_calls finish
-    const result = mapOpenAIChunkToGemini({
-      id: 'stream_tc',
-      choices: [{ delta: {}, finish_reason: 'tool_calls', index: 0 }],
-    }, 'gpt-4o');
+    const result = mapOpenAIChunkToGemini(
+      {
+        id: 'stream_tc',
+        choices: [{ delta: {}, finish_reason: 'tool_calls', index: 0 }],
+      },
+      'gpt-4o',
+    );
     expect(result).not.toBeNull();
     expect(result!.finishReason).toBe('TOOL_CALL');
   });
 
   it('should handle stop finish with pending tool calls', () => {
-    mapOpenAIChunkToGemini({
-      id: 'stream_stop_tc',
-      choices: [{ delta: { tool_calls: [{ index: 0, id: 'c1', function: { name: 'read', arguments: '{"path":"/f"}' } }] }, index: 0 }],
-    }, 'gpt-4o');
+    mapOpenAIChunkToGemini(
+      {
+        id: 'stream_stop_tc',
+        choices: [
+          {
+            delta: { tool_calls: [{ index: 0, id: 'c1', function: { name: 'read', arguments: '{"path":"/f"}' } }] },
+            index: 0,
+          },
+        ],
+      },
+      'gpt-4o',
+    );
 
-    const result = mapOpenAIChunkToGemini({
-      id: 'stream_stop_tc',
-      choices: [{ delta: {}, finish_reason: 'stop', index: 0 }],
-    }, 'gpt-4o');
+    const result = mapOpenAIChunkToGemini(
+      {
+        id: 'stream_stop_tc',
+        choices: [{ delta: {}, finish_reason: 'stop', index: 0 }],
+      },
+      'gpt-4o',
+    );
     expect(result).not.toBeNull();
     // If tool calls were pending, they should be emitted
   });
 
   it('should handle stop finish with no pending state', () => {
-    const result = mapOpenAIChunkToGemini({
-      id: 'stream_clean',
-      choices: [{ delta: { content: 'done' }, finish_reason: 'stop', index: 0 }],
-    }, 'gpt-4o');
+    const result = mapOpenAIChunkToGemini(
+      {
+        id: 'stream_clean',
+        choices: [{ delta: { content: 'done' }, finish_reason: 'stop', index: 0 }],
+      },
+      'gpt-4o',
+    );
     expect(result).not.toBeNull();
     expect(result!.finishReason).toBe('STOP');
   });
@@ -300,14 +351,15 @@ describe('mapOpenAIChunkToGemini', () => {
   });
 
   it('should detect DSML tool calls in accumulated streaming text', () => {
-    const dsmlText = 'Result:\n<DSML|invoke name="run_command">\n<DSML|parameter name="CommandLine" string="true">ls</DSML|parameter>\n</DSML|invoke>';
+    const dsmlText =
+      'Result:\n<DSML|invoke name="run_command">\n<DSML|parameter name="CommandLine" string="true">ls</DSML|parameter>\n</DSML|invoke>';
     const chunk = {
       id: 'stream_dsml',
       choices: [{ delta: { content: dsmlText }, index: 0 }],
     };
     const result = mapOpenAIChunkToGemini(chunk, 'deepseek-v4');
     expect(result).not.toBeNull();
-    const fcParts = result!.content.parts.filter(p => p.functionCall);
+    const fcParts = result!.content.parts.filter((p) => p.functionCall);
     expect(fcParts.length).toBeGreaterThan(0);
   });
 });

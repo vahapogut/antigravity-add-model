@@ -1,11 +1,12 @@
 "use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
 /**
  * Preload script — runs in every BrowserWindow before the page loads.
  * Exposes a minimal, secure API via contextBridge so the renderer can
  * communicate with the main-process auto-updater without nodeIntegration.
  */
+Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
+// ─── API Definitions ─────────────────────────────────────────────────────────
 const updaterAPI = {
     onStateChanged: (callback) => {
         const handler = (_event, state) => {
@@ -97,6 +98,7 @@ const electronNativeAPI = {
     },
     openExternal: (url) => electron_1.ipcRenderer.invoke('shell:open-external', url),
 };
+// ─── Expose all APIs via contextBridge ──────────────────────────────────────
 electron_1.contextBridge.exposeInMainWorld('electronUpdater', updaterAPI);
 electron_1.contextBridge.exposeInMainWorld('dialog', dialogAPI);
 electron_1.contextBridge.exposeInMainWorld('nativeNotifications', notificationAPI);
@@ -106,66 +108,60 @@ electron_1.contextBridge.exposeInMainWorld('extensions', extensionsAPI);
 electron_1.contextBridge.exposeInMainWorld('deepLink', deepLinkAPI);
 electron_1.contextBridge.exposeInMainWorld('agent', agentAPI);
 electron_1.contextBridge.exposeInMainWorld('electronNative', electronNativeAPI);
-
+// ─── Custom Models UI Injection ─────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
     function findRefreshButton() {
         const buttons = Array.from(document.querySelectorAll('button'));
-        return buttons.find(b => b.textContent.trim() === 'Refresh');
+        return buttons.find((b) => b.textContent?.trim() === 'Refresh') || null;
     }
-    
     function findMcpSectionContainer() {
         const refreshBtn = findRefreshButton();
-        if (!refreshBtn) return null;
-        
+        if (!refreshBtn)
+            return null;
         const btnGroup = refreshBtn.parentNode;
-        if (!btnGroup) return null;
-        
+        if (!btnGroup)
+            return null;
         const headerRow = btnGroup.parentNode;
-        if (!headerRow) return null;
-        
+        if (!headerRow)
+            return null;
         const mainContainer = headerRow.parentNode;
-        if (!mainContainer) return null;
-        
+        if (!mainContainer)
+            return null;
         const contentBlock = headerRow.nextElementSibling;
-        
         return {
             mainContainer,
             headerRow,
-            contentBlock
+            contentBlock,
         };
     }
-    
     // ─── Provider Icons & Status Helpers ──────────────────────────────
     const PROVIDER_ICONS = {
         openai: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>`,
         anthropic: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="8" width="4" height="8" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="10" y="5" width="4" height="14" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="17" y="2" width="4" height="20" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>`,
         google: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M12 4a8 8 0 0 1 5.66 13.66L12 12V4z" fill="currentColor" fill-opacity="0.2"/></svg>`,
         ollama: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.5"/><circle cx="9" cy="10" r="1.5" fill="currentColor"/><circle cx="15" cy="10" r="1.5" fill="currentColor"/><path d="M8 15c1 1.5 3 2 4 2s3-.5 4-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
-        custom: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`
+        openrouter: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.5"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="12" r="3" fill="currentColor" fill-opacity="0.3"/></svg>`,
+        custom: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
     };
-
     const PROVIDER_COLORS = {
         openai: '#10a37f',
         anthropic: '#d97757',
         google: '#4285f4',
         ollama: '#f0f0f0',
-        custom: '#a855f7'
+        openrouter: '#ff7a45',
+        custom: '#a855f7',
     };
-
     function getProviderIcon(provider) {
         return PROVIDER_ICONS[provider] || PROVIDER_ICONS.custom;
     }
-
     function getProviderColor(provider) {
         return PROVIDER_COLORS[provider] || PROVIDER_COLORS.custom;
     }
-
     async function renderCustomModelsList() {
         const contentArea = document.getElementById('agy-custom-models-content');
-        if (!contentArea) return;
-        
+        if (!contentArea)
+            return;
         contentArea.innerHTML = '';
-        
         try {
             const models = await storageAPI.getCustomModels();
             if (!models || models.length === 0) {
@@ -179,14 +175,14 @@ window.addEventListener('DOMContentLoaded', () => {
                 placeholder.style.border = '1px solid #27272a';
                 placeholder.style.borderRadius = '8px';
                 placeholder.style.textAlign = 'center';
-                
                 placeholder.innerHTML = `
                     <div style="font-size: 15px; font-weight: 600; color: #f4f4f5; margin-bottom: 4px;">No Custom Models</div>
                     <div style="font-size: 13px; color: #a1a1aa;">You currently don't have any custom models installed. Add a custom model above.</div>
                 `;
                 contentArea.appendChild(placeholder);
-            } else {
-                models.forEach(model => {
+            }
+            else {
+                models.forEach((model) => {
                     const item = document.createElement('div');
                     item.style.display = 'flex';
                     item.style.justifyContent = 'space-between';
@@ -197,7 +193,6 @@ window.addEventListener('DOMContentLoaded', () => {
                     item.style.borderRadius = '8px';
                     item.style.transition = 'border-color 0.15s ease, background-color 0.15s ease';
                     item.style.marginBottom = '8px';
-                    
                     item.addEventListener('mouseenter', () => {
                         item.style.borderColor = '#3f3f46';
                         item.style.backgroundColor = '#1c1c1f';
@@ -206,13 +201,11 @@ window.addEventListener('DOMContentLoaded', () => {
                         item.style.borderColor = '#27272a';
                         item.style.backgroundColor = '#18181b';
                     });
-                    
                     // ─── Left: Provider icon + model info ────────────
                     const left = document.createElement('div');
                     left.style.display = 'flex';
                     left.style.alignItems = 'center';
                     left.style.gap = '12px';
-                    
                     // Provider icon bubble
                     const iconWrapper = document.createElement('div');
                     iconWrapper.style.width = '32px';
@@ -225,19 +218,16 @@ window.addEventListener('DOMContentLoaded', () => {
                     iconWrapper.style.color = getProviderColor(model.provider);
                     iconWrapper.style.flexShrink = '0';
                     iconWrapper.innerHTML = getProviderIcon(model.provider);
-                    
                     // Text info
                     const info = document.createElement('div');
                     info.style.display = 'flex';
                     info.style.flexDirection = 'column';
                     info.style.gap = '2px';
-                    
                     // Title row with status dot
                     const titleRow = document.createElement('div');
                     titleRow.style.display = 'flex';
                     titleRow.style.alignItems = 'center';
                     titleRow.style.gap = '6px';
-                    
                     // Status indicator dot
                     const statusDot = document.createElement('span');
                     statusDot.style.width = '6px';
@@ -247,16 +237,13 @@ window.addEventListener('DOMContentLoaded', () => {
                     statusDot.style.backgroundColor = '#71717a'; // neutral = unknown
                     statusDot.title = 'Connection status unknown (test to verify)';
                     statusDot.style.transition = 'background-color 0.3s ease';
-                    
                     const title = document.createElement('div');
                     title.style.fontSize = '14px';
                     title.style.fontWeight = '500';
                     title.style.color = '#f4f4f5';
                     title.textContent = model.displayName || model.name;
-                    
                     titleRow.appendChild(statusDot);
                     titleRow.appendChild(title);
-                    
                     // Subtitle with provider badge
                     const sub = document.createElement('div');
                     sub.style.fontSize = '12px';
@@ -264,7 +251,6 @@ window.addEventListener('DOMContentLoaded', () => {
                     sub.style.display = 'flex';
                     sub.style.alignItems = 'center';
                     sub.style.gap = '8px';
-                    
                     // Provider badge
                     const badge = document.createElement('span');
                     badge.style.fontSize = '10px';
@@ -276,22 +262,17 @@ window.addEventListener('DOMContentLoaded', () => {
                     badge.style.backgroundColor = getProviderColor(model.provider) + '22';
                     badge.style.color = getProviderColor(model.provider);
                     badge.textContent = model.provider;
-                    
                     sub.appendChild(badge);
                     sub.appendChild(document.createTextNode(model.apiUrl));
-                    
                     info.appendChild(titleRow);
                     info.appendChild(sub);
-                    
                     left.appendChild(iconWrapper);
                     left.appendChild(info);
-                    
                     // ─── Right: Action buttons ──────────────────
                     const actions = document.createElement('div');
                     actions.style.display = 'flex';
                     actions.style.gap = '4px';
                     actions.style.alignItems = 'center';
-                    
                     // Test Connection button
                     const testBtn = document.createElement('button');
                     testBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
@@ -306,7 +287,6 @@ window.addEventListener('DOMContentLoaded', () => {
                     testBtn.style.justifyContent = 'center';
                     testBtn.style.transition = 'color 0.15s ease, background-color 0.15s ease';
                     testBtn.title = 'Test connection';
-                    
                     testBtn.addEventListener('mouseenter', () => {
                         testBtn.style.color = '#22c55e';
                         testBtn.style.backgroundColor = 'rgba(34, 197, 94, 0.1)';
@@ -315,24 +295,29 @@ window.addEventListener('DOMContentLoaded', () => {
                         testBtn.style.color = '#a1a1aa';
                         testBtn.style.backgroundColor = 'transparent';
                     });
-                    
                     testBtn.addEventListener('click', async (e) => {
                         e.stopPropagation();
                         // Show loading spinner
+                        const originalHtml = testBtn.innerHTML;
                         testBtn.style.color = '#fbbf24';
                         testBtn.style.cursor = 'wait';
+                        testBtn.disabled = true;
                         testBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>`;
-                        
                         try {
-                            const result = await storageAPI.testModelConnection(model);
-                            
+                            const result = await storageAPI.testModelConnection({
+                                apiUrl: model.apiUrl,
+                                provider: model.provider,
+                                apiKey: model.apiKey,
+                                allowUnauthorized: model.allowUnauthorized,
+                            });
                             if (result.success) {
                                 statusDot.style.backgroundColor = '#22c55e'; // green
                                 statusDot.title = result.message || 'Connected';
                                 testBtn.title = 'Connected ✓';
                                 testBtn.style.color = '#22c55e';
                                 testBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
-                            } else {
+                            }
+                            else {
                                 statusDot.style.backgroundColor = '#ef4444'; // red
                                 const errMsg = result.error || 'Connection failed';
                                 statusDot.title = errMsg;
@@ -340,28 +325,24 @@ window.addEventListener('DOMContentLoaded', () => {
                                 testBtn.style.color = '#ef4444';
                                 testBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
                             }
-                        } catch (err) {
+                        }
+                        catch (err) {
                             statusDot.style.backgroundColor = '#ef4444';
                             statusDot.title = 'Connection test failed';
                             testBtn.title = 'Connection test failed';
                             testBtn.style.color = '#ef4444';
                             testBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
                         }
-                        
                         testBtn.style.cursor = 'pointer';
-                        
-                        // Reset to neutral after 5 seconds
+                        // Reset to neutral after 3 seconds
                         setTimeout(() => {
-                            if (statusDot.style.backgroundColor === '#22c55e') {
-                                statusDot.style.backgroundColor = '#71717a';
-                                statusDot.title = 'Connection status unknown (click test to verify)';
-                            }
+                            testBtn.disabled = false;
+                            testBtn.style.cursor = 'pointer';
                             testBtn.style.color = '#a1a1aa';
-                            testBtn.title = 'Test connection';
-                            testBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
-                        }, 5000);
+                            testBtn.style.borderColor = '#3f3f46';
+                            testBtn.innerHTML = originalHtml;
+                        }, 3000);
                     });
-                    
                     // Delete button
                     const deleteBtn = document.createElement('button');
                     deleteBtn.innerHTML = `
@@ -382,7 +363,6 @@ window.addEventListener('DOMContentLoaded', () => {
                     deleteBtn.style.alignItems = 'center';
                     deleteBtn.style.justifyContent = 'center';
                     deleteBtn.style.transition = 'color 0.15s ease, background-color 0.15s ease';
-                    
                     deleteBtn.addEventListener('mouseenter', () => {
                         deleteBtn.style.color = '#ef4444';
                         deleteBtn.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
@@ -391,46 +371,41 @@ window.addEventListener('DOMContentLoaded', () => {
                         deleteBtn.style.color = '#a1a1aa';
                         deleteBtn.style.backgroundColor = 'transparent';
                     });
-                    
                     deleteBtn.addEventListener('click', async (e) => {
                         e.stopPropagation();
                         if (confirm(`Are you sure you want to delete the model "${model.displayName || model.name}"?`)) {
                             await storageAPI.deleteCustomModel(model.name);
                             await renderCustomModelsList();
-                            
                             const refreshBtn = findRefreshButton();
-                            if (refreshBtn) refreshBtn.click();
+                            if (refreshBtn)
+                                refreshBtn.click();
                         }
                     });
-                    
                     actions.appendChild(testBtn);
                     actions.appendChild(deleteBtn);
-                    
                     item.appendChild(left);
                     item.appendChild(actions);
                     contentArea.appendChild(item);
                 });
             }
-        } catch (err) {
+        }
+        catch (err) {
             console.error('Failed to load custom models in list:', err);
         }
     }
-    
     async function injectCustomModelsSection() {
         const layout = findMcpSectionContainer();
-        if (!layout) return;
-        
+        if (!layout)
+            return;
         const { mainContainer, headerRow, contentBlock } = layout;
-        
-        if (document.getElementById('agy-custom-models-section')) return;
-        
+        if (document.getElementById('agy-custom-models-section'))
+            return;
         const section = document.createElement('div');
         section.id = 'agy-custom-models-section';
         section.style.marginTop = '24px';
         section.style.display = 'flex';
         section.style.flexDirection = 'column';
         section.style.gap = '12px';
-        
         const newHeaderRow = document.createElement('div');
         newHeaderRow.className = headerRow.className;
         newHeaderRow.style.cssText = headerRow.style.cssText;
@@ -438,7 +413,6 @@ window.addEventListener('DOMContentLoaded', () => {
         newHeaderRow.style.justifyContent = 'space-between';
         newHeaderRow.style.alignItems = 'center';
         newHeaderRow.style.marginBottom = '8px';
-        
         const originalHeading = headerRow.firstElementChild;
         const newHeading = document.createElement(originalHeading ? originalHeading.tagName : 'div');
         if (originalHeading) {
@@ -446,7 +420,6 @@ window.addEventListener('DOMContentLoaded', () => {
             newHeading.style.cssText = originalHeading.style.cssText;
         }
         newHeading.textContent = 'Custom Models';
-        
         const newBtnGroup = document.createElement('div');
         const originalBtnGroup = headerRow.lastElementChild;
         if (originalBtnGroup) {
@@ -456,7 +429,6 @@ window.addEventListener('DOMContentLoaded', () => {
         newBtnGroup.style.display = 'flex';
         newBtnGroup.style.gap = '8px';
         newBtnGroup.style.alignItems = 'center';
-        
         const addModelBtn = document.createElement('button');
         addModelBtn.id = 'agy-add-model-btn';
         addModelBtn.textContent = 'Add Model';
@@ -469,34 +441,29 @@ window.addEventListener('DOMContentLoaded', () => {
         addModelBtn.addEventListener('click', () => {
             openAddModelModal();
         });
-        
         newBtnGroup.appendChild(addModelBtn);
         newHeaderRow.appendChild(newHeading);
         newHeaderRow.appendChild(newBtnGroup);
-        
         const contentArea = document.createElement('div');
         contentArea.id = 'agy-custom-models-content';
         contentArea.style.display = 'flex';
         contentArea.style.flexDirection = 'column';
         contentArea.style.gap = '8px';
-        
         section.appendChild(newHeaderRow);
         section.appendChild(contentArea);
-        
         if (contentBlock && contentBlock.nextSibling) {
             mainContainer.insertBefore(section, contentBlock.nextSibling);
-        } else {
+        }
+        else {
             mainContainer.appendChild(section);
         }
-        
         await renderCustomModelsList();
     }
-    
     function openAddModelModal() {
         // Remove existing modal if any
         const existing = document.getElementById('agy-modal-overlay');
-        if (existing) existing.remove();
-        
+        if (existing)
+            existing.remove();
         // Modal overlay backdrop
         const overlay = document.createElement('div');
         overlay.id = 'agy-modal-overlay';
@@ -507,14 +474,12 @@ window.addEventListener('DOMContentLoaded', () => {
         overlay.style.height = '100vh';
         overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
         overlay.style.backdropFilter = 'blur(6px)';
-        overlay.style.webkitBackdropFilter = 'blur(6px)';
         overlay.style.display = 'flex';
         overlay.style.justifyContent = 'center';
         overlay.style.alignItems = 'center';
         overlay.style.zIndex = '999999';
         overlay.style.opacity = '0';
         overlay.style.transition = 'opacity 0.2s ease-in-out';
-        
         // Modal card container
         const modal = document.createElement('div');
         modal.id = 'agy-modal-card';
@@ -530,7 +495,6 @@ window.addEventListener('DOMContentLoaded', () => {
         modal.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
         modal.style.transform = 'scale(0.9) translateY(20px)';
         modal.style.transition = 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)';
-        
         modal.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                 <div style="display: flex; align-items: center; gap: 10px;">
@@ -539,7 +503,7 @@ window.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <button id="agy-modal-close" style="background: transparent; border: none; color: #a1a1aa; cursor: pointer; font-size: 20px; line-height: 1; padding: 4px; display: flex; align-items: center; justify-content: center; transition: color 0.15s ease;">&times;</button>
             </div>
-            
+
             <div style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px;">
                 <!-- Provider -->
                 <div style="display: flex; flex-direction: column; gap: 6px;">
@@ -549,29 +513,30 @@ window.addEventListener('DOMContentLoaded', () => {
                         <option value="anthropic">Anthropic (Claude)</option>
                         <option value="google">Google AI Studio (Gemini)</option>
                         <option value="ollama">Ollama (Local)</option>
+                        <option value="openrouter">OpenRouter</option>
                         <option value="custom">Custom / Other</option>
                     </select>
                 </div>
-                
+
                 <!-- Model ID -->
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                     <label style="font-size: 13px; font-weight: 500; color: #a1a1aa;">Model Name / ID <span style="color: #ef4444;">*</span></label>
                     <input type="text" id="agy-model-id" placeholder="e.g. gpt-4o" style="background-color: #27272a; border: 1px solid #3f3f46; border-radius: 8px; color: #f4f4f5; padding: 10px 12px; font-size: 14px; outline: none; transition: border-color 0.15s ease;" required />
                     <div id="agy-model-id-error" style="font-size: 11px; color: #ef4444; display: none; margin-top: 2px;"></div>
                 </div>
-                
+
                 <!-- Friendly Display Name -->
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                     <label style="font-size: 13px; font-weight: 500; color: #a1a1aa;">Friendly Display Name</label>
                     <input type="text" id="agy-display-name" placeholder="e.g. GPT-4o (OpenAI)" style="background-color: #27272a; border: 1px solid #3f3f46; border-radius: 8px; color: #f4f4f5; padding: 10px 12px; font-size: 14px; outline: none; transition: border-color 0.15s ease;" />
                 </div>
-                
+
                 <!-- API Key -->
                 <div id="agy-key-container" style="display: flex; flex-direction: column; gap: 6px;">
                     <label style="font-size: 13px; font-weight: 500; color: #a1a1aa;">API Key <span id="agy-key-required" style="color: #ef4444;">*</span></label>
                     <input type="password" id="agy-api-key" placeholder="Enter API key" style="background-color: #27272a; border: 1px solid #3f3f46; border-radius: 8px; color: #f4f4f5; padding: 10px 12px; font-size: 14px; outline: none; transition: border-color 0.15s ease;" />
                 </div>
-                
+
                 <!-- API URL -->
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                     <label style="font-size: 13px; font-weight: 500; color: #a1a1aa;">API URL <span style="color: #ef4444;">*</span></label>
@@ -582,7 +547,7 @@ window.addEventListener('DOMContentLoaded', () => {
                     <div id="agy-url-error" style="font-size: 11px; color: #ef4444; display: none; margin-top: 2px;"></div>
                 </div>
             </div>
-            
+
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <button id="agy-btn-test" style="background-color: transparent; border: 1px solid #3f3f46; border-radius: 8px; color: #a1a1aa; padding: 10px 14px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s ease; display: flex; align-items: center; gap: 6px;">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
@@ -594,15 +559,25 @@ window.addEventListener('DOMContentLoaded', () => {
                 </div>
             </div>
         `;
-        
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
-        
+        // Animate in
         setTimeout(() => {
             overlay.style.opacity = '1';
             modal.style.transform = 'scale(1) translateY(0)';
         }, 10);
-        
+        // Close handler
+        const closeModal = () => {
+            overlay.style.opacity = '0';
+            modal.style.transform = 'scale(0.9) translateY(20px)';
+            setTimeout(() => overlay.remove(), 200);
+        };
+        document.getElementById('agy-modal-close').addEventListener('click', closeModal);
+        document.getElementById('agy-btn-cancel').addEventListener('click', closeModal);
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay)
+                closeModal();
+        });
         const providerSelect = document.getElementById('agy-provider');
         const urlInput = document.getElementById('agy-api-url');
         const keyContainer = document.getElementById('agy-key-container');
@@ -615,14 +590,14 @@ window.addEventListener('DOMContentLoaded', () => {
         const providerIcon = document.getElementById('agy-modal-provider-icon');
         const keyRequired = document.getElementById('agy-key-required');
         const testBtn = document.getElementById('agy-btn-test');
-        
+        const saveBtn = document.getElementById('agy-btn-save');
         const prefilledUrls = {
             openai: 'https://api.openai.com/v1/chat/completions',
             anthropic: 'https://api.anthropic.com/v1/messages',
             ollama: 'http://localhost:11434/v1/chat/completions',
-            custom: ''
+            openrouter: 'https://openrouter.ai/api/v1/chat/completions',
+            custom: '',
         };
-        
         // Real-time URL validation
         const validateUrl = () => {
             const val = urlInput.value.trim();
@@ -637,18 +612,19 @@ window.addEventListener('DOMContentLoaded', () => {
                     urlStatus.style.backgroundColor = '#22c55e';
                     urlStatus.title = 'Valid URL format';
                     urlError.style.display = 'none';
-                } else {
+                }
+                else {
                     urlStatus.style.backgroundColor = '#fbbf24';
                     urlStatus.title = 'URL must use http or https';
                 }
-            } catch (e) {
+            }
+            catch {
                 urlStatus.style.backgroundColor = '#ef4444';
                 urlStatus.title = 'Invalid URL format';
                 urlError.textContent = 'Please enter a valid URL (e.g. https://api.openai.com/v1)';
                 urlError.style.display = 'block';
             }
         };
-        
         // Model ID validation
         const validateModelId = () => {
             const val = modelInput.value.trim();
@@ -656,12 +632,12 @@ window.addEventListener('DOMContentLoaded', () => {
                 modelIdError.textContent = 'Use only letters, numbers, dots, hyphens, underscores';
                 modelIdError.style.display = 'block';
                 modelInput.style.borderColor = '#ef4444';
-            } else {
+            }
+            else {
                 modelIdError.style.display = 'none';
                 modelInput.style.borderColor = '#3f3f46';
             }
         };
-        
         urlInput.addEventListener('input', validateUrl);
         modelInput.addEventListener('input', () => {
             validateModelId();
@@ -671,22 +647,19 @@ window.addEventListener('DOMContentLoaded', () => {
                 validateUrl();
             }
         });
-        
         const updatePrefills = () => {
             const val = providerSelect.value;
             const modelId = modelInput.value.trim() || 'model-name';
-            
             if (val === 'google') {
                 urlInput.value = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`;
-            } else {
+            }
+            else {
                 urlInput.value = prefilledUrls[val] || '';
             }
-            
             // Update provider icon
             providerIcon.style.backgroundColor = getProviderColor(val) + '18';
             providerIcon.style.color = getProviderColor(val);
             providerIcon.innerHTML = getProviderIcon(val);
-            
             // Update key requirement indicator
             if (val === 'ollama') {
                 keyContainer.style.display = 'none';
@@ -694,111 +667,71 @@ window.addEventListener('DOMContentLoaded', () => {
                 keyRequired.style.display = 'none';
                 modelInput.placeholder = 'e.g. llama3';
                 nameInput.placeholder = 'e.g. Llama 3 (Ollama)';
-            } else {
+            }
+            else {
                 keyContainer.style.display = 'flex';
                 keyRequired.style.display = 'inline';
                 if (val === 'openai') {
                     modelInput.placeholder = 'e.g. gpt-4o';
                     nameInput.placeholder = 'e.g. GPT-4o (OpenAI)';
-                } else if (val === 'anthropic') {
+                }
+                else if (val === 'anthropic') {
                     modelInput.placeholder = 'e.g. claude-3-5-sonnet-latest';
                     nameInput.placeholder = 'e.g. Claude 3.5 Sonnet';
-                } else if (val === 'google') {
-                    modelInput.placeholder = 'e.g. gemini-1.5-pro';
-                    nameInput.placeholder = 'e.g. Gemini 1.5 Pro (Google)';
-                } else {
-                    modelInput.placeholder = 'e.g. custom-model';
+                }
+                else if (val === 'google') {
+                    modelInput.placeholder = 'e.g. gemini-2.0-flash';
+                    nameInput.placeholder = 'e.g. Gemini 2.0 Flash';
+                }
+                else {
+                    modelInput.placeholder = 'e.g. model-name';
                     nameInput.placeholder = 'e.g. My Custom Model';
                 }
             }
-            
             validateUrl();
         };
-        
         providerSelect.addEventListener('change', updatePrefills);
-        updatePrefills();
-        
-        const closeModal = () => {
-            overlay.style.opacity = '0';
-            modal.style.transform = 'scale(0.9) translateY(20px)';
-            setTimeout(() => {
-                overlay.remove();
-            }, 200);
-        };
-        
-        document.getElementById('agy-modal-close').addEventListener('click', closeModal);
-        
-        const cancelBtn = document.getElementById('agy-btn-cancel');
-        cancelBtn.addEventListener('click', closeModal);
-        
-        // Button Hover Effects
-        cancelBtn.addEventListener('mouseenter', () => { cancelBtn.style.backgroundColor = '#3f3f46'; });
-        cancelBtn.addEventListener('mouseleave', () => { cancelBtn.style.backgroundColor = '#27272a'; });
-        
-        const saveBtn = document.getElementById('agy-btn-save');
-        saveBtn.addEventListener('mouseenter', () => { saveBtn.style.backgroundColor = '#d4d4d8'; });
-        saveBtn.addEventListener('mouseleave', () => { saveBtn.style.backgroundColor = '#e4e4e7'; });
-        
-        const closeBtn = document.getElementById('agy-modal-close');
-        closeBtn.addEventListener('mouseenter', () => { closeBtn.style.color = '#f4f4f5'; });
-        closeBtn.addEventListener('mouseleave', () => { closeBtn.style.color = '#a1a1aa'; });
-        
-        // Test button hover
-        testBtn.addEventListener('mouseenter', () => { 
-            testBtn.style.color = '#22c55e'; 
-            testBtn.style.borderColor = '#22c55e44';
-        });
-        testBtn.addEventListener('mouseleave', () => { 
-            testBtn.style.color = '#a1a1aa'; 
-            testBtn.style.borderColor = '#3f3f46';
-        });
-        
-        // Focus Highlights
-        const inputs = [providerSelect, urlInput, keyInput, modelInput, nameInput];
-        inputs.forEach(input => {
-            input.addEventListener('focus', () => { input.style.borderColor = '#71717a'; });
-            input.addEventListener('blur', () => { input.style.borderColor = '#3f3f46'; });
-        });
-        
-        // ─── Test Connection Button ──────────────────────────────
+        // ─── Test Connection in Modal ────────────────────
         testBtn.addEventListener('click', async () => {
             const provider = providerSelect.value;
-            const apiUrl = urlInput.value.trim();
+            const modelId = modelInput.value.trim();
             const apiKey = keyInput.value.trim();
-            
+            const apiUrl = urlInput.value.trim();
             if (!apiUrl) {
-                urlError.textContent = 'Please enter an API URL first';
-                urlError.style.display = 'block';
+                alert('Please enter an API URL first');
                 return;
             }
-            
-            const originalHtml = testBtn.innerHTML;
             testBtn.disabled = true;
             testBtn.style.cursor = 'wait';
             testBtn.style.color = '#fbbf24';
-            testBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Testing...`;
-            
+            testBtn.style.borderColor = '#fbbf24';
+            const originalHtml = testBtn.innerHTML;
+            testBtn.innerHTML = '<span>Testing...</span>';
             try {
-                const proxyPort = 50999;
-                const resp = await fetch(`http://127.0.0.1:${proxyPort}/health`);
-                if (resp.ok) {
-                    const health = await resp.json();
-                    testBtn.style.color = '#22c55e';
-                    testBtn.style.borderColor = '#22c55e44';
-                    testBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Proxy Active ✓`;
+                const result = await storageAPI.testModelConnection({
+                    apiUrl,
+                    provider,
+                    apiKey,
+                });
+                if (result.success) {
                     urlStatus.style.backgroundColor = '#22c55e';
-                    urlStatus.title = 'Proxy reachable';
-                } else {
-                    testBtn.style.color = '#ef4444';
-                    testBtn.style.borderColor = '#ef444444';
-                    testBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> Check Failed`;
+                    urlStatus.title = result.message || 'Connection successful!';
+                    testBtn.style.color = '#22c55e';
+                    testBtn.style.borderColor = '#22c55e';
                 }
-            } catch (err) {
-                testBtn.style.color = '#ef4444';
-                testBtn.style.borderColor = '#ef444444';
-                testBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> No Connection`;
+                else {
+                    urlStatus.style.backgroundColor = '#ef4444';
+                    urlStatus.title = result.error || 'Connection failed';
+                    testBtn.style.color = '#ef4444';
+                    testBtn.style.borderColor = '#ef4444';
+                }
             }
-            
+            catch (err) {
+                urlStatus.style.backgroundColor = '#ef4444';
+                urlStatus.title = 'Test connection failed';
+                testBtn.style.color = '#ef4444';
+                testBtn.style.borderColor = '#ef4444';
+            }
             setTimeout(() => {
                 testBtn.disabled = false;
                 testBtn.style.cursor = 'pointer';
@@ -807,45 +740,41 @@ window.addEventListener('DOMContentLoaded', () => {
                 testBtn.innerHTML = originalHtml;
             }, 3000);
         });
-        
         saveBtn.addEventListener('click', async () => {
             const provider = providerSelect.value;
             const modelId = modelInput.value.trim();
             let displayName = nameInput.value.trim();
             const apiKey = keyInput.value.trim();
             const apiUrl = urlInput.value.trim();
-            
             // Clear previous errors
             modelIdError.style.display = 'none';
             urlError.style.display = 'none';
             modelInput.style.borderColor = '#3f3f46';
             urlInput.style.borderColor = '#3f3f46';
-            
             let hasError = false;
-            
             if (!modelId) {
                 modelIdError.textContent = 'Model ID is required';
                 modelIdError.style.display = 'block';
                 modelInput.style.borderColor = '#ef4444';
                 hasError = true;
-            } else if (!/^[a-zA-Z0-9._-]+$/.test(modelId)) {
+            }
+            else if (!/^[a-zA-Z0-9._-]+$/.test(modelId)) {
                 modelIdError.textContent = 'Use only letters, numbers, dots, hyphens, underscores';
                 modelIdError.style.display = 'block';
                 modelInput.style.borderColor = '#ef4444';
                 hasError = true;
             }
-            
             if (provider !== 'ollama' && !apiKey) {
                 alert('API Key is required.');
                 hasError = true;
             }
-            
             if (!apiUrl) {
                 urlError.textContent = 'API URL is required';
                 urlError.style.display = 'block';
                 urlInput.style.borderColor = '#ef4444';
                 hasError = true;
-            } else {
+            }
+            else {
                 try {
                     const u = new URL(apiUrl);
                     if (!['http:', 'https:'].includes(u.protocol)) {
@@ -854,27 +783,27 @@ window.addEventListener('DOMContentLoaded', () => {
                         urlInput.style.borderColor = '#ef4444';
                         hasError = true;
                     }
-                } catch (e) {
+                }
+                catch {
                     urlError.textContent = 'Invalid URL format';
                     urlError.style.display = 'block';
                     urlInput.style.borderColor = '#ef4444';
                     hasError = true;
                 }
             }
-            
-            if (hasError) return;
-            
+            if (hasError)
+                return;
             if (!displayName) {
                 const providerNames = {
                     openai: 'OpenAI',
                     anthropic: 'Anthropic',
                     google: 'Google Studio',
                     ollama: 'Ollama',
-                    custom: 'Custom'
+                    openrouter: 'OpenRouter',
+                    custom: 'Custom',
                 };
                 displayName = `${modelId} (${providerNames[provider]})`;
             }
-            
             const newModel = {
                 name: 'models/' + modelId,
                 displayName: displayName,
@@ -882,56 +811,52 @@ window.addEventListener('DOMContentLoaded', () => {
                 provider: provider,
                 apiKey: apiKey || 'none',
                 apiUrl: apiUrl,
-                externalModelName: modelId
+                externalModelName: modelId,
             };
-            
             saveBtn.disabled = true;
             saveBtn.textContent = 'Saving...';
-            
             try {
                 const res = await storageAPI.saveCustomModel(newModel);
                 if (res && res.success) {
                     closeModal();
-                    
                     // Re-render the custom models list immediately!
                     await renderCustomModelsList();
-                    
                     // Trigger native refresh button if available
                     const refreshBtn = findRefreshButton();
                     if (refreshBtn) {
                         refreshBtn.click();
                     }
-                } else {
+                }
+                else {
                     alert('Failed to save model: ' + (res?.error || 'Unknown error'));
                     saveBtn.disabled = false;
                     saveBtn.textContent = 'Save Model';
                 }
-            } catch (err) {
+            }
+            catch (err) {
                 alert('Error saving model: ' + err.message);
                 saveBtn.disabled = false;
                 saveBtn.textContent = 'Save Model';
             }
         });
     }
-    
-    // MutationObserver ile verimli DOM takibi — setInterval yerine
+    // Efficient DOM tracking via MutationObserver — instead of setInterval
     let injectionObserver = null;
     let injectionDebounceTimer = null;
-    
     function setupInjectionObserver() {
-        // Önce hemen dene
-        injectCustomModelsSection();
-        
-        // Zaten eklenmişse observer'a gerek yok
-        if (document.getElementById('agy-custom-models-section')) return;
-        
-        // Observer kur: document.body altındaki tüm değişiklikleri izle
+        // Try immediately first
+        void injectCustomModelsSection();
+        // If already added, no need for observer
+        if (document.getElementById('agy-custom-models-section'))
+            return;
+        // Set up observer: watch all changes under document.body
         injectionObserver = new MutationObserver(() => {
-            // Debounce: ardışık mutasyonları tek bir denemede birleştir
-            if (injectionDebounceTimer) clearTimeout(injectionDebounceTimer);
+            // Debounce: coalesce consecutive mutations into a single attempt
+            if (injectionDebounceTimer)
+                clearTimeout(injectionDebounceTimer);
             injectionDebounceTimer = setTimeout(async () => {
                 await injectCustomModelsSection();
-                // Başarıyla enjekte edildiyse observer'ı durdur
+                // If successfully injected, stop observing
                 if (document.getElementById('agy-custom-models-section')) {
                     if (injectionObserver) {
                         injectionObserver.disconnect();
@@ -940,29 +865,27 @@ window.addEventListener('DOMContentLoaded', () => {
                 }
             }, 200);
         });
-        
         injectionObserver.observe(document.body, {
             childList: true,
-            subtree: true
+            subtree: true,
         });
     }
-    
-    // SPA sayfa geçişlerinde yeniden enjeksiyon için URL izleme
+    // URL tracking for re-injection on SPA page transitions
     let lastUrl = location.href;
     setInterval(() => {
         const currentUrl = location.href;
         if (currentUrl !== lastUrl) {
             lastUrl = currentUrl;
-            // Sayfa değişti — önceki observer'ı temizle ve yeniden kur
+            // Page changed — clean up previous observer and re-initialize
             if (injectionObserver) {
                 injectionObserver.disconnect();
                 injectionObserver = null;
             }
-            // Kısa gecikmeyle yeniden kur (yeni DOM'un oluşması için)
+            // Re-initialize after a short delay (for new DOM to render)
             setTimeout(setupInjectionObserver, 500);
         }
     }, 1500);
-    
-    // Başlangıçta observer'ı kur
+    // Start the observer on initial load
     setupInjectionObserver();
 });
+//# sourceMappingURL=preload.js.map

@@ -53,3 +53,4 @@ function registerCustomSchemeHandlers() {
         }
     });
 }
+//# sourceMappingURL=customScheme.js.map

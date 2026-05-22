@@ -47,3 +47,4 @@ exports.IDE_OLD_DATA_DIR = path_1.default.join(os_1.default.homedir(), '.gemini'
 exports.IDE_NEW_DATA_DIR = path_1.default.join(os_1.default.homedir(), '.gemini', 'antigravity-ide');
 /** User data dir for backup (destination for backup copy). */
 exports.IDE_BACKUP_DATA_DIR = path_1.default.join(os_1.default.homedir(), '.gemini', 'antigravity-backup');
+//# sourceMappingURL=paths.js.map

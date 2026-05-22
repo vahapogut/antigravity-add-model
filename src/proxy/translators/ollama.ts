@@ -15,11 +15,7 @@ import log from 'electron-log';
 //   mapGeminiToOpenAI, mapOpenAIToGemini, mapOpenAIChunkToGemini
 // Ollama uses the exact same format, so we re-export verbatim.
 
-export {
-  mapGeminiToOpenAI,
-  mapOpenAIToGemini,
-  mapOpenAIChunkToGemini,
-} from './openai';
+export { mapGeminiToOpenAI, mapOpenAIToGemini, mapOpenAIChunkToGemini } from './openai';
 
 // ─── Ollama-Specific Helpers ──────────────────────────────────────────────
 

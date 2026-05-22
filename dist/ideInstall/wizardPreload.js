@@ -1,5 +1,4 @@
 "use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
 /**
  * Preload script for the IDE Install Wizard window.
  *
@@ -7,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
  * needed by the wizard's inline HTML UI. It runs in its own
  * BrowserWindow, separate from the main app window and its preload.
  */
+Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const wizardAPI = {
     completeWizard: (shouldDownload) => electron_1.ipcRenderer.invoke('wizard:complete', shouldDownload),
@@ -21,3 +21,4 @@ const wizardAPI = {
     },
 };
 electron_1.contextBridge.exposeInMainWorld('wizardAPI', wizardAPI);
+//# sourceMappingURL=wizardPreload.js.map

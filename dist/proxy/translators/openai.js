@@ -47,7 +47,7 @@ function mapGeminiToolsToOpenAI(geminiTools) {
 function mapGeminiToOpenAI(geminiBody, modelName) {
     const messages = [];
     if (geminiBody.systemInstruction && geminiBody.systemInstruction.parts) {
-        const systemText = geminiBody.systemInstruction.parts.map(p => p.text || '').join('');
+        const systemText = geminiBody.systemInstruction.parts.map((p) => p.text || '').join('');
         if (systemText) {
             messages.push({ role: 'system', content: systemText });
         }
@@ -55,13 +55,13 @@ function mapGeminiToOpenAI(geminiBody, modelName) {
     if (geminiBody.contents) {
         for (const item of geminiBody.contents) {
             if (item.parts) {
-                const hasFunctionCall = item.parts.some(p => p.functionCall);
-                const hasFunctionResponse = item.parts.some(p => p.functionResponse);
+                const hasFunctionCall = item.parts.some((p) => p.functionCall);
+                const hasFunctionResponse = item.parts.some((p) => p.functionResponse);
                 if (hasFunctionCall && item.role === 'model') {
                     const toolCalls = [];
                     for (const p of item.parts) {
                         if (p.functionCall) {
-                            const callId = p.functionCall.id || ('call_' + Math.random().toString(36).slice(2, 10));
+                            const callId = p.functionCall.id || 'call_' + Math.random().toString(36).slice(2, 10);
                             let originalName = p.functionCall.name;
                             let originalArgs = p.functionCall.args;
                             const translatedInfo = shared_1.translatedToolCalls.get(callId);
@@ -86,7 +86,7 @@ function mapGeminiToOpenAI(geminiBody, modelName) {
                         if (p.functionResponse) {
                             const funcName = p.functionResponse.name || '';
                             const modelTCIds = shared_1.modelToolCallIds.get(modelName) || {};
-                            const toolCallId = p.functionResponse.id || modelTCIds[funcName] || ('call_' + funcName);
+                            const toolCallId = p.functionResponse.id || modelTCIds[funcName] || 'call_' + funcName;
                             const responseData = p.functionResponse.response;
                             let contentStr = '';
                             const translatedInfo = shared_1.translatedToolCalls.get(toolCallId);
@@ -101,17 +101,17 @@ function mapGeminiToOpenAI(geminiBody, modelName) {
                     }
                 }
                 else {
-                    const role = item.role === 'model' ? 'assistant' : (item.role || 'user');
+                    const role = item.role === 'model' ? 'assistant' : item.role || 'user';
                     let content = '';
                     let reasoning_content = '';
                     if (role === 'assistant') {
-                        const regularParts = (item.parts || []).filter(p => !p.thought);
-                        const thoughtParts = (item.parts || []).filter(p => p.thought);
-                        content = regularParts.map(p => p.text || '').join('');
-                        reasoning_content = thoughtParts.map(p => p.text || '').join('');
+                        const regularParts = (item.parts || []).filter((p) => !p.thought);
+                        const thoughtParts = (item.parts || []).filter((p) => p.thought);
+                        content = regularParts.map((p) => p.text || '').join('');
+                        reasoning_content = thoughtParts.map((p) => p.text || '').join('');
                     }
                     else {
-                        content = (item.parts || []).map(p => p.text || '').join('');
+                        content = (item.parts || []).map((p) => p.text || '').join('');
                     }
                     const msg = { role, content };
                     if (reasoning_content)
@@ -130,8 +130,7 @@ function mapGeminiToOpenAI(geminiBody, modelName) {
     for (let i = 0; i < messages.length; i++) {
         if (messages[i].role === 'assistant' && !messages[i].reasoning_content) {
             const preservedReasoning = shared_1.modelReasoningContent.get(modelName) || '';
-            messages[i].reasoning_content =
-                (i === lastAssistantIdx && preservedReasoning) ? preservedReasoning : '';
+            messages[i].reasoning_content = i === lastAssistantIdx && preservedReasoning ? preservedReasoning : '';
         }
     }
     const payload = {
@@ -177,7 +176,7 @@ function parseDSMLToolCalls(text) {
         }
         if (functionCalls.length === 0)
             return null;
-        electron_log_1.default.info(`[Proxy] Detected ${functionCalls.length} DSML tool call(s): ${functionCalls.map(f => f.name).join(', ')}`);
+        electron_log_1.default.info(`[Proxy] Detected ${functionCalls.length} DSML tool call(s): ${functionCalls.map((f) => f.name).join(', ')}`);
         let cleanText = text;
         cleanText = cleanText.replace(/<DSML\|tool_calls>[\s\S]*?<\/DSML\|tool_calls>/g, '');
         cleanText = cleanText.replace(/<DSML\|invoke name="[^"]+">[\s\S]*?<\/DSML\|invoke>/g, '');
@@ -192,22 +191,23 @@ function parseDSMLToolCalls(text) {
 function mapOpenAIToGemini(openAiRes, modelName) {
     const choice = openAiRes.choices?.[0];
     if (choice?.message?.tool_calls && choice.message.tool_calls.length > 0) {
-        const parts = choice.message.tool_calls.map(tc => {
+        const parts = choice.message.tool_calls.map((tc) => {
             let args;
             try {
-                args = typeof tc.function.arguments === 'string'
-                    ? JSON.parse(tc.function.arguments)
-                    : tc.function.arguments;
+                args =
+                    typeof tc.function.arguments === 'string'
+                        ? JSON.parse(tc.function.arguments)
+                        : tc.function.arguments;
             }
             catch (e) {
                 electron_log_1.default.debug('[OpenAI] Tool call args parse fallback:', e.message);
                 args = {};
             }
+            args = (0, utils_1.normalizeToolArgs)(tc.function.name, args);
             const modelTCIds = shared_1.modelToolCallIds.get(modelName) || {};
             modelTCIds[tc.function.name] = tc.id;
             shared_1.modelToolCallIds.set(modelName, modelTCIds);
             (0, shared_1.touchStateTimestamp)(shared_1.stateTimestamps.toolCallIds, modelName);
-            args = (0, utils_1.normalizeToolArgs)(tc.function.name, args);
             const translated = (0, utils_1.translateToolCallToNative)(tc.function.name, args);
             if (translated.name !== tc.function.name) {
                 translated.args = (0, utils_1.normalizeToolArgs)(translated.name, translated.args);
@@ -233,10 +233,10 @@ function mapOpenAIToGemini(openAiRes, modelName) {
     const text = choice?.message?.content || '';
     const dsml = parseDSMLToolCalls(text);
     if (dsml && dsml.functionCalls.length > 0) {
-        const parts = dsml.functionCalls.map(fc => {
-            const normalizedArgs = (0, utils_1.normalizeToolArgs)(fc.name, fc.args);
-            const translated = (0, utils_1.translateToolCallToNative)(fc.name, normalizedArgs);
-            return { functionCall: { name: translated.name, args: translated.args } };
+        const parts = dsml.functionCalls.map((fc) => {
+            const na = (0, utils_1.normalizeToolArgs)(fc.name, fc.args);
+            const tr = (0, utils_1.translateToolCallToNative)(fc.name, na);
+            return { functionCall: { name: tr.name, args: tr.args } };
         });
         if (dsml.cleanText)
             parts.unshift({ text: dsml.cleanText });
@@ -300,10 +300,10 @@ function mapOpenAIChunkToGemini(chunk, modelName) {
         context.accumulatedText += text;
     const dsml = parseDSMLToolCalls(context.accumulatedText);
     if (dsml && dsml.functionCalls.length > 0) {
-        const parts = dsml.functionCalls.map(fc => {
-            const normalizedArgs = (0, utils_1.normalizeToolArgs)(fc.name, fc.args);
-            const translated = (0, utils_1.translateToolCallToNative)(fc.name, normalizedArgs);
-            return { functionCall: { name: translated.name, args: translated.args } };
+        const parts = dsml.functionCalls.map((fc) => {
+            const na = (0, utils_1.normalizeToolArgs)(fc.name, fc.args);
+            const tr = (0, utils_1.translateToolCallToNative)(fc.name, na);
+            return { functionCall: { name: tr.name, args: tr.args } };
         });
         context.accumulatedText = '';
         return { content: { parts, role: 'model' }, finishReason: 'TOOL_CALL', index: 0 };
@@ -311,11 +311,16 @@ function mapOpenAIChunkToGemini(chunk, modelName) {
     const finishReason = choice.finish_reason;
     if (finishReason === 'stop' || finishReason === 'length') {
         // Check for pending native tool_calls before closing stream
-        const pendingToolCalls = Object.values(context.toolCalls).filter(tc => tc.name && tc.arguments);
+        const pendingToolCalls = Object.values(context.toolCalls).filter((tc) => tc.name && tc.arguments);
         if (pendingToolCalls.length > 0) {
-            const parts = pendingToolCalls.map(tc => {
+            const parts = pendingToolCalls.map((tc) => {
                 let args = {};
-                try { args = JSON.parse(tc.arguments); } catch (e) { args = {}; }
+                try {
+                    args = JSON.parse(tc.arguments);
+                }
+                catch (_e) {
+                    args = {};
+                }
                 args = (0, utils_1.normalizeToolArgs)(tc.name, args);
                 const modelTCIds = shared_1.modelToolCallIds.get(modelName) || {};
                 modelTCIds[tc.name] = tc.id;
@@ -324,8 +329,10 @@ function mapOpenAIChunkToGemini(chunk, modelName) {
                 const translated = (0, utils_1.translateToolCallToNative)(tc.name, args);
                 if (translated.name !== tc.name) {
                     shared_1.translatedToolCalls.set(tc.id, {
-                        originalName: tc.name, translatedName: translated.name,
-                        cmd: args.CommandLine || '', cwd: args.Cwd || ''
+                        originalName: tc.name,
+                        translatedName: translated.name,
+                        cmd: args.CommandLine || '',
+                        cwd: args.Cwd || '',
                     });
                     (0, shared_1.touchStateTimestamp)(shared_1.stateTimestamps.translatedCalls, tc.id);
                 }
@@ -334,16 +341,17 @@ function mapOpenAIChunkToGemini(chunk, modelName) {
             shared_1.activeStreamContexts.delete(streamId);
             return { content: { parts, role: 'model' }, finishReason: 'TOOL_CALL', index: 0 };
         }
-        // Check for accumulated DSML tool calls before closing stream
+        // Check for accumulated DSML tool calls
         if (context.accumulatedText) {
             const dsml2 = parseDSMLToolCalls(context.accumulatedText);
             if (dsml2 && dsml2.functionCalls.length > 0) {
-                const parts = dsml2.functionCalls.map(fc => {
-                    const normalizedArgs = (0, utils_1.normalizeToolArgs)(fc.name, fc.args);
-                    const translated = (0, utils_1.translateToolCallToNative)(fc.name, normalizedArgs);
-                    return { functionCall: { name: translated.name, args: translated.args } };
+                const parts = dsml2.functionCalls.map((fc) => {
+                    const na = (0, utils_1.normalizeToolArgs)(fc.name, fc.args);
+                    const tr = (0, utils_1.translateToolCallToNative)(fc.name, na);
+                    return { functionCall: { name: tr.name, args: tr.args } };
                 });
-                if (dsml2.cleanText) parts.unshift({ text: dsml2.cleanText });
+                if (dsml2.cleanText)
+                    parts.unshift({ text: dsml2.cleanText });
                 shared_1.activeStreamContexts.delete(streamId);
                 return { content: { parts, role: 'model' }, finishReason: 'TOOL_CALL', index: 0 };
             }
@@ -353,7 +361,7 @@ function mapOpenAIChunkToGemini(chunk, modelName) {
     }
     // Only emit tool calls when finishReason signals completion (args are fully accumulated)
     if (finishReason === 'tool_calls') {
-        const parts = Object.values(context.toolCalls).map(tc => {
+        const parts = Object.values(context.toolCalls).map((tc) => {
             let args = {};
             try {
                 args = JSON.parse(tc.arguments);
@@ -369,6 +377,7 @@ function mapOpenAIChunkToGemini(chunk, modelName) {
             (0, shared_1.touchStateTimestamp)(shared_1.stateTimestamps.toolCallIds, modelName);
             const translated = (0, utils_1.translateToolCallToNative)(tc.name, args);
             if (translated.name !== tc.name) {
+                translated.args = (0, utils_1.normalizeToolArgs)(translated.name, translated.args);
                 shared_1.translatedToolCalls.set(tc.id, {
                     originalName: tc.name,
                     translatedName: translated.name,
@@ -379,8 +388,7 @@ function mapOpenAIChunkToGemini(chunk, modelName) {
             }
             return { functionCall: { name: translated.name, args: translated.args, id: tc.id } };
         });
-        if (finishReason === 'tool_calls')
-            shared_1.activeStreamContexts.delete(streamId);
+        shared_1.activeStreamContexts.delete(streamId);
         return { content: { parts, role: 'model' }, finishReason: 'TOOL_CALL', index: 0 };
     }
     if (text) {

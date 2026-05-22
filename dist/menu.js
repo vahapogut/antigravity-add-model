@@ -57,3 +57,4 @@ function addItemToSubmenu(appMenu, submenuLabel, position, item) {
     }
     submenuItem.submenu.insert(position, item);
 }
+//# sourceMappingURL=menu.js.map

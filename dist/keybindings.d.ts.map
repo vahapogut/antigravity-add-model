@@ -1,0 +1,1 @@
+{"version":3,"file":"keybindings.d.ts","sourceRoot":"","sources":["../src/keybindings.ts"],"names":[],"mappings":"AAAA,OAAO,EAAiB,KAAK,qBAAqB,EAAE,MAAM,UAAU,CAAC;AAGrE,UAAU,iBAAiB;IACzB,eAAe,IAAI,IAAI,CAAC;IACxB,eAAe,IAAI,IAAI,CAAC;CACzB;AAED,wBAAgB,mBAAmB,CAAC,GAAG,EAAE,qBAAqB,EAAE,OAAO,EAAE,iBAAiB,GAAG,IAAI,CAchG"}

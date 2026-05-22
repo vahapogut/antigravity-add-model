@@ -32,9 +32,6 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SleepBlocker = exports.showOrCreateWindow = exports.showQuitConfirmation = void 0;
 exports.setShowQuitConfirmation = setShowQuitConfirmation;
@@ -45,7 +42,7 @@ exports.setupNodeWrapper = setupNodeWrapper;
 const electron_1 = require("electron");
 const constants_1 = require("./constants");
 const keybindings_1 = require("./keybindings");
-const path_1 = __importDefault(require("path"));
+const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
 const paths_1 = require("./paths");
 const loadingOverlay_1 = require("./loadingOverlay");
@@ -89,7 +86,7 @@ function getThemeMode() {
 function ensureAppIsInDock() {
     void electron_1.app.dock?.show();
     if (isMacOS() && electron_1.app.dock) {
-        const iconPath = path_1.default.join(__dirname, '..', 'icon.png');
+        const iconPath = path.join(__dirname, '..', 'icon.png');
         electron_1.app.dock.setIcon(electron_1.nativeImage.createFromPath(iconPath));
     }
 }
@@ -111,7 +108,7 @@ function createWindow(url) {
         width: 1400,
         height: 900,
         title: electron_1.app.getName(),
-        icon: path_1.default.join(__dirname, '..', 'icon.png'),
+        icon: path.join(__dirname, '..', 'icon.png'),
         titleBarStyle: 'hidden',
         titleBarOverlay: isMacOS()
             ? false
@@ -125,7 +122,7 @@ function createWindow(url) {
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
-            preload: path_1.default.join(__dirname, 'preload.js'),
+            preload: path.join(__dirname, 'preload.js'),
         },
     });
     win.webContents.setWindowOpenHandler((details) => {
@@ -192,15 +189,15 @@ exports.SleepBlocker = SleepBlocker;
 function getNodeWrapperPaths(envPath, os, isPackaged, userDataPath, baseDir) {
     const delimiter = os === 'win32' ? ';' : ':';
     if (!isPackaged) {
-        const devBinPath = path_1.default.join(baseDir, '..', 'node_modules', '.bin');
+        const devBinPath = path.join(baseDir, '..', 'node_modules', '.bin');
         return {
             newEnvPath: `${devBinPath}${delimiter}${envPath || ''}`,
             nodeWrapperPath: undefined,
             binPath: undefined,
         };
     }
-    const binPath = path_1.default.join(userDataPath, 'bin');
-    const nodeWrapperPath = path_1.default.join(binPath, os === 'win32' ? 'agy-node.cmd' : 'agy-node');
+    const binPath = path.join(userDataPath, 'bin');
+    const nodeWrapperPath = path.join(binPath, os === 'win32' ? 'agy-node.cmd' : 'agy-node');
     return {
         newEnvPath: `${binPath}${delimiter}${envPath || ''}`,
         nodeWrapperPath,
@@ -218,10 +215,8 @@ function setupNodeWrapper(env) {
     // the actual key used to avoid creating case-duplicate keys (e.g. 'Path' and 'PATH')
     // which can confuse child_process.spawn on Windows.
     const isWindows = process.platform === 'win32';
-    const pathKey = isWindows
-        ? Object.keys(env).find((k) => k.toUpperCase() === 'PATH') || 'PATH'
-        : 'PATH';
-    const { newEnvPath, nodeWrapperPath, binPath } = getNodeWrapperPaths(env[pathKey], process.platform, electron_1.app.isPackaged, userDataPath, __dirname);
+    const pathKey = isWindows ? Object.keys(env).find((k) => k.toUpperCase() === 'PATH') || 'PATH' : 'PATH';
+    const { newEnvPath, nodeWrapperPath, binPath } = getNodeWrapperPaths(env[pathKey] || '', process.platform, electron_1.app.isPackaged, userDataPath, __dirname);
     env[pathKey] = newEnvPath;
     // In non-packaged dev mode, we don't create a wrapper and it'll just use machine node
     if (!nodeWrapperPath || !binPath) {
@@ -239,9 +234,9 @@ function setupNodeWrapper(env) {
             // Use the Helper app instead of the main executable to prevent macOS
             // from bouncing a new Dock icon when this script is executed. The Helper
             // has LSUIElement=true in its Info.plist, running it invisibly.
-            const appName = path_1.default.basename(process.execPath);
+            const appName = path.basename(process.execPath);
             let electronBinary = process.execPath;
-            const helperPath = path_1.default.join(path_1.default.dirname(process.execPath), '..', 'Frameworks', `${appName} Helper.app`, 'Contents', 'MacOS', `${appName} Helper`);
+            const helperPath = path.join(path.dirname(process.execPath), '..', 'Frameworks', `${appName} Helper.app`, 'Contents', 'MacOS', `${appName} Helper`);
             if (fs.existsSync(helperPath)) {
                 electronBinary = helperPath;
             }
@@ -253,9 +248,7 @@ function setupNodeWrapper(env) {
             break;
     }
     try {
-        const existingContent = fs.existsSync(nodeWrapperPath)
-            ? fs.readFileSync(nodeWrapperPath, 'utf-8')
-            : '';
+        const existingContent = fs.existsSync(nodeWrapperPath) ? fs.readFileSync(nodeWrapperPath, 'utf-8') : '';
         if (existingContent !== nodeWrapperContent) {
             fs.writeFileSync(nodeWrapperPath, nodeWrapperContent);
             if (process.platform !== 'win32') {
@@ -267,3 +260,4 @@ function setupNodeWrapper(env) {
         console.error(`Failed to create node wrapper: ${err}`);
     }
 }
+//# sourceMappingURL=utils.js.map

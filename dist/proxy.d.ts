@@ -14,6 +14,8 @@ export interface CustomModel {
     allowUnauthorized?: boolean;
     encrypted?: boolean;
     _slug?: string;
+    timeout?: number;
+    maxRetries?: number;
 }
 export declare function startProxy(): Promise<number>;
 export declare function stopProxy(): Promise<void>;

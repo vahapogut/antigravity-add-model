@@ -61,8 +61,8 @@ export function startCleanupInterval(): void {
   if (cleanupInterval) return; // already running
   cleanupInterval = setInterval(() => {
     const now = Date.now();
-    const STREAM_TTL = 600_000;   // 10 minutes for active stream contexts
-    const TOOL_TTL   = 1_800_000; // 30 minutes for tool call IDs & reasoning
+    const STREAM_TTL = 600_000; // 10 minutes for active stream contexts
+    const TOOL_TTL = 1_800_000; // 30 minutes for tool call IDs & reasoning
 
     for (const [key, ts] of stateTimestamps.streamCtx) {
       if (now - ts > STREAM_TTL) {

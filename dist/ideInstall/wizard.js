@@ -1,4 +1,7 @@
 "use strict";
+/**
+ * IDE Install Wizard — Window orchestration and IPC handlers.
+ */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -38,9 +41,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.showIdeInstallWizard = showIdeInstallWizard;
 exports.maybeShowIdeInstallWizard = maybeShowIdeInstallWizard;
-/**
- * IDE Install Wizard — Window orchestration and IPC handlers.
- */
 const electron_1 = require("electron");
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
@@ -153,3 +153,4 @@ async function maybeShowIdeInstallWizard(storageManager) {
     await showIdeInstallWizard();
     return true;
 }
+//# sourceMappingURL=wizard.js.map

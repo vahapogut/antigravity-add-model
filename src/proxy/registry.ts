@@ -30,10 +30,12 @@ export interface TranslatorModule {
 
 export interface ProviderHeaders {
   'Content-Type': string;
-  'Authorization'?: string;
+  Authorization?: string;
   'x-api-key'?: string;
   'anthropic-version'?: string;
   'x-goog-api-key'?: string;
+  'HTTP-Referer'?: string;
+  'X-Title'?: string;
   [key: string]: string | undefined;
 }
 
@@ -47,7 +49,7 @@ function loadTranslators(): void {
   const translatorDir = path.join(__dirname, 'translators');
 
   try {
-    const files = fs.readdirSync(translatorDir).filter(f => f.endsWith('.js') && f !== 'utils.js');
+    const files = fs.readdirSync(translatorDir).filter((f) => f.endsWith('.js') && f !== 'utils.js');
 
     for (const file of files) {
       const provider = path.basename(file, '.js');
@@ -64,12 +66,16 @@ function loadTranslators(): void {
     log.error('[TranslatorRegistry] Failed to scan translators directory:', (err as Error).message);
   }
 
-  log.info(`[TranslatorRegistry] ${translators.size} provider translator(s) loaded: ${[...translators.keys()].join(', ')}`);
+  log.info(
+    `[TranslatorRegistry] ${translators.size} provider translator(s) loaded: ${[...translators.keys()].join(', ')}`,
+  );
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────
 
 export function getTranslator(provider: string): TranslatorModule | null {
+  // openrouter uses OpenAI-compatible API — reuse OpenAI translator
+  if (provider === 'openrouter') return translators.get('openai') || null;
   const key = provider === 'custom' ? 'openai' : provider;
   return translators.get(key) || translators.get('openai') || null;
 }
@@ -81,7 +87,7 @@ export function translateRequest(provider: string, geminiBody: unknown, modelNam
     return geminiBody; // passthrough
   }
 
-  if (provider === 'openai' || provider === 'ollama' || provider === 'custom') {
+  if (provider === 'openai' || provider === 'ollama' || provider === 'custom' || provider === 'openrouter') {
     return t?.mapGeminiToOpenAI ? t.mapGeminiToOpenAI(geminiBody, modelName) : geminiBody;
   }
 
@@ -104,7 +110,7 @@ export function translateResponse(provider: string, providerRes: unknown, modelN
 
   if (provider === 'google') return providerRes;
 
-  if (provider === 'openai' || provider === 'ollama' || provider === 'custom') {
+  if (provider === 'openai' || provider === 'ollama' || provider === 'custom' || provider === 'openrouter') {
     return t?.mapOpenAIToGemini ? t.mapOpenAIToGemini(providerRes, modelName) : providerRes;
   }
 
@@ -128,7 +134,7 @@ export function translateStreamChunk(provider: string, chunk: unknown, modelName
     return t?.mapGoogleChunkToGemini ? t.mapGoogleChunkToGemini(chunk, modelName) : null;
   }
 
-  if (provider === 'openai' || provider === 'ollama' || provider === 'custom') {
+  if (provider === 'openai' || provider === 'ollama' || provider === 'custom' || provider === 'openrouter') {
     return t?.mapOpenAIChunkToGemini ? t.mapOpenAIChunkToGemini(chunk, modelName) : null;
   }
 
@@ -152,6 +158,12 @@ export function getProviderHeaders(provider: string, apiKey: string): ProviderHe
     case 'custom':
       headers['Authorization'] = `Bearer ${apiKey}`;
       break;
+    case 'openrouter':
+      headers['Authorization'] = `Bearer ${apiKey}`;
+      // OpenRouter optional headers for leaderboard attribution
+      headers['HTTP-Referer'] = 'https://antigravity.google';
+      headers['X-Title'] = 'Antigravity';
+      break;
     case 'anthropic':
       headers['x-api-key'] = apiKey;
       headers['anthropic-version'] = '2025-04-01';
@@ -173,12 +185,17 @@ export function getProviderHeaders(provider: string, apiKey: string): ProviderHe
 }
 
 export function supportsStreaming(provider: string): boolean {
-  return ['openai', 'ollama', 'custom', 'anthropic', 'google'].includes(provider);
+  return ['openai', 'ollama', 'custom', 'anthropic', 'google', 'openrouter'].includes(provider);
 }
 
 // ─── URL Helpers ──────────────────────────────────────────────────────────
 
-export function getProviderUrl(baseUrl: string, modelName: string, isStream: boolean, translator: TranslatorModule | null): string {
+export function getProviderUrl(
+  baseUrl: string,
+  modelName: string,
+  isStream: boolean,
+  translator: TranslatorModule | null,
+): string {
   // Google AI Studio: dynamic streaming vs non-streaming URL
   if (translator && typeof translator['getGoogleApiUrl'] === 'function') {
     return (translator['getGoogleApiUrl'] as (...args: unknown[]) => string)(baseUrl, modelName, isStream);

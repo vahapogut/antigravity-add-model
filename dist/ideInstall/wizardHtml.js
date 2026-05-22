@@ -251,7 +251,7 @@ function getWizardHtml(iconBase64) {
       </div>
       <h1>Welcome to the new Antigravity!</h1>
       <p>Antigravity has been redesigned to put agents first with new capabilities. If you'd still like a code editor, you can download it as a separate app named <b>Antigravity IDE</b>.</p>
-      
+
       <label class="checkbox-label">
         <input type="checkbox" id="chk-download" checked>
         <span class="custom-checkbox"></span>
@@ -284,3 +284,4 @@ function getWizardHtml(iconBase64) {
 </body>
 </html>`;
 }
+//# sourceMappingURL=wizardHtml.js.map

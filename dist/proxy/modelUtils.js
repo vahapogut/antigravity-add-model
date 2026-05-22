@@ -21,17 +21,16 @@ function detectModelCapabilities(m, includeDisplayName = true) {
     const displayLower = includeDisplayName ? (m.displayName || '').toLowerCase() : '';
     const isThinking = m.provider === 'anthropic' ||
         m.provider === 'openai' ||
+        m.provider === 'openrouter' ||
         THINKING_PATTERN.test(nameLower) ||
         THINKING_PATTERN.test(extLower) ||
         (includeDisplayName && THINKING_PATTERN.test(displayLower));
     const isDeepSeek = DEEPSEEK_PATTERN.test(nameLower) ||
         DEEPSEEK_PATTERN.test(extLower) ||
         (includeDisplayName && DEEPSEEK_PATTERN.test(displayLower));
-    const isClaude = m.provider === 'anthropic' ||
-        CLAUDE_PATTERN.test(nameLower) ||
-        CLAUDE_PATTERN.test(extLower);
+    const isClaude = m.provider === 'anthropic' || CLAUDE_PATTERN.test(nameLower) || CLAUDE_PATTERN.test(extLower);
     const maxTokens = isClaude ? 200000 : 1048576;
-    const maxOutputTokens = isDeepSeek ? 32768 : (isThinking ? 32768 : 16384);
+    const maxOutputTokens = isDeepSeek ? 32768 : isThinking ? 32768 : 16384;
     return { isThinking, isDeepSeek, isClaude, maxTokens, maxOutputTokens };
 }
 /**

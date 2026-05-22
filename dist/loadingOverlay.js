@@ -98,3 +98,4 @@ function attachLoadingOverlay(win, foregroundColor, backgroundColor) {
         win.off('resize', updateBounds);
     });
 }
+//# sourceMappingURL=loadingOverlay.js.map

@@ -1,10 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as shared from '../proxy/shared';
-import {
-  mapGeminiToAnthropic,
-  mapAnthropicToGemini,
-  mapAnthropicChunkToGemini,
-} from '../proxy/translators/anthropic';
+import { mapGeminiToAnthropic, mapAnthropicToGemini, mapAnthropicChunkToGemini } from '../proxy/translators/anthropic';
 
 // Mock detectModelCapabilitiesByName to avoid importing the full module chain
 vi.mock('../proxy/modelUtils', () => ({
@@ -58,35 +54,38 @@ describe('mapGeminiToAnthropic', () => {
 
   it('should convert functionCall to tool_use content blocks', () => {
     const body = {
-      contents: [{
-        role: 'model',
-        parts: [
-          { text: 'Before call' },
-          { functionCall: { name: 'search', args: { query: 'test' }, id: 'call_1' } },
-        ],
-      }],
+      contents: [
+        {
+          role: 'model',
+          parts: [{ text: 'Before call' }, { functionCall: { name: 'search', args: { query: 'test' }, id: 'call_1' } }],
+        },
+      ],
     };
     const result = mapGeminiToAnthropic(body, 'claude-3-5-sonnet-latest');
     expect(result.messages[0].role).toBe('assistant');
     expect(Array.isArray(result.messages[0].content)).toBe(true);
     const blocks = result.messages[0].content as Array<Record<string, unknown>>;
-    expect(blocks.some(b => b.type === 'tool_use')).toBe(true);
-    expect(blocks.some(b => b.type === 'text')).toBe(true);
+    expect(blocks.some((b) => b.type === 'tool_use')).toBe(true);
+    expect(blocks.some((b) => b.type === 'text')).toBe(true);
   });
 
   it('should convert functionResponse to tool_result content blocks', () => {
     const body = {
-      contents: [{
-        parts: [{
-          functionResponse: { name: 'search', response: 'data', id: 'call_1' },
-        }],
-      }],
+      contents: [
+        {
+          parts: [
+            {
+              functionResponse: { name: 'search', response: 'data', id: 'call_1' },
+            },
+          ],
+        },
+      ],
     };
     const result = mapGeminiToAnthropic(body, 'claude-3-5-sonnet-latest');
     expect(result.messages[0].role).toBe('user');
     expect(Array.isArray(result.messages[0].content)).toBe(true);
     const blocks = result.messages[0].content as Array<Record<string, unknown>>;
-    expect(blocks.some(b => b.type === 'tool_result')).toBe(true);
+    expect(blocks.some((b) => b.type === 'tool_result')).toBe(true);
   });
 
   it('should set max_tokens from generationConfig', () => {
@@ -117,13 +116,17 @@ describe('mapGeminiToAnthropic', () => {
   it('should convert Gemini tools to Anthropic format', () => {
     const body = {
       contents: [],
-      tools: [{
-        functionDeclarations: [{
-          name: 'get_weather',
-          description: 'Get weather',
-          parameters: { type: 'OBJECT', properties: { city: { type: 'STRING' } } },
-        }],
-      }],
+      tools: [
+        {
+          functionDeclarations: [
+            {
+              name: 'get_weather',
+              description: 'Get weather',
+              parameters: { type: 'OBJECT', properties: { city: { type: 'STRING' } } },
+            },
+          ],
+        },
+      ],
     };
     const result = mapGeminiToAnthropic(body, 'claude-3-5-sonnet-latest');
     expect(result.tools).toHaveLength(1);
@@ -157,21 +160,19 @@ describe('mapAnthropicToGemini', () => {
     };
     const result = mapAnthropicToGemini(res, 'claude-opus-4');
     const parts = result.candidates[0].content.parts;
-    expect(parts.some(p => p.text === 'reasoning...' && p.thought)).toBe(true);
-    expect(parts.some(p => p.text === 'answer')).toBe(true);
+    expect(parts.some((p) => p.text === 'reasoning...' && p.thought)).toBe(true);
+    expect(parts.some((p) => p.text === 'answer')).toBe(true);
   });
 
   it('should convert tool_use blocks to functionCalls', () => {
     const res = {
-      content: [
-        { type: 'tool_use' as const, id: 'toolu_1', name: 'search', input: { query: 'test' } },
-      ],
+      content: [{ type: 'tool_use' as const, id: 'toolu_1', name: 'search', input: { query: 'test' } }],
       usage: { input_tokens: 5, output_tokens: 10 },
       stop_reason: 'tool_use',
     };
     const result = mapAnthropicToGemini(res, 'claude-3-5-sonnet-latest');
     expect(result.candidates[0].finishReason).toBe('TOOL_CALL');
-    const fcParts = result.candidates[0].content.parts.filter(p => p.functionCall);
+    const fcParts = result.candidates[0].content.parts.filter((p) => p.functionCall);
     expect(fcParts).toHaveLength(1);
     expect(fcParts[0].functionCall!.name).toBe('search');
   });
@@ -209,9 +210,7 @@ describe('mapAnthropicToGemini', () => {
 
   it('should track tool call IDs in modelToolCallIds', () => {
     const res = {
-      content: [
-        { type: 'tool_use' as const, id: 'toolu_abc', name: 'search', input: { query: 'x' } },
-      ],
+      content: [{ type: 'tool_use' as const, id: 'toolu_abc', name: 'search', input: { query: 'x' } }],
       usage: { input_tokens: 1, output_tokens: 1 },
       stop_reason: 'tool_use',
     };
@@ -259,48 +258,66 @@ describe('mapAnthropicChunkToGemini', () => {
 
   it('should accumulate input_delta for tool arguments', () => {
     // Start a tool_use block
-    mapAnthropicChunkToGemini({
-      message: { id: 'msg_tool' },
-      type: 'content_block_start',
-      index: 0,
-      content_block: { type: 'tool_use' as const, id: 'toolu_x', name: 'run_command', input: {} },
-    }, 'claude-3-5-sonnet-latest');
+    mapAnthropicChunkToGemini(
+      {
+        message: { id: 'msg_tool' },
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'tool_use' as const, id: 'toolu_x', name: 'run_command', input: {} },
+      },
+      'claude-3-5-sonnet-latest',
+    );
 
     // Send input delta fragments
-    mapAnthropicChunkToGemini({
-      message: { id: 'msg_tool' },
-      type: 'content_block_delta',
-      index: 0,
-      delta: { type: 'input_delta', partial_json: '{"CommandLine"' },
-    }, 'claude-3-5-sonnet-latest');
-    mapAnthropicChunkToGemini({
-      message: { id: 'msg_tool' },
-      type: 'content_block_delta',
-      index: 0,
-      delta: { type: 'input_delta', partial_json: ':"ls"}' },
-    }, 'claude-3-5-sonnet-latest');
+    mapAnthropicChunkToGemini(
+      {
+        message: { id: 'msg_tool' },
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'input_delta', partial_json: '{"CommandLine"' },
+      },
+      'claude-3-5-sonnet-latest',
+    );
+    mapAnthropicChunkToGemini(
+      {
+        message: { id: 'msg_tool' },
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'input_delta', partial_json: ':"ls"}' },
+      },
+      'claude-3-5-sonnet-latest',
+    );
 
     // Message delta with stop_reason tool_use should emit the tool call
-    const result = mapAnthropicChunkToGemini({
-      message: { id: 'msg_tool' },
-      type: 'message_delta',
-      delta: { stop_reason: 'tool_use' },
-    }, 'claude-3-5-sonnet-latest');
+    const result = mapAnthropicChunkToGemini(
+      {
+        message: { id: 'msg_tool' },
+        type: 'message_delta',
+        delta: { stop_reason: 'tool_use' },
+      },
+      'claude-3-5-sonnet-latest',
+    );
     expect(result).not.toBeNull();
     expect(result!.finishReason).toBe('TOOL_CALL');
   });
 
   it('should handle message_stop', () => {
     // Send some text first
-    mapAnthropicChunkToGemini({
-      type: 'content_block_delta',
-      index: 0,
-      delta: { type: 'text_delta', text: 'Some text' },
-    }, 'claude-3-5-sonnet-latest');
+    mapAnthropicChunkToGemini(
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'Some text' },
+      },
+      'claude-3-5-sonnet-latest',
+    );
 
-    const result = mapAnthropicChunkToGemini({
-      type: 'message_stop',
-    }, 'claude-3-5-sonnet-latest');
+    const result = mapAnthropicChunkToGemini(
+      {
+        type: 'message_stop',
+      },
+      'claude-3-5-sonnet-latest',
+    );
     expect(result).not.toBeNull();
     expect(result!.finishReason).toBe('STOP');
   });

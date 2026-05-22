@@ -46,20 +46,20 @@ function mapGeminiToAnthropic(geminiBody, modelName) {
     const messages = [];
     let system = undefined;
     if (geminiBody.systemInstruction && geminiBody.systemInstruction.parts) {
-        system = geminiBody.systemInstruction.parts.map(p => p.text || '').join('');
+        system = geminiBody.systemInstruction.parts.map((p) => p.text || '').join('');
     }
     if (geminiBody.contents) {
         for (const item of geminiBody.contents) {
             if (item.parts) {
-                const hasFunctionCall = item.parts.some(p => p.functionCall);
-                const hasFunctionResponse = item.parts.some(p => p.functionResponse);
+                const hasFunctionCall = item.parts.some((p) => p.functionCall);
+                const hasFunctionResponse = item.parts.some((p) => p.functionResponse);
                 if (hasFunctionCall && item.role === 'model') {
                     const contentBlocks = [];
                     for (const p of item.parts) {
                         if (p.text)
                             contentBlocks.push({ type: 'text', text: p.text });
                         if (p.functionCall) {
-                            const callId = p.functionCall.id || ('call_' + Math.random().toString(36).slice(2, 10));
+                            const callId = p.functionCall.id || 'call_' + Math.random().toString(36).slice(2, 10);
                             let originalName = p.functionCall.name;
                             let originalArgs = p.functionCall.args;
                             const translatedInfo = shared_1.translatedToolCalls.get(callId);
@@ -85,7 +85,7 @@ function mapGeminiToAnthropic(geminiBody, modelName) {
                         if (p.functionResponse) {
                             const funcName = p.functionResponse.name || '';
                             const modelTCIds = shared_1.modelToolCallIds.get(modelName) || {};
-                            const toolCallId = p.functionResponse.id || modelTCIds[funcName] || ('call_' + funcName);
+                            const toolCallId = p.functionResponse.id || modelTCIds[funcName] || 'call_' + funcName;
                             const responseData = p.functionResponse.response;
                             let contentStr = '';
                             const translatedInfo = shared_1.translatedToolCalls.get(toolCallId);
@@ -93,9 +93,7 @@ function mapGeminiToAnthropic(geminiBody, modelName) {
                                 contentStr = (0, utils_1.formatTranslatedResponse)(translatedInfo, responseData);
                             }
                             else {
-                                contentStr = typeof responseData === 'string'
-                                    ? responseData
-                                    : JSON.stringify(responseData || {});
+                                contentStr = typeof responseData === 'string' ? responseData : JSON.stringify(responseData || {});
                             }
                             contentBlocks.push({
                                 type: 'tool_result',
@@ -107,10 +105,10 @@ function mapGeminiToAnthropic(geminiBody, modelName) {
                     messages.push({ role: 'user', content: contentBlocks });
                 }
                 else {
-                    const roleStr = item.role === 'model' ? 'assistant' : (item.role || 'user');
+                    const roleStr = item.role === 'model' ? 'assistant' : item.role || 'user';
                     let content = '';
                     if (item.parts)
-                        content = item.parts.map(p => p.text || '').join('');
+                        content = item.parts.map((p) => p.text || '').join('');
                     if (roleStr === 'system') {
                         system = (system || '') + '\n' + content;
                     }
@@ -161,11 +159,12 @@ function mapAnthropicToGemini(anthRes, modelName) {
             const normalizedInput = (0, utils_1.normalizeToolArgs)(block.name || '', block.input || {});
             const translated = (0, utils_1.translateToolCallToNative)(block.name || '', normalizedInput);
             if (translated.name !== block.name) {
+                translated.args = (0, utils_1.normalizeToolArgs)(translated.name, translated.args);
                 shared_1.translatedToolCalls.set(block.id || '', {
                     originalName: block.name || '',
                     translatedName: translated.name,
-                    cmd: block.input?.CommandLine || '',
-                    cwd: block.input?.Cwd || '',
+                    cmd: normalizedInput.CommandLine || '',
+                    cwd: normalizedInput.Cwd || '',
                 });
                 (0, shared_1.touchStateTimestamp)(shared_1.stateTimestamps.translatedCalls, block.id || '');
             }
@@ -176,7 +175,9 @@ function mapAnthropicToGemini(anthRes, modelName) {
     }
     if (functionCalls.length > 0) {
         return {
-            candidates: [{ content: { parts: [...parts, ...functionCalls], role: 'model' }, finishReason: 'TOOL_CALL', index: 0 }],
+            candidates: [
+                { content: { parts: [...parts, ...functionCalls], role: 'model' }, finishReason: 'TOOL_CALL', index: 0 },
+            ],
             usageMetadata: {
                 promptTokenCount: anthRes.usage?.input_tokens || 0,
                 candidatesTokenCount: anthRes.usage?.output_tokens || 0,
@@ -184,8 +185,7 @@ function mapAnthropicToGemini(anthRes, modelName) {
             },
         };
     }
-    const finishReason = anthRes.stop_reason === 'end_turn' ? 'STOP' :
-        anthRes.stop_reason === 'max_tokens' ? 'MAX_TOKENS' : 'OTHER';
+    const finishReason = anthRes.stop_reason === 'end_turn' ? 'STOP' : anthRes.stop_reason === 'max_tokens' ? 'MAX_TOKENS' : 'OTHER';
     return {
         candidates: [{ content: { parts, role: 'model' }, finishReason, index: 0 }],
         usageMetadata: {
@@ -222,7 +222,11 @@ function mapAnthropicChunkToGemini(chunk, modelName) {
         else if (delta?.type === 'thinking_delta') {
             const thinkingText = delta.thinking || '';
             context.accumulatedReasoning += thinkingText;
-            return { content: { parts: [{ text: thinkingText, thought: true }], role: 'model' }, finishReason: 'OTHER', index: 0 };
+            return {
+                content: { parts: [{ text: thinkingText, thought: true }], role: 'model' },
+                finishReason: 'OTHER',
+                index: 0,
+            };
         }
         else if (delta?.type === 'input_delta') {
             if (context.toolCalls[idx]) {
@@ -233,7 +237,7 @@ function mapAnthropicChunkToGemini(chunk, modelName) {
     if (type === 'message_delta') {
         const delta = chunk.delta;
         if (delta?.stop_reason === 'tool_use') {
-            const parts = Object.values(context.toolCalls).map(tc => {
+            const parts = Object.values(context.toolCalls).map((tc) => {
                 let args = {};
                 try {
                     args = JSON.parse(tc.arguments);
@@ -264,35 +268,6 @@ function mapAnthropicChunkToGemini(chunk, modelName) {
         }
     }
     if (type === 'message_stop') {
-        // Check for pending tool calls before finalizing
-        const pendingToolCalls = Object.values(context.toolCalls).filter(tc => tc.name && tc.arguments);
-        if (pendingToolCalls.length > 0) {
-            const parts = pendingToolCalls.map(tc => {
-                let args = {};
-                try { args = JSON.parse(tc.arguments); } catch (e) { args = {}; }
-                args = (0, utils_1.normalizeToolArgs)(tc.name, args);
-                const modelTCIds = shared_1.modelToolCallIds.get(modelName) || {};
-                modelTCIds[tc.name] = tc.id;
-                shared_1.modelToolCallIds.set(modelName, modelTCIds);
-                (0, shared_1.touchStateTimestamp)(shared_1.stateTimestamps.toolCallIds, modelName);
-                const translated = (0, utils_1.translateToolCallToNative)(tc.name, args);
-                if (translated.name !== tc.name) {
-                    shared_1.translatedToolCalls.set(tc.id, {
-                        originalName: tc.name, translatedName: translated.name,
-                        cmd: args.CommandLine || '', cwd: args.Cwd || ''
-                    });
-                    (0, shared_1.touchStateTimestamp)(shared_1.stateTimestamps.translatedCalls, tc.id);
-                }
-                return { functionCall: { name: translated.name, args: translated.args, id: tc.id } };
-            });
-            shared_1.activeStreamContexts.delete(streamId);
-            return { content: { parts, role: 'model' }, finishReason: 'TOOL_CALL', index: 0 };
-        }
-        // Emit any remaining accumulated text on stream end
-        if (context.accumulatedText) {
-            shared_1.activeStreamContexts.delete(streamId);
-            return { content: { parts: [{ text: context.accumulatedText }], role: 'model' }, finishReason: 'STOP', index: 0 };
-        }
         shared_1.activeStreamContexts.delete(streamId);
         return { content: { parts: [], role: 'model' }, finishReason: 'STOP', index: 0 };
     }

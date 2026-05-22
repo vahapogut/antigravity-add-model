@@ -51,6 +51,7 @@ exports.translateResponse = translateResponse;
 exports.translateStreamChunk = translateStreamChunk;
 exports.getProviderHeaders = getProviderHeaders;
 exports.supportsStreaming = supportsStreaming;
+exports.getProviderUrl = getProviderUrl;
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
 const electron_log_1 = __importDefault(require("electron-log"));
@@ -60,7 +61,7 @@ const translators = new Map();
 function loadTranslators() {
     const translatorDir = path.join(__dirname, 'translators');
     try {
-        const files = fs.readdirSync(translatorDir).filter(f => f.endsWith('.js') && f !== 'utils.js');
+        const files = fs.readdirSync(translatorDir).filter((f) => f.endsWith('.js') && f !== 'utils.js');
         for (const file of files) {
             const provider = path.basename(file, '.js');
             try {
@@ -81,6 +82,9 @@ function loadTranslators() {
 }
 // ─── Public API ───────────────────────────────────────────────────────────
 function getTranslator(provider) {
+    // openrouter uses OpenAI-compatible API — reuse OpenAI translator
+    if (provider === 'openrouter')
+        return translators.get('openai') || null;
     const key = provider === 'custom' ? 'openai' : provider;
     return translators.get(key) || translators.get('openai') || null;
 }
@@ -89,7 +93,7 @@ function translateRequest(provider, geminiBody, modelName) {
     if (provider === 'google') {
         return geminiBody; // passthrough
     }
-    if (provider === 'openai' || provider === 'ollama' || provider === 'custom') {
+    if (provider === 'openai' || provider === 'ollama' || provider === 'custom' || provider === 'openrouter') {
         return t?.mapGeminiToOpenAI ? t.mapGeminiToOpenAI(geminiBody, modelName) : geminiBody;
     }
     if (provider === 'anthropic') {
@@ -107,7 +111,7 @@ function translateResponse(provider, providerRes, modelName) {
     const t = getTranslator(provider);
     if (provider === 'google')
         return providerRes;
-    if (provider === 'openai' || provider === 'ollama' || provider === 'custom') {
+    if (provider === 'openai' || provider === 'ollama' || provider === 'custom' || provider === 'openrouter') {
         return t?.mapOpenAIToGemini ? t.mapOpenAIToGemini(providerRes, modelName) : providerRes;
     }
     if (provider === 'anthropic') {
@@ -122,9 +126,10 @@ function translateResponse(provider, providerRes, modelName) {
 }
 function translateStreamChunk(provider, chunk, modelName) {
     const t = getTranslator(provider);
-    if (provider === 'google')
-        return null;
-    if (provider === 'openai' || provider === 'ollama' || provider === 'custom') {
+    if (provider === 'google') {
+        return t?.mapGoogleChunkToGemini ? t.mapGoogleChunkToGemini(chunk, modelName) : null;
+    }
+    if (provider === 'openai' || provider === 'ollama' || provider === 'custom' || provider === 'openrouter') {
         return t?.mapOpenAIChunkToGemini ? t.mapOpenAIChunkToGemini(chunk, modelName) : null;
     }
     if (provider === 'anthropic') {
@@ -142,6 +147,12 @@ function getProviderHeaders(provider, apiKey) {
         case 'openai':
         case 'custom':
             headers['Authorization'] = `Bearer ${apiKey}`;
+            break;
+        case 'openrouter':
+            headers['Authorization'] = `Bearer ${apiKey}`;
+            // OpenRouter optional headers for leaderboard attribution
+            headers['HTTP-Referer'] = 'https://antigravity.google';
+            headers['X-Title'] = 'Antigravity';
             break;
         case 'anthropic':
             headers['x-api-key'] = apiKey;
@@ -162,7 +173,19 @@ function getProviderHeaders(provider, apiKey) {
     return headers;
 }
 function supportsStreaming(provider) {
-    return ['openai', 'ollama', 'custom', 'anthropic'].includes(provider);
+    return ['openai', 'ollama', 'custom', 'anthropic', 'google', 'openrouter'].includes(provider);
+}
+// ─── URL Helpers ──────────────────────────────────────────────────────────
+function getProviderUrl(baseUrl, modelName, isStream, translator) {
+    // Google AI Studio: dynamic streaming vs non-streaming URL
+    if (translator && typeof translator['getGoogleApiUrl'] === 'function') {
+        return translator['getGoogleApiUrl'](baseUrl, modelName, isStream);
+    }
+    // Ollama: normalize to standard /v1/chat/completions endpoint
+    if (translator && typeof translator['getOllamaApiUrl'] === 'function') {
+        return translator['getOllamaApiUrl'](baseUrl);
+    }
+    return baseUrl;
 }
 // ─── Boot ─────────────────────────────────────────────────────────────────
 loadTranslators();

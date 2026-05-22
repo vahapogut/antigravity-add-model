@@ -250,9 +250,7 @@ describe('formatTranslatedResponse', () => {
 
   it('should format grep_search response', () => {
     const grepInfo = { ...info, translatedName: 'grep_search' };
-    const result = formatTranslatedResponse(grepInfo, [
-      { Filename: 'a.ts', LineNumber: 10, LineContent: 'TODO: fix' },
-    ]);
+    const result = formatTranslatedResponse(grepInfo, [{ Filename: 'a.ts', LineNumber: 10, LineContent: 'TODO: fix' }]);
     expect(result).toContain('a.ts:10:TODO: fix');
   });
 

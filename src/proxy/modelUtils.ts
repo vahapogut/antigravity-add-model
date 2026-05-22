@@ -44,6 +44,7 @@ export function detectModelCapabilities(m: CustomModelConfig, includeDisplayName
   const isThinking =
     m.provider === 'anthropic' ||
     m.provider === 'openai' ||
+    m.provider === 'openrouter' ||
     THINKING_PATTERN.test(nameLower) ||
     THINKING_PATTERN.test(extLower) ||
     (includeDisplayName && THINKING_PATTERN.test(displayLower));
@@ -53,13 +54,10 @@ export function detectModelCapabilities(m: CustomModelConfig, includeDisplayName
     DEEPSEEK_PATTERN.test(extLower) ||
     (includeDisplayName && DEEPSEEK_PATTERN.test(displayLower));
 
-  const isClaude =
-    m.provider === 'anthropic' ||
-    CLAUDE_PATTERN.test(nameLower) ||
-    CLAUDE_PATTERN.test(extLower);
+  const isClaude = m.provider === 'anthropic' || CLAUDE_PATTERN.test(nameLower) || CLAUDE_PATTERN.test(extLower);
 
   const maxTokens = isClaude ? 200_000 : 1_048_576;
-  const maxOutputTokens = isDeepSeek ? 32_768 : (isThinking ? 32_768 : 16_384);
+  const maxOutputTokens = isDeepSeek ? 32_768 : isThinking ? 32_768 : 16_384;
 
   return { isThinking, isDeepSeek, isClaude, maxTokens, maxOutputTokens };
 }

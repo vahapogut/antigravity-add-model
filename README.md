@@ -30,21 +30,22 @@ Antigravity IDE
 | [openai.ts](src/proxy/translators/openai.ts) | OpenAI ↔ Gemini format translation (request, response, streaming chunks, tool calls) |
 | [anthropic.ts](src/proxy/translators/anthropic.ts) | Anthropic ↔ Gemini format translation (Claude tool_use, SSE streaming, thinking support) |
 | [google.ts](src/proxy/translators/google.ts) | Google AI Studio passthrough with streaming endpoint routing |
+| [ollama.ts](src/proxy/translators/ollama.ts) | Ollama ↔ Gemini format translation (OpenAI-compatible local LLMs) |
 | [utils.ts](src/proxy/translators/utils.ts) | Shared translator utilities (tool call mapping, DSML parsing, parameter type fixing) |
 
 #### Security & Data
 | File | Role |
 |---|---|
-| [cryptoStore.js](dist/cryptoStore.js) | AES-256-GCM API key encryption via Electron `safeStorage` |
-| [schemaValidator.js](dist/schemaValidator.js) | Runtime schema validation for API responses, custom models, and streaming chunks |
+| [cryptoStore.ts](src/cryptoStore.ts) | AES-256-GCM API key encryption via Electron `safeStorage` |
+| [schemaValidator.ts](src/schemaValidator.ts) | Runtime schema validation for API responses, custom models, and streaming chunks |
 
 #### UI & App Integration
 | File | Role |
 |---|---|
-| [preload.js](dist/preload.js) | UI injection: Custom Models dashboard in Settings → Models, inline Add Model modal with animations, connectivity test button |
-| [main.js](dist/main.js) | App lifecycle: intercepts and blocks `SetCloudCodeURL` requests to prevent the frontend from overriding the proxy endpoint |
-| [ipcHandlers.js](dist/ipcHandlers.js) | Backend IPC: `storage:get-custom-models`, `storage:save-custom-model`, `storage:delete-custom-model`, `storage:test-model-connection` |
-| [languageServer.js](dist/languageServer.js) | Modified language server manager, starts proxy on app launch |
+| [preload.ts](src/preload.ts) | UI injection: Custom Models dashboard in Settings → Models, inline Add Model modal with animations, connectivity test button |
+| [main.ts](src/main.ts) | App lifecycle: intercepts and blocks `SetCloudCodeURL` requests to prevent the frontend from overriding the proxy endpoint |
+| [ipcHandlers.ts](src/ipcHandlers.ts) | Backend IPC: `storage:get-custom-models`, `storage:save-custom-model`, `storage:delete-custom-model`, `storage:test-model-connection` |
+| [languageServer.ts](src/languageServer.ts) | Modified language server manager, starts proxy on app launch |
 
 #### Deployment Scripts
 | File | Platform |
@@ -226,9 +227,14 @@ antigravity-add-model/
 │   ├── services/
 │   │   └── settingsService.ts
 │   ├── ideInstall/                # IDE installation wizard
+│   ├── __tests__/                  # Unit tests (vitest)
+│   │   ├── registry.test.ts
+│   │   ├── proxy.test.ts
+│   │   ├── modelUtils.test.ts
+│   │   ├── anthropic.test.ts
+│   │   ├── openai.test.ts
+│   │   └── utils.test.ts
 │   ├── __mocks__/                 # Test mocks
-│   └── test/
-│       └── helpers.ts
 ├── dist/                          # Compiled JavaScript output
 ├── tsconfig.json                  # TypeScript configuration
 ├── deploy.ps1                     # Portable PowerShell deploy script
@@ -249,12 +255,16 @@ You can configure **multiple models from different providers simultaneously**. A
 |---|---|---|---|
 | **OpenAI** | `openai` | `apiKey` (or `OPENAI_API_KEY`) | `https://api.openai.com/v1/chat/completions` |
 | **Anthropic** | `anthropic` | `apiKey` (or `ANTHROPIC_API_KEY`) | `https://api.anthropic.com/v1/messages` |
+| **OpenRouter** | `openrouter` | `apiKey` (OpenRouter API Key) | `https://openrouter.ai/api/v1/chat/completions` |
 | **Ollama** (Local) | `ollama` | *(None required)* | `http://localhost:11434/v1/chat/completions` |
 | **Google AI Studio** | `google` | `apiKey` *(Gemini API Key)* | `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent` |
 | **Custom** (OpenAI-compatible) | `custom` | `apiKey` *(Provider API Key)* | E.g. `https://api.together.xyz/v1`, `https://api.groq.com/openai/v1`, etc. |
 
 > [!NOTE]
 > For the **Custom** provider, URLs ending in `/v1` automatically get `/chat/completions` appended. It is fully compatible with Together AI, OpenRouter, Groq, Mistral, and any other OpenAI-compliant endpoint.
+
+> [!NOTE]
+> **OpenRouter** provides unified access to 300+ models (OpenAI, Anthropic, Google, Meta, DeepSeek, etc.) through a single API. It uses the OpenAI-compatible format with Bearer token auth and optional `HTTP-Referer` / `X-Title` headers for ranking.
 
 > [!NOTE]
 > For **Google AI Studio**, provide the full endpoint URL or just the base `https://generativelanguage.googleapis.com/v1beta/models/`. The proxy auto-detects `streamGenerateContent` vs `generateContent` based on whether the request is streaming.
@@ -380,7 +390,7 @@ Here is an example of a **fully loaded** `custom_models.json` file configuring *
 | `name` | Internal model identifier (e.g. `models/gpt-4o`). Must start with `models/` prefix. |
 | `displayName` | The friendly name that will appear in the Antigravity chat model dropdown. |
 | `description` | Subtitle/description displayed in the Custom Models list in Settings. |
-| `provider` | One of `openai`, `anthropic`, `ollama`, `google`, or `custom`. This determines how the request and response formats are translated. |
+| `provider` | One of `openai`, `anthropic`, `openrouter`, `ollama`, `google`, or `custom`. This determines how the request and response formats are translated. |
 | `apiKey` | The API credential for the provider. Leave empty `""` for local providers like Ollama. |
 | `apiUrl` | The target endpoint. This gets automatically pre-filled by the UI dropdown selection. |
 | `externalModelName` | The exact model ID expected by the target provider (e.g., `gpt-4o`, `claude-3-5-sonnet-latest`, `llama3`). |
@@ -393,7 +403,7 @@ Here is an example of a **fully loaded** `custom_models.json` file configuring *
 ### Add Model Modal
 
 Click the **"Add Model"** button in Settings → Models to open a polished modal with:
-- Provider dropdown (OpenAI, Anthropic, Google AI Studio, Ollama, Custom)
+- Provider dropdown (OpenAI, Anthropic, Google AI Studio, Ollama, OpenRouter, Custom)
 - Automatic URL pre-filling based on provider selection
 - Dynamic Google AI Studio URL generation as you type the model ID
 - Smooth enter/exit animations with backdrop blur
@@ -532,6 +542,15 @@ Set `DEBUG=antigravity:*` for verbose logging (debug level captures stream parse
 ---
 
 ## Changelog
+
+### v2.1.0
+- **TypeScript**: Full migration — all 23 source files converted from JavaScript to TypeScript (`dist/*.js` → `src/*.ts`)
+- **New Provider**: OpenRouter support (300+ models via unified API, OpenAI-compatible format)
+- **OpenRouter UI**: Provider dropdown, auto-filled URL, connection test, icon & color in Settings modal
+- **Dev Experience**: ESLint + Prettier configured with automated `lint`, `format`, `lint:fix` scripts
+- **Test Coverage**: Expanded to 137 tests across 6 test files (registry, proxy, modelUtils, translators)
+- **Cleanup**: Removed 25+ scratch development artifacts, added `.prettierignore`
+- **Architecture**: `ideInstall/` wizard extracted to dedicated TypeScript module
 
 ### v2.0.3
 - **Architecture**: Extracted Google AI Studio translator to dedicated module

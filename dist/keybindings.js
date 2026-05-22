@@ -17,3 +17,4 @@ function registerKeybindings(win, actions) {
         }
     });
 }
+//# sourceMappingURL=keybindings.js.map

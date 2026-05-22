@@ -34,7 +34,10 @@ interface GeminiRequestBody {
   model_id?: string;
   request?: GeminiRequestBody;
   systemInstruction?: { parts: { text?: string }[] };
-  contents?: { parts?: { text?: string; functionCall?: unknown; functionResponse?: unknown; thought?: boolean }[]; role?: string }[];
+  contents?: {
+    parts?: { text?: string; functionCall?: unknown; functionResponse?: unknown; thought?: boolean }[];
+    role?: string;
+  }[];
   tools?: unknown[];
   generationConfig?: {
     temperature?: number;
@@ -75,7 +78,7 @@ function generateModelPlaceholderId(model: CustomModel): string {
   const input = (model.displayName || model.name || 'custom-model').toLowerCase();
   let hash = 5381;
   for (let i = 0; i < input.length; i++) {
-    hash = ((hash << 5) + hash) + input.charCodeAt(i);
+    hash = (hash << 5) + hash + input.charCodeAt(i);
     hash = hash & hash; // Force 32-bit integer
   }
   const placeholderNum = 400 + (Math.abs(hash) % 200);
@@ -88,11 +91,14 @@ function getCustomModelsPath(): string {
 }
 
 function toSlug(model: CustomModel): string {
-  return 'custom-' + (model.externalModelName || model.name)
-    .replace(/^models\//, '')
-    .replace(/[^a-zA-Z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .toLowerCase();
+  return (
+    'custom-' +
+    (model.externalModelName || model.name)
+      .replace(/^models\//, '')
+      .replace(/[^a-zA-Z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .toLowerCase()
+  );
 }
 
 // ─── Model Loading ────────────────────────────────────────────────────────
@@ -135,7 +141,7 @@ function loadCustomModels(): CustomModel[] {
     };
     try {
       fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      (defaultModels.models as CustomModel[]).forEach(m => {
+      (defaultModels.models as CustomModel[]).forEach((m) => {
         (m as unknown as Record<string, unknown>).encrypted = false;
       });
       const encrypted = cryptoStore.encryptModels(defaultModels.models);
@@ -153,8 +159,12 @@ function loadCustomModels(): CustomModel[] {
 
     // Auto-migration check
     const needsMigration = models.some(
-      m => !m.encrypted && m.apiKey && m.apiKey !== 'none' &&
-           !m.apiKey.startsWith('enc:') && !m.apiKey.startsWith('fallback:')
+      (m) =>
+        !m.encrypted &&
+        m.apiKey &&
+        m.apiKey !== 'none' &&
+        !m.apiKey.startsWith('enc:') &&
+        !m.apiKey.startsWith('fallback:'),
     );
     if (needsMigration) {
       log.info('[Proxy] Plaintext custom_models.json detected. Migrating to encrypted format...');
@@ -182,7 +192,9 @@ function loadCustomModels(): CustomModel[] {
       }
     }
     if (validModels.length < decrypted.length) {
-      log.info(`[Proxy] Loaded ${validModels.length}/${decrypted.length} valid models (${decrypted.length - validModels.length} skipped)`);
+      log.info(
+        `[Proxy] Loaded ${validModels.length}/${decrypted.length} valid models (${decrypted.length - validModels.length} skipped)`,
+      );
     }
 
     return validModels;
@@ -201,7 +213,9 @@ function proxyToGoogle(req: http.IncomingMessage, res: http.ServerResponse, reqB
     : 'https://generativelanguage.googleapis.com';
   const parsedUrl = new URL(req.url!, targetUrl);
 
-  const headers: Record<string, string | string[] | undefined> = { ...req.headers as Record<string, string | string[] | undefined> };
+  const headers: Record<string, string | string[] | undefined> = {
+    ...(req.headers as Record<string, string | string[] | undefined>),
+  };
   headers['host'] = isCloudCodeUrl ? 'daily-cloudcode-pa.googleapis.com' : 'generativelanguage.googleapis.com';
   delete headers['connection'];
   delete headers['keep-alive'];
@@ -219,7 +233,6 @@ function proxyToGoogle(req: http.IncomingMessage, res: http.ServerResponse, reqB
   };
 
   const proxyReq = https.request(parsedUrl, options, (proxyRes) => {
-
     // P0-5: Timeout for Google proxy requests (60s)
     proxyReq.setTimeout(60_000, () => {
       log.error('[Proxy] Google proxy request timed out after 60s');
@@ -232,7 +245,7 @@ function proxyToGoogle(req: http.IncomingMessage, res: http.ServerResponse, reqB
 
     if (shouldBufferAndModify) {
       const responseChunks: Buffer[] = [];
-      proxyRes.on('data', chunk => responseChunks.push(chunk));
+      proxyRes.on('data', (chunk) => responseChunks.push(chunk));
       proxyRes.on('end', () => {
         const fullResBody = Buffer.concat(responseChunks);
         let text: string;
@@ -249,7 +262,9 @@ function proxyToGoogle(req: http.IncomingMessage, res: http.ServerResponse, reqB
           text = fullResBody.toString('utf-8');
         }
 
-        log.info(`[Proxy] Response for ${req.url} (status: ${proxyRes.statusCode}, encoding: ${encoding}, length: ${text.length})`);
+        log.info(
+          `[Proxy] Response for ${req.url} (status: ${proxyRes.statusCode}, encoding: ${encoding}, length: ${text.length})`,
+        );
         // P0-3: Response body content is NOT logged to disk. Only metadata.
 
         const proxyHost = req.headers.host || 'localhost';
@@ -324,7 +339,7 @@ function handleCustomModelRequest(
   const MAX_RETRIES = Math.min(Math.max(model.maxRetries ?? 3, 0), 5);
   const REQUEST_TIMEOUT_MS = model.timeout || 120_000;
 
-  const provider = model.provider === 'custom' ? 'openai' : model.provider;
+  const provider = model.provider === 'custom' || model.provider === 'openrouter' ? 'openai' : model.provider;
 
   const payload = registry.translateRequest(provider, geminiBody, model.externalModelName);
   const headers = registry.getProviderHeaders(provider, model.apiKey);
@@ -339,7 +354,7 @@ function handleCustomModelRequest(
   if (provider === 'google' || provider === 'ollama') {
     const providerTranslator = registry.getTranslator(provider);
     finalUrlStr = registry.getProviderUrl(finalUrlStr, model.externalModelName, isStream, providerTranslator);
-  } else if (provider === 'openai' || model.provider === 'custom') {
+  } else if (provider === 'openai' || model.provider === 'custom' || model.provider === 'openrouter') {
     const urlLower = finalUrlStr.toLowerCase();
     if (!urlLower.includes('/chat/completions') && !urlLower.includes('/completions')) {
       if (finalUrlStr.endsWith('/v1')) {
@@ -362,11 +377,15 @@ function handleCustomModelRequest(
   // P0-2: SSL bypass ONLY when user explicitly opts in via allowUnauthorized.
   // Custom providers no longer bypass SSL automatically.
   if (model.allowUnauthorized) {
-    log.warn(`[Proxy] SSL verification DISABLED for ${model.name} (allowUnauthorized=true). Connection is vulnerable to MITM.`);
+    log.warn(
+      `[Proxy] SSL verification DISABLED for ${model.name} (allowUnauthorized=true). Connection is vulnerable to MITM.`,
+    );
     (options as Record<string, unknown>).rejectUnauthorized = false;
   }
 
-  log.info(`[Proxy] Routing ${model.name} to ${model.provider} (${model.apiUrl}) (isStream: ${!!isStream})${retryCount > 0 ? ` (retry ${retryCount})` : ''}`);
+  log.info(
+    `[Proxy] Routing ${model.name} to ${model.provider} (${model.apiUrl}) (isStream: ${!!isStream})${retryCount > 0 ? ` (retry ${retryCount})` : ''}`,
+  );
 
   const request = client.request(url, options, (apiRes) => {
     apiRes.on('error', (err) => {
@@ -383,7 +402,7 @@ function handleCustomModelRequest(
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
         'X-Accel-Buffering': 'no',
       });
 
@@ -442,11 +461,13 @@ function handleCustomModelRequest(
 
         const finalChunk = {
           response: {
-            candidates: [{
-              content: { parts: [], role: 'model' },
-              finishReason: 'STOP',
-              index: 0,
-            }],
+            candidates: [
+              {
+                content: { parts: [], role: 'model' },
+                finishReason: 'STOP',
+                index: 0,
+              },
+            ],
           },
           traceId: '',
           metadata: {},
@@ -456,13 +477,15 @@ function handleCustomModelRequest(
       });
     } else {
       let body = '';
-      apiRes.on('data', (chunk: Buffer) => body += chunk);
+      apiRes.on('data', (chunk: Buffer) => (body += chunk));
       apiRes.on('end', () => {
         // Retry on 5xx with exponential backoff
         if (apiRes.statusCode! >= 500 && apiRes.statusCode! < 600 && retryCount < MAX_RETRIES) {
           const retryAfter = parseRetryAfter(apiRes.headers);
           const delay = retryAfter > 0 ? retryAfter : 1000 * Math.pow(2, retryCount);
-          log.warn(`[Proxy] Server error ${apiRes.statusCode} for ${model.name}, retrying in ${delay}ms (${retryCount + 1}/${MAX_RETRIES})...`);
+          log.warn(
+            `[Proxy] Server error ${apiRes.statusCode} for ${model.name}, retrying in ${delay}ms (${retryCount + 1}/${MAX_RETRIES})...`,
+          );
           setTimeout(() => handleCustomModelRequest(res, model, geminiBody, isStream, retryCount + 1), delay);
           return;
         }
@@ -471,7 +494,9 @@ function handleCustomModelRequest(
         if (apiRes.statusCode === 429 && retryCount < MAX_RETRIES) {
           const retryAfter = parseRetryAfter(apiRes.headers);
           const delay = retryAfter > 0 ? retryAfter : 2000 * Math.pow(2, retryCount);
-          log.warn(`[Proxy] Rate limited (429) for ${model.name}, retrying in ${delay}ms (${retryCount + 1}/${MAX_RETRIES})...`);
+          log.warn(
+            `[Proxy] Rate limited (429) for ${model.name}, retrying in ${delay}ms (${retryCount + 1}/${MAX_RETRIES})...`,
+          );
           setTimeout(() => handleCustomModelRequest(res, model, geminiBody, isStream, retryCount + 1), delay);
           return;
         }
@@ -488,14 +513,17 @@ function handleCustomModelRequest(
           const parsed = JSON.parse(body) as Record<string, unknown>;
 
           const reasoning =
-            (parsed as { choices?: { message?: { reasoning_content?: string; reasoning?: string } }[] }).choices?.[0]?.message?.reasoning_content ||
-            (parsed as { choices?: { message?: { reasoning_content?: string; reasoning?: string } }[] }).choices?.[0]?.message?.reasoning;
+            (parsed as { choices?: { message?: { reasoning_content?: string; reasoning?: string } }[] }).choices?.[0]
+              ?.message?.reasoning_content ||
+            (parsed as { choices?: { message?: { reasoning_content?: string; reasoning?: string } }[] }).choices?.[0]
+              ?.message?.reasoning;
           if (reasoning) {
             modelReasoningContent.set(model.name, reasoning);
             touchStateTimestamp(stateTimestamps.reasoning, model.name);
           }
 
-          const providerForResponse = model.provider === 'custom' ? 'openai' : model.provider;
+          const providerForResponse =
+            model.provider === 'custom' || model.provider === 'openrouter' ? 'openai' : model.provider;
           const mapped = registry.translateResponse(providerForResponse, parsed, model.name);
 
           const cloudCodeResponse = {
@@ -511,7 +539,10 @@ function handleCustomModelRequest(
 
           if (retryCount < MAX_RETRIES) {
             log.warn(`[Proxy] Parse error for ${model.name}, retrying (${retryCount + 1}/${MAX_RETRIES})...`);
-            setTimeout(() => handleCustomModelRequest(res, model, geminiBody, isStream, retryCount + 1), 1000 * (retryCount + 1));
+            setTimeout(
+              () => handleCustomModelRequest(res, model, geminiBody, isStream, retryCount + 1),
+              1000 * (retryCount + 1),
+            );
             return;
           }
 
@@ -528,7 +559,10 @@ function handleCustomModelRequest(
 
     if (retryCount < MAX_RETRIES) {
       log.warn(`[Proxy] Timeout for ${model.name}, retrying (${retryCount + 1}/${MAX_RETRIES})...`);
-      setTimeout(() => handleCustomModelRequest(res, model, geminiBody, isStream, retryCount + 1), 1000 * (retryCount + 1));
+      setTimeout(
+        () => handleCustomModelRequest(res, model, geminiBody, isStream, retryCount + 1),
+        1000 * (retryCount + 1),
+      );
       return;
     }
 
@@ -543,7 +577,10 @@ function handleCustomModelRequest(
 
     if (retryCount < MAX_RETRIES) {
       log.warn(`[Proxy] Network error for ${model.name}, retrying (${retryCount + 1}/${MAX_RETRIES})...`);
-      setTimeout(() => handleCustomModelRequest(res, model, geminiBody, isStream, retryCount + 1), 1000 * (retryCount + 1));
+      setTimeout(
+        () => handleCustomModelRequest(res, model, geminiBody, isStream, retryCount + 1),
+        1000 * (retryCount + 1),
+      );
       return;
     }
 
@@ -551,11 +588,13 @@ function handleCustomModelRequest(
       if (!res.headersSent) {
         const errResponse = {
           response: {
-            candidates: [{
-              content: { parts: [{ text: 'Network error: ' + err.message }], role: 'model' },
-              finishReason: 'STOP',
-              index: 0,
-            }],
+            candidates: [
+              {
+                content: { parts: [{ text: 'Network error: ' + err.message }], role: 'model' },
+                finishReason: 'STOP',
+                index: 0,
+              },
+            ],
           },
           traceId: '',
           metadata: {},
@@ -584,23 +623,25 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
   if (req.method === 'GET' && (req.url === '/health' || req.url === '/healthz')) {
     const memUsage = process.memoryUsage();
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-      status: 'ok',
-      uptime: process.uptime(),
-      port: proxyPort,
-      memory: {
-        rssMB: Math.round(memUsage.rss / 1024 / 1024),
-        heapUsedMB: Math.round(memUsage.heapUsed / 1024 / 1024),
-        heapTotalMB: Math.round(memUsage.heapTotal / 1024 / 1024),
-      },
-      state: {
-        activeStreamContexts: activeStreamContexts.size,
-        modelToolCallIds: modelToolCallIds.size,
-        translatedToolCalls: translatedToolCalls.size,
-        modelReasoningContent: modelReasoningContent.size,
-      },
-      timestamp: new Date().toISOString(),
-    }));
+    res.end(
+      JSON.stringify({
+        status: 'ok',
+        uptime: process.uptime(),
+        port: proxyPort,
+        memory: {
+          rssMB: Math.round(memUsage.rss / 1024 / 1024),
+          heapUsedMB: Math.round(memUsage.heapUsed / 1024 / 1024),
+          heapTotalMB: Math.round(memUsage.heapTotal / 1024 / 1024),
+        },
+        state: {
+          activeStreamContexts: activeStreamContexts.size,
+          modelToolCallIds: modelToolCallIds.size,
+          translatedToolCalls: translatedToolCalls.size,
+          modelReasoningContent: modelReasoningContent.size,
+        },
+        timestamp: new Date().toISOString(),
+      }),
+    );
     return;
   }
 
@@ -610,7 +651,7 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
   let bodyRejected = false;
 
   const bodyChunks: Buffer[] = [];
-  req.on('data', chunk => {
+  req.on('data', (chunk) => {
     bodyLength += chunk.length;
     if (bodyLength > MAX_BODY_SIZE) {
       if (!bodyRejected) {
@@ -619,7 +660,9 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
         req.destroy();
         if (!res.headersSent) {
           res.writeHead(413, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: { message: `Request body too large. Maximum: ${MAX_BODY_SIZE / 1024 / 1024}MB` } }));
+          res.end(
+            JSON.stringify({ error: { message: `Request body too large. Maximum: ${MAX_BODY_SIZE / 1024 / 1024}MB` } }),
+          );
         }
       }
       return;
@@ -640,7 +683,9 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
 
       const targetUrl = 'https://daily-cloudcode-pa.googleapis.com';
       const parsedUrl = new URL(req.url!, targetUrl);
-      const fwdHeaders: Record<string, string | string[] | undefined> = { ...req.headers as Record<string, string | string[] | undefined> };
+      const fwdHeaders: Record<string, string | string[] | undefined> = {
+        ...(req.headers as Record<string, string | string[] | undefined>),
+      };
       fwdHeaders['host'] = 'daily-cloudcode-pa.googleapis.com';
       delete fwdHeaders['connection'];
       delete fwdHeaders['keep-alive'];
@@ -652,7 +697,6 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
       };
 
       const googleReq = https.request(parsedUrl, fwdOptions, (googleRes) => {
-
         // P0-5: Timeout for fetchAvailableModels forward request (30s)
         googleReq.setTimeout(30_000, () => {
           log.error('[Proxy] fetchAvailableModels forward request timed out');
@@ -660,7 +704,7 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
           if (!res.headersSent) {
             const customModels = loadCustomModels();
             const mappedCustom: Record<string, unknown> = {};
-            customModels.forEach(m => {
+            customModels.forEach((m) => {
               const slug = toSlug(m);
               mappedCustom[slug] = {
                 displayName: m.displayName,
@@ -677,10 +721,12 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
         });
 
         let googleBody = '';
-        googleRes.on('data', chunk => googleBody += chunk);
+        googleRes.on('data', (chunk) => (googleBody += chunk));
         googleRes.on('end', () => {
           try {
-            log.info(`[Proxy] fetchAvailableModels response status: ${googleRes.statusCode}, body length: ${googleBody.length}`);
+            log.info(
+              `[Proxy] fetchAvailableModels response status: ${googleRes.statusCode}, body length: ${googleBody.length}`,
+            );
 
             const googleJson = JSON.parse(googleBody) as Record<string, unknown>;
             const customModels = loadCustomModels();
@@ -689,7 +735,7 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
 
             const mergeModels = (target: unknown): unknown => {
               if (Array.isArray(target)) {
-                const mapped = customModels.map(m => {
+                const mapped = customModels.map((m) => {
                   const cap = detectModelCapabilities(m, true);
                   return {
                     name: 'models/' + generateModelPlaceholderId(m),
@@ -706,8 +752,8 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
                 });
                 return [...mapped, ...target];
               } else if (target && typeof target === 'object') {
-                const result = { ...target as Record<string, unknown> };
-                customModels.forEach(m => {
+                const result = { ...(target as Record<string, unknown>) };
+                customModels.forEach((m) => {
                   const slug = toSlug(m);
                   const cap = detectModelCapabilities(m, true);
                   (result as Record<string, unknown>)[slug] = {
@@ -723,7 +769,9 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
                     modelProvider: 'MODEL_PROVIDER_GOOGLE',
                   };
                   m._slug = slug;
-                  log.info(`[Proxy] Custom model "${m.displayName}" => slug: ${slug} => model: ${generateModelPlaceholderId(m)} => supportsThinking: ${cap.isThinking}`);
+                  log.info(
+                    `[Proxy] Custom model "${m.displayName}" => slug: ${slug} => model: ${generateModelPlaceholderId(m)} => supportsThinking: ${cap.isThinking}`,
+                  );
                 });
                 return result;
               }
@@ -746,7 +794,7 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
 
             if (!merged) {
               const modelsMap: Record<string, unknown> = {};
-              customModels.forEach(m => {
+              customModels.forEach((m) => {
                 const slug = toSlug(m);
                 modelsMap[slug] = {
                   displayName: m.displayName,
@@ -764,14 +812,14 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
             }
 
             // Inject custom model slugs into agentModelSorts
-            const customSlugs = customModels.map(m => m._slug).filter(Boolean) as string[];
+            const customSlugs = customModels.map((m) => m._slug).filter(Boolean) as string[];
             if (customSlugs.length > 0) {
               if (googleJson.agentModelSorts && Array.isArray(googleJson.agentModelSorts)) {
-                (googleJson.agentModelSorts as { groups?: { modelIds?: string[] }[] }[]).forEach(sort => {
+                (googleJson.agentModelSorts as { groups?: { modelIds?: string[] }[] }[]).forEach((sort) => {
                   if (sort.groups && Array.isArray(sort.groups)) {
-                    sort.groups.forEach(group => {
+                    sort.groups.forEach((group) => {
                       if (group.modelIds && Array.isArray(group.modelIds)) {
-                        customSlugs.forEach(slug => {
+                        customSlugs.forEach((slug) => {
                           if (!group.modelIds!.includes(slug)) {
                             group.modelIds!.push(slug);
                           }
@@ -789,7 +837,7 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
             log.error('[Proxy] Parsing fetchAvailableModels failed, returning custom models:', err);
             const customModels = loadCustomModels();
             const mappedCustom: Record<string, unknown> = {};
-            customModels.forEach(m => {
+            customModels.forEach((m) => {
               const slug = toSlug(m);
               mappedCustom[slug] = {
                 displayName: m.displayName,
@@ -810,7 +858,7 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
         log.error('[Proxy] Forwarding fetchAvailableModels failed:', err);
         const customModels = loadCustomModels();
         const mappedCustom: Record<string, unknown> = {};
-        customModels.forEach(m => {
+        customModels.forEach((m) => {
           const slug = toSlug(m);
           mappedCustom[slug] = {
             displayName: m.displayName,
@@ -838,7 +886,9 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
 
       const targetUrl = 'https://generativelanguage.googleapis.com';
       const parsedUrl = new URL(req.url!, targetUrl);
-      const mdlHeaders: Record<string, string | string[] | undefined> = { ...req.headers as Record<string, string | string[] | undefined> };
+      const mdlHeaders: Record<string, string | string[] | undefined> = {
+        ...(req.headers as Record<string, string | string[] | undefined>),
+      };
       mdlHeaders['host'] = 'generativelanguage.googleapis.com';
       delete mdlHeaders['connection'];
       delete mdlHeaders['accept-encoding'];
@@ -846,7 +896,6 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
       const mdlOptions: https.RequestOptions = { method: 'GET', headers: mdlHeaders as Record<string, string> };
 
       const googleReq = https.request(parsedUrl, mdlOptions, (googleRes) => {
-
         // P0-5: Timeout for models list forward request (30s)
         googleReq.setTimeout(30_000, () => {
           log.error('[Proxy] Models list forward request timed out');
@@ -854,25 +903,27 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
           if (!res.headersSent) {
             const customModels = loadCustomModels();
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-              models: customModels.map(m => ({
-                name: m.name,
-                displayName: m.displayName,
-                description: m.description,
-                supportedGenerationMethods: ['generateContent'],
-              })),
-            }));
+            res.end(
+              JSON.stringify({
+                models: customModels.map((m) => ({
+                  name: m.name,
+                  displayName: m.displayName,
+                  description: m.description,
+                  supportedGenerationMethods: ['generateContent'],
+                })),
+              }),
+            );
           }
         });
 
         let googleBody = '';
-        googleRes.on('data', chunk => googleBody += chunk);
+        googleRes.on('data', (chunk) => (googleBody += chunk));
         googleRes.on('end', () => {
           try {
             const googleJson = JSON.parse(googleBody) as { models?: unknown[] };
             const customModels = loadCustomModels();
 
-            const mappedCustom = customModels.map(m => ({
+            const mappedCustom = customModels.map((m) => ({
               name: 'models/' + generateModelPlaceholderId(m),
               version: '1.0',
               displayName: m.displayName,
@@ -896,7 +947,7 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
           } catch (err) {
             log.error('[Proxy] Google list models failed, returning custom models list only:', err);
             const customModels = loadCustomModels();
-            const mappedCustom = customModels.map(m => ({
+            const mappedCustom = customModels.map((m) => ({
               name: 'models/' + generateModelPlaceholderId(m),
               version: '1.0',
               displayName: m.displayName,
@@ -915,35 +966,42 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
         log.error('[Proxy] Google models list request error:', err);
         const customModels = loadCustomModels();
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          models: customModels.map(m => ({
-            name: m.name,
-            displayName: m.displayName,
-            description: m.description,
-            supportedGenerationMethods: ['generateContent'],
-          })),
-        }));
+        res.end(
+          JSON.stringify({
+            models: customModels.map((m) => ({
+              name: m.name,
+              displayName: m.displayName,
+              description: m.description,
+              supportedGenerationMethods: ['generateContent'],
+            })),
+          }),
+        );
       });
       googleReq.end();
       return;
     }
 
     // 3. Intercept Cloud Code generation stream or non-stream requests
-    const isCloudCodeStream = req.url!.includes('/v1internal:streamGenerateContent') || req.url!.includes('/v1internal:generateContent');
+    const isCloudCodeStream =
+      req.url!.includes('/v1internal:streamGenerateContent') || req.url!.includes('/v1internal:generateContent');
     if (req.method === 'POST' && isCloudCodeStream) {
       try {
         const reqJson = JSON.parse(bodyStr) as Record<string, unknown>;
         const modelName = reqJson.model as string | undefined;
         const modelId = (reqJson.modelId || reqJson.model_id) as string | undefined;
-        log.info(`[Proxy] Cloud Code generation request model: ${modelName}, modelId: ${modelId}, url: ${req.url}, bodyKeys: ${Object.keys(reqJson).join(',')}`);
+        log.info(
+          `[Proxy] Cloud Code generation request model: ${modelName}, modelId: ${modelId}, url: ${req.url}, bodyKeys: ${Object.keys(reqJson).join(',')}`,
+        );
         if (modelName) {
           const customModels = loadCustomModels();
-          const matchedCustomModel = customModels.find(m => {
+          const matchedCustomModel = customModels.find((m) => {
             const enumName = generateModelPlaceholderId(m);
             return m.name === modelName || toSlug(m) === modelName || enumName === modelName || enumName === modelId;
           });
           if (matchedCustomModel) {
-            log.info(`[Proxy] Intercepting Cloud Code generation for custom model: ${modelName} => ${matchedCustomModel.displayName}`);
+            log.info(
+              `[Proxy] Intercepting Cloud Code generation for custom model: ${modelName} => ${matchedCustomModel.displayName}`,
+            );
             const isStream = req.url!.includes('streamGenerateContent') || req.url!.includes('alt=sse');
             const actualGeminiBody = (reqJson.request || reqJson) as GeminiRequestBody;
             handleCustomModelRequest(res, matchedCustomModel, actualGeminiBody, isStream);
@@ -965,12 +1023,14 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
     if (req.method === 'POST' && (isGenerate || isStandardStream)) {
       const matchedModelName = isGenerate ? generateMatch![1] : streamMatch![1];
       const customModels = loadCustomModels();
-      const matchedCustomModel = customModels.find(m => {
+      const matchedCustomModel = customModels.find((m) => {
         const enumName = generateModelPlaceholderId(m);
-        return m.name === matchedModelName ||
-               toSlug(m) === matchedModelName ||
-               enumName === matchedModelName ||
-               ('models/' + enumName) === matchedModelName;
+        return (
+          m.name === matchedModelName ||
+          toSlug(m) === matchedModelName ||
+          enumName === matchedModelName ||
+          'models/' + enumName === matchedModelName
+        );
       });
 
       if (matchedCustomModel) {

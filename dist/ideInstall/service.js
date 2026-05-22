@@ -52,9 +52,7 @@ const http = __importStar(require("http"));
 const main_1 = __importDefault(require("electron-log/main"));
 const constants_1 = require("./constants");
 const paths_1 = require("../paths");
-// ---------------------------------------------------------------------------
-// Download
-// ---------------------------------------------------------------------------
+// ─── Download ──────────────────────────────────────────────────────────────
 function downloadFile(url, destPath, onProgress, maxRedirects = 5) {
     return new Promise((resolve, reject) => {
         if (maxRedirects <= 0) {
@@ -63,10 +61,7 @@ function downloadFile(url, destPath, onProgress, maxRedirects = 5) {
         }
         const proto = url.startsWith('https') ? https : http;
         const req = proto.get(url, (res) => {
-            if (res.statusCode &&
-                res.statusCode >= 300 &&
-                res.statusCode < 400 &&
-                res.headers.location) {
+            if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
                 const redirectUrl = res.headers.location.startsWith('http')
                     ? res.headers.location
                     : new URL(res.headers.location, url).toString();
@@ -105,9 +100,7 @@ function downloadFile(url, destPath, onProgress, maxRedirects = 5) {
         req.on('error', reject);
     });
 }
-// ---------------------------------------------------------------------------
-// Extract
-// ---------------------------------------------------------------------------
+// ─── Extract ───────────────────────────────────────────────────────────────
 async function extractIde(archivePath, installPath) {
     const { execFile } = await Promise.resolve().then(() => __importStar(require('child_process')));
     const { promisify } = await Promise.resolve().then(() => __importStar(require('util')));
@@ -141,13 +134,7 @@ async function extractIde(archivePath, installPath) {
             if (!fs.existsSync(installPath)) {
                 await fsPromises.mkdir(installPath, { recursive: true });
             }
-            await execFileAsync('tar', [
-                '-xzf',
-                archivePath,
-                '-C',
-                installPath,
-                '--strip-components=1',
-            ]);
+            await execFileAsync('tar', ['-xzf', archivePath, '-C', installPath, '--strip-components=1']);
             break;
         }
         case 'win32': {
@@ -158,9 +145,7 @@ async function extractIde(archivePath, installPath) {
             throw new Error(`Unsupported platform: ${process.platform}`);
     }
 }
-// ---------------------------------------------------------------------------
-// Copy User Data
-// ---------------------------------------------------------------------------
+// ─── Copy User Data ────────────────────────────────────────────────────────
 async function copyUserData(sourcePath, destPath) {
     if (!fs.existsSync(sourcePath)) {
         main_1.default.warn(`[IDE Wizard] Source path does not exist: ${sourcePath}`);
@@ -169,17 +154,11 @@ async function copyUserData(sourcePath, destPath) {
     await fsPromises.cp(sourcePath, destPath, { recursive: true, force: true });
     main_1.default.info(`[IDE Wizard] Copied user data: ${sourcePath} → ${destPath}`);
 }
-// ---------------------------------------------------------------------------
-// Download & Install (orchestrator)
-// ---------------------------------------------------------------------------
+// ─── Download & Install (orchestrator) ─────────────────────────────────────
 async function downloadAndInstallIde() {
     const platformKey = (0, constants_1.getPlatformKey)();
     const downloadUrl = await (0, constants_1.fetchIdeDownloadUrl)(platformKey);
-    const ext = process.platform === 'win32'
-        ? '.exe'
-        : process.platform === 'linux'
-            ? '.tar.gz'
-            : '.zip';
+    const ext = process.platform === 'win32' ? '.exe' : process.platform === 'linux' ? '.tar.gz' : '.zip';
     const tempFile = path.join(os.tmpdir(), `antigravity-ide-download${ext}`);
     main_1.default.info(`[IDE Wizard] Downloading IDE from ${downloadUrl}…`);
     await downloadFile(downloadUrl, tempFile);
@@ -195,3 +174,4 @@ async function downloadAndInstallIde() {
         /* ignore */
     }
 }
+//# sourceMappingURL=service.js.map

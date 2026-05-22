@@ -154,7 +154,7 @@ function mapGeminiToolsToAnthropic(geminiTools: GeminiTool[]): AnthropicTool[] {
     if (toolGroup.functionDeclarations && Array.isArray(toolGroup.functionDeclarations)) {
       for (const func of toolGroup.functionDeclarations) {
         const params = func.parameters
-          ? JSON.parse(JSON.stringify(func.parameters)) as Record<string, unknown>
+          ? (JSON.parse(JSON.stringify(func.parameters)) as Record<string, unknown>)
           : { type: 'OBJECT', properties: {} };
         if (params.type && typeof params.type === 'string') {
           (params as Record<string, string>).type = (params.type as string).toLowerCase();
@@ -178,21 +178,21 @@ export function mapGeminiToAnthropic(geminiBody: GeminiRequestBody, modelName: s
   let system: string | undefined = undefined;
 
   if (geminiBody.systemInstruction && geminiBody.systemInstruction.parts) {
-    system = geminiBody.systemInstruction.parts.map(p => p.text || '').join('');
+    system = geminiBody.systemInstruction.parts.map((p) => p.text || '').join('');
   }
 
   if (geminiBody.contents) {
     for (const item of geminiBody.contents) {
       if (item.parts) {
-        const hasFunctionCall = item.parts.some(p => p.functionCall);
-        const hasFunctionResponse = item.parts.some(p => p.functionResponse);
+        const hasFunctionCall = item.parts.some((p) => p.functionCall);
+        const hasFunctionResponse = item.parts.some((p) => p.functionResponse);
 
         if (hasFunctionCall && item.role === 'model') {
           const contentBlocks: AnthropicContentBlock[] = [];
           for (const p of item.parts) {
             if (p.text) contentBlocks.push({ type: 'text', text: p.text });
             if (p.functionCall) {
-              const callId = p.functionCall.id || ('call_' + Math.random().toString(36).slice(2, 10));
+              const callId = p.functionCall.id || 'call_' + Math.random().toString(36).slice(2, 10);
               let originalName = p.functionCall.name;
               let originalArgs = p.functionCall.args;
               const translatedInfo = translatedToolCalls.get(callId);
@@ -204,9 +204,10 @@ export function mapGeminiToAnthropic(geminiBody: GeminiRequestBody, modelName: s
                 type: 'tool_use',
                 id: callId,
                 name: originalName,
-                input: typeof originalArgs === 'string'
-                  ? JSON.parse(originalArgs) as Record<string, unknown>
-                  : (originalArgs as Record<string, unknown>),
+                input:
+                  typeof originalArgs === 'string'
+                    ? (JSON.parse(originalArgs) as Record<string, unknown>)
+                    : (originalArgs as Record<string, unknown>),
               });
             }
           }
@@ -217,16 +218,14 @@ export function mapGeminiToAnthropic(geminiBody: GeminiRequestBody, modelName: s
             if (p.functionResponse) {
               const funcName = p.functionResponse.name || '';
               const modelTCIds = modelToolCallIds.get(modelName) || {};
-              const toolCallId = p.functionResponse.id || modelTCIds[funcName] || ('call_' + funcName);
+              const toolCallId = p.functionResponse.id || modelTCIds[funcName] || 'call_' + funcName;
               const responseData = p.functionResponse.response;
               let contentStr = '';
               const translatedInfo = translatedToolCalls.get(toolCallId);
               if (translatedInfo) {
                 contentStr = formatTranslatedResponse(translatedInfo, responseData);
               } else {
-                contentStr = typeof responseData === 'string'
-                  ? responseData
-                  : JSON.stringify(responseData || {});
+                contentStr = typeof responseData === 'string' ? responseData : JSON.stringify(responseData || {});
               }
               contentBlocks.push({
                 type: 'tool_result',
@@ -237,9 +236,9 @@ export function mapGeminiToAnthropic(geminiBody: GeminiRequestBody, modelName: s
           }
           messages.push({ role: 'user', content: contentBlocks });
         } else {
-          const roleStr = item.role === 'model' ? 'assistant' : (item.role || 'user');
+          const roleStr = item.role === 'model' ? 'assistant' : item.role || 'user';
           let content = '';
-          if (item.parts) content = item.parts.map(p => p.text || '').join('');
+          if (item.parts) content = item.parts.map((p) => p.text || '').join('');
           if (roleStr === 'system') {
             system = (system || '') + '\n' + content;
           } else {
@@ -311,7 +310,9 @@ export function mapAnthropicToGemini(anthRes: AnthropicResponse, modelName: stri
 
   if (functionCalls.length > 0) {
     return {
-      candidates: [{ content: { parts: [...parts, ...functionCalls], role: 'model' }, finishReason: 'TOOL_CALL', index: 0 }],
+      candidates: [
+        { content: { parts: [...parts, ...functionCalls], role: 'model' }, finishReason: 'TOOL_CALL', index: 0 },
+      ],
       usageMetadata: {
         promptTokenCount: anthRes.usage?.input_tokens || 0,
         candidatesTokenCount: anthRes.usage?.output_tokens || 0,
@@ -321,8 +322,7 @@ export function mapAnthropicToGemini(anthRes: AnthropicResponse, modelName: stri
   }
 
   const finishReason =
-    anthRes.stop_reason === 'end_turn' ? 'STOP' :
-    anthRes.stop_reason === 'max_tokens' ? 'MAX_TOKENS' : 'OTHER';
+    anthRes.stop_reason === 'end_turn' ? 'STOP' : anthRes.stop_reason === 'max_tokens' ? 'MAX_TOKENS' : 'OTHER';
 
   return {
     candidates: [{ content: { parts, role: 'model' }, finishReason, index: 0 }],
@@ -364,7 +364,11 @@ export function mapAnthropicChunkToGemini(chunk: AnthropicResponse, modelName: s
     } else if (delta?.type === 'thinking_delta') {
       const thinkingText = delta.thinking || '';
       context.accumulatedReasoning += thinkingText;
-      return { content: { parts: [{ text: thinkingText, thought: true }], role: 'model' }, finishReason: 'OTHER', index: 0 };
+      return {
+        content: { parts: [{ text: thinkingText, thought: true }], role: 'model' },
+        finishReason: 'OTHER',
+        index: 0,
+      };
     } else if (delta?.type === 'input_delta') {
       if (context.toolCalls[idx]) {
         context.toolCalls[idx].arguments += delta.partial_json || '';
@@ -375,9 +379,14 @@ export function mapAnthropicChunkToGemini(chunk: AnthropicResponse, modelName: s
   if (type === 'message_delta') {
     const delta = chunk.delta;
     if (delta?.stop_reason === 'tool_use') {
-      const parts: GeminiPart[] = Object.values(context.toolCalls).map(tc => {
+      const parts: GeminiPart[] = Object.values(context.toolCalls).map((tc) => {
         let args: ToolCallArgs = {};
-        try { args = JSON.parse(tc.arguments); } catch (e) { log.debug('[Anthropic] Stream tool args parse fallback:', (e as Error).message); args = {}; }
+        try {
+          args = JSON.parse(tc.arguments);
+        } catch (e) {
+          log.debug('[Anthropic] Stream tool args parse fallback:', (e as Error).message);
+          args = {};
+        }
         args = normalizeToolArgs(tc.name, args) as ToolCallArgs;
         const modelTCIds = modelToolCallIds.get(modelName) || {};
         modelTCIds[tc.name] = tc.id;

@@ -67,7 +67,7 @@ function generateModelPlaceholderId(model) {
     const input = (model.displayName || model.name || 'custom-model').toLowerCase();
     let hash = 5381;
     for (let i = 0; i < input.length; i++) {
-        hash = ((hash << 5) + hash) + input.charCodeAt(i);
+        hash = (hash << 5) + hash + input.charCodeAt(i);
         hash = hash & hash; // Force 32-bit integer
     }
     const placeholderNum = 400 + (Math.abs(hash) % 200);
@@ -78,11 +78,12 @@ function getCustomModelsPath() {
     return path.join(geminiDir, 'custom_models.json');
 }
 function toSlug(model) {
-    return 'custom-' + (model.externalModelName || model.name)
-        .replace(/^models\//, '')
-        .replace(/[^a-zA-Z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .toLowerCase();
+    return ('custom-' +
+        (model.externalModelName || model.name)
+            .replace(/^models\//, '')
+            .replace(/[^a-zA-Z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .toLowerCase());
 }
 // ─── Model Loading ────────────────────────────────────────────────────────
 function loadCustomModels() {
@@ -122,7 +123,7 @@ function loadCustomModels() {
         };
         try {
             fs.mkdirSync(path.dirname(filePath), { recursive: true });
-            defaultModels.models.forEach(m => {
+            defaultModels.models.forEach((m) => {
                 m.encrypted = false;
             });
             const encrypted = cryptoStore.encryptModels(defaultModels.models);
@@ -138,8 +139,11 @@ function loadCustomModels() {
         const parsed = JSON.parse(content);
         const models = parsed.models || [];
         // Auto-migration check
-        const needsMigration = models.some(m => !m.encrypted && m.apiKey && m.apiKey !== 'none' &&
-            !m.apiKey.startsWith('enc:') && !m.apiKey.startsWith('fallback:'));
+        const needsMigration = models.some((m) => !m.encrypted &&
+            m.apiKey &&
+            m.apiKey !== 'none' &&
+            !m.apiKey.startsWith('enc:') &&
+            !m.apiKey.startsWith('fallback:'));
         if (needsMigration) {
             electron_log_1.default.info('[Proxy] Plaintext custom_models.json detected. Migrating to encrypted format...');
             cryptoStore.backupFile(filePath);
@@ -182,7 +186,9 @@ function proxyToGoogle(req, res, reqBody) {
         ? 'https://daily-cloudcode-pa.googleapis.com'
         : 'https://generativelanguage.googleapis.com';
     const parsedUrl = new URL(req.url, targetUrl);
-    const headers = { ...req.headers };
+    const headers = {
+        ...req.headers,
+    };
     headers['host'] = isCloudCodeUrl ? 'daily-cloudcode-pa.googleapis.com' : 'generativelanguage.googleapis.com';
     delete headers['connection'];
     delete headers['keep-alive'];
@@ -207,7 +213,7 @@ function proxyToGoogle(req, res, reqBody) {
         });
         if (shouldBufferAndModify) {
             const responseChunks = [];
-            proxyRes.on('data', chunk => responseChunks.push(chunk));
+            proxyRes.on('data', (chunk) => responseChunks.push(chunk));
             proxyRes.on('end', () => {
                 const fullResBody = Buffer.concat(responseChunks);
                 let text;
@@ -255,17 +261,48 @@ function proxyToGoogle(req, res, reqBody) {
     proxyReq.end();
 }
 // ─── Custom Model Request Handler ─────────────────────────────────────────
+/**
+ * Parses the Retry-After header from upstream responses (RFC 7231 §7.1.3).
+ * Returns delay in milliseconds, or 0 if no valid header is present.
+ */
+function parseRetryAfter(headers) {
+    const val = headers['retry-after'];
+    if (!val)
+        return 0;
+    const raw = Array.isArray(val) ? val[0] : val;
+    if (!raw)
+        return 0;
+    // Try delta-seconds (e.g. "120")
+    const seconds = parseInt(raw.trim(), 10);
+    if (!isNaN(seconds) && seconds >= 0) {
+        return seconds * 1000;
+    }
+    // Try HTTP-date (e.g. "Wed, 21 Oct 2015 07:28:00 GMT")
+    const date = new Date(raw);
+    if (!isNaN(date.getTime())) {
+        const delay = date.getTime() - Date.now();
+        return delay > 0 ? delay : 0;
+    }
+    return 0;
+}
 function handleCustomModelRequest(res, model, geminiBody, isStream, retryCount = 0) {
-    const MAX_RETRIES = 2;
-    const REQUEST_TIMEOUT_MS = 120000;
-    const provider = model.provider === 'custom' ? 'openai' : model.provider;
+    // P3-18: Configurable max retries per model (default 3, min 0, max 5)
+    const MAX_RETRIES = Math.min(Math.max(model.maxRetries ?? 3, 0), 5);
+    const REQUEST_TIMEOUT_MS = model.timeout || 120000;
+    const provider = model.provider === 'custom' || model.provider === 'openrouter' ? 'openai' : model.provider;
     const payload = registry.translateRequest(provider, geminiBody, model.externalModelName);
     const headers = registry.getProviderHeaders(provider, model.apiKey);
     if (isStream && registry.supportsStreaming(provider)) {
         payload.stream = true;
     }
     let finalUrlStr = model.apiUrl;
-    if (provider === 'openai' || model.provider === 'custom' || provider === 'ollama') {
+    // P3-15: Google AI Studio uses dynamic URL construction for streaming vs non-streaming
+    // P3-16: Ollama uses URL normalization for default port and endpoint
+    if (provider === 'google' || provider === 'ollama') {
+        const providerTranslator = registry.getTranslator(provider);
+        finalUrlStr = registry.getProviderUrl(finalUrlStr, model.externalModelName, isStream, providerTranslator);
+    }
+    else if (provider === 'openai' || model.provider === 'custom' || model.provider === 'openrouter') {
         const urlLower = finalUrlStr.toLowerCase();
         if (!urlLower.includes('/chat/completions') && !urlLower.includes('/completions')) {
             if (finalUrlStr.endsWith('/v1')) {
@@ -291,8 +328,7 @@ function handleCustomModelRequest(res, model, geminiBody, isStream, retryCount =
         electron_log_1.default.warn(`[Proxy] SSL verification DISABLED for ${model.name} (allowUnauthorized=true). Connection is vulnerable to MITM.`);
         options.rejectUnauthorized = false;
     }
-    const apiKeyLen = model.apiKey ? model.apiKey.length : 0;
-    electron_log_1.default.info(`[Proxy] Routing ${model.name} to ${model.provider} (${model.apiUrl}) (isStream: ${!!isStream}) (keyLen: ${apiKeyLen})${retryCount > 0 ? ` (retry ${retryCount})` : ''}`);
+    electron_log_1.default.info(`[Proxy] Routing ${model.name} to ${model.provider} (${model.apiUrl}) (isStream: ${!!isStream})${retryCount > 0 ? ` (retry ${retryCount})` : ''}`);
     const request = client.request(url, options, (apiRes) => {
         apiRes.on('error', (err) => {
             electron_log_1.default.error(`[Proxy] Upstream stream error for ${model.name}:`, err.message);
@@ -305,14 +341,14 @@ function handleCustomModelRequest(res, model, geminiBody, isStream, retryCount =
             }
         });
         if (isStream) {
-            // Check for error status BEFORE writing streaming headers
+            // Check for API errors BEFORE writing streaming headers
             if (apiRes.statusCode >= 400) {
                 let errorBody = '';
-                apiRes.on('data', (chunk) => errorBody += chunk);
+                apiRes.on('data', (chunk) => errorBody += chunk.toString());
                 apiRes.on('end', () => {
-                    electron_log_1.default.error(`[Proxy] API error (${apiRes.statusCode}) for streaming ${model.name}: ${errorBody.substring(0, 300)}`);
+                    electron_log_1.default.error(`[Proxy] Stream API error (${apiRes.statusCode}) for ${model.name}: ${errorBody.substring(0, 300)}`);
                     if (retryCount < MAX_RETRIES) {
-                        electron_log_1.default.warn(`[Proxy] Stream error for ${model.name}, retrying (${retryCount + 1}/${MAX_RETRIES})...`);
+                        electron_log_1.default.warn(`[Proxy] Stream error, retrying (${retryCount + 1}/${MAX_RETRIES})...`);
                         setTimeout(() => handleCustomModelRequest(res, model, geminiBody, isStream, retryCount + 1), 1000 * (retryCount + 1));
                         return;
                     }
@@ -325,7 +361,7 @@ function handleCustomModelRequest(res, model, geminiBody, isStream, retryCount =
             res.writeHead(200, {
                 'Content-Type': 'text/event-stream',
                 'Cache-Control': 'no-cache',
-                'Connection': 'keep-alive',
+                Connection: 'keep-alive',
                 'X-Accel-Buffering': 'no',
             });
             let buffer = '';
@@ -383,11 +419,13 @@ function handleCustomModelRequest(res, model, geminiBody, isStream, retryCount =
                 }
                 const finalChunk = {
                     response: {
-                        candidates: [{
-                            content: { parts: [], role: 'model' },
-                            finishReason: 'STOP',
-                            index: 0,
-                        }],
+                        candidates: [
+                            {
+                                content: { parts: [], role: 'model' },
+                                finishReason: 'STOP',
+                                index: 0,
+                            },
+                        ],
                     },
                     traceId: '',
                     metadata: {},
@@ -398,17 +436,20 @@ function handleCustomModelRequest(res, model, geminiBody, isStream, retryCount =
         }
         else {
             let body = '';
-            apiRes.on('data', (chunk) => body += chunk);
+            apiRes.on('data', (chunk) => (body += chunk));
             apiRes.on('end', () => {
-                // Retry on 5xx
+                // Retry on 5xx with exponential backoff
                 if (apiRes.statusCode >= 500 && apiRes.statusCode < 600 && retryCount < MAX_RETRIES) {
-                    electron_log_1.default.warn(`[Proxy] Server error ${apiRes.statusCode} for ${model.name}, retrying (${retryCount + 1}/${MAX_RETRIES})...`);
-                    setTimeout(() => handleCustomModelRequest(res, model, geminiBody, isStream, retryCount + 1), 1000 * (retryCount + 1));
+                    const retryAfter = parseRetryAfter(apiRes.headers);
+                    const delay = retryAfter > 0 ? retryAfter : 1000 * Math.pow(2, retryCount);
+                    electron_log_1.default.warn(`[Proxy] Server error ${apiRes.statusCode} for ${model.name}, retrying in ${delay}ms (${retryCount + 1}/${MAX_RETRIES})...`);
+                    setTimeout(() => handleCustomModelRequest(res, model, geminiBody, isStream, retryCount + 1), delay);
                     return;
                 }
-                // Retry on 429
+                // Retry on 429 with Retry-After header support + exponential backoff
                 if (apiRes.statusCode === 429 && retryCount < MAX_RETRIES) {
-                    const delay = 2000 * Math.pow(2, retryCount);
+                    const retryAfter = parseRetryAfter(apiRes.headers);
+                    const delay = retryAfter > 0 ? retryAfter : 2000 * Math.pow(2, retryCount);
                     electron_log_1.default.warn(`[Proxy] Rate limited (429) for ${model.name}, retrying in ${delay}ms (${retryCount + 1}/${MAX_RETRIES})...`);
                     setTimeout(() => handleCustomModelRequest(res, model, geminiBody, isStream, retryCount + 1), delay);
                     return;
@@ -422,13 +463,15 @@ function handleCustomModelRequest(res, model, geminiBody, isStream, retryCount =
                 }
                 try {
                     const parsed = JSON.parse(body);
-                    const reasoning = parsed.choices?.[0]?.message?.reasoning_content ||
-                        parsed.choices?.[0]?.message?.reasoning;
+                    const reasoning = parsed.choices?.[0]
+                        ?.message?.reasoning_content ||
+                        parsed.choices?.[0]
+                            ?.message?.reasoning;
                     if (reasoning) {
                         shared_1.modelReasoningContent.set(model.name, reasoning);
                         (0, shared_1.touchStateTimestamp)(shared_1.stateTimestamps.reasoning, model.name);
                     }
-                    const providerForResponse = model.provider === 'custom' ? 'openai' : model.provider;
+                    const providerForResponse = model.provider === 'custom' || model.provider === 'openrouter' ? 'openai' : model.provider;
                     const mapped = registry.translateResponse(providerForResponse, parsed, model.name);
                     const cloudCodeResponse = {
                         response: mapped,
@@ -475,11 +518,13 @@ function handleCustomModelRequest(res, model, geminiBody, isStream, retryCount =
             if (!res.headersSent) {
                 const errResponse = {
                     response: {
-                        candidates: [{
+                        candidates: [
+                            {
                                 content: { parts: [{ text: 'Network error: ' + err.message }], role: 'model' },
                                 finishReason: 'STOP',
                                 index: 0,
-                            }],
+                            },
+                        ],
                     },
                     traceId: '',
                     metadata: {},
@@ -529,7 +574,7 @@ function handleRequest(req, res) {
     let bodyLength = 0;
     let bodyRejected = false;
     const bodyChunks = [];
-    req.on('data', chunk => {
+    req.on('data', (chunk) => {
         bodyLength += chunk.length;
         if (bodyLength > MAX_BODY_SIZE) {
             if (!bodyRejected) {
@@ -556,7 +601,9 @@ function handleRequest(req, res) {
             electron_log_1.default.info('[Proxy] Intercepting fetchAvailableModels request');
             const targetUrl = 'https://daily-cloudcode-pa.googleapis.com';
             const parsedUrl = new URL(req.url, targetUrl);
-            const fwdHeaders = { ...req.headers };
+            const fwdHeaders = {
+                ...req.headers,
+            };
             fwdHeaders['host'] = 'daily-cloudcode-pa.googleapis.com';
             delete fwdHeaders['connection'];
             delete fwdHeaders['keep-alive'];
@@ -573,7 +620,7 @@ function handleRequest(req, res) {
                     if (!res.headersSent) {
                         const customModels = loadCustomModels();
                         const mappedCustom = {};
-                        customModels.forEach(m => {
+                        customModels.forEach((m) => {
                             const slug = toSlug(m);
                             mappedCustom[slug] = {
                                 displayName: m.displayName,
@@ -589,7 +636,7 @@ function handleRequest(req, res) {
                     }
                 });
                 let googleBody = '';
-                googleRes.on('data', chunk => googleBody += chunk);
+                googleRes.on('data', (chunk) => (googleBody += chunk));
                 googleRes.on('end', () => {
                     try {
                         electron_log_1.default.info(`[Proxy] fetchAvailableModels response status: ${googleRes.statusCode}, body length: ${googleBody.length}`);
@@ -598,7 +645,7 @@ function handleRequest(req, res) {
                         electron_log_1.default.info(`[Proxy] Loaded custom models count: ${customModels.length}`);
                         const mergeModels = (target) => {
                             if (Array.isArray(target)) {
-                                const mapped = customModels.map(m => {
+                                const mapped = customModels.map((m) => {
                                     const cap = (0, modelUtils_1.detectModelCapabilities)(m, true);
                                     return {
                                         name: 'models/' + generateModelPlaceholderId(m),
@@ -617,7 +664,7 @@ function handleRequest(req, res) {
                             }
                             else if (target && typeof target === 'object') {
                                 const result = { ...target };
-                                customModels.forEach(m => {
+                                customModels.forEach((m) => {
                                     const slug = toSlug(m);
                                     const cap = (0, modelUtils_1.detectModelCapabilities)(m, true);
                                     result[slug] = {
@@ -654,7 +701,7 @@ function handleRequest(req, res) {
                         }
                         if (!merged) {
                             const modelsMap = {};
-                            customModels.forEach(m => {
+                            customModels.forEach((m) => {
                                 const slug = toSlug(m);
                                 modelsMap[slug] = {
                                     displayName: m.displayName,
@@ -671,14 +718,14 @@ function handleRequest(req, res) {
                             googleJson.models = modelsMap;
                         }
                         // Inject custom model slugs into agentModelSorts
-                        const customSlugs = customModels.map(m => m._slug).filter(Boolean);
+                        const customSlugs = customModels.map((m) => m._slug).filter(Boolean);
                         if (customSlugs.length > 0) {
                             if (googleJson.agentModelSorts && Array.isArray(googleJson.agentModelSorts)) {
-                                googleJson.agentModelSorts.forEach(sort => {
+                                googleJson.agentModelSorts.forEach((sort) => {
                                     if (sort.groups && Array.isArray(sort.groups)) {
-                                        sort.groups.forEach(group => {
+                                        sort.groups.forEach((group) => {
                                             if (group.modelIds && Array.isArray(group.modelIds)) {
-                                                customSlugs.forEach(slug => {
+                                                customSlugs.forEach((slug) => {
                                                     if (!group.modelIds.includes(slug)) {
                                                         group.modelIds.push(slug);
                                                     }
@@ -696,7 +743,7 @@ function handleRequest(req, res) {
                         electron_log_1.default.error('[Proxy] Parsing fetchAvailableModels failed, returning custom models:', err);
                         const customModels = loadCustomModels();
                         const mappedCustom = {};
-                        customModels.forEach(m => {
+                        customModels.forEach((m) => {
                             const slug = toSlug(m);
                             mappedCustom[slug] = {
                                 displayName: m.displayName,
@@ -716,7 +763,7 @@ function handleRequest(req, res) {
                 electron_log_1.default.error('[Proxy] Forwarding fetchAvailableModels failed:', err);
                 const customModels = loadCustomModels();
                 const mappedCustom = {};
-                customModels.forEach(m => {
+                customModels.forEach((m) => {
                     const slug = toSlug(m);
                     mappedCustom[slug] = {
                         displayName: m.displayName,
@@ -741,7 +788,9 @@ function handleRequest(req, res) {
             electron_log_1.default.info('[Proxy] Intercepting models list request');
             const targetUrl = 'https://generativelanguage.googleapis.com';
             const parsedUrl = new URL(req.url, targetUrl);
-            const mdlHeaders = { ...req.headers };
+            const mdlHeaders = {
+                ...req.headers,
+            };
             mdlHeaders['host'] = 'generativelanguage.googleapis.com';
             delete mdlHeaders['connection'];
             delete mdlHeaders['accept-encoding'];
@@ -755,7 +804,7 @@ function handleRequest(req, res) {
                         const customModels = loadCustomModels();
                         res.writeHead(200, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({
-                            models: customModels.map(m => ({
+                            models: customModels.map((m) => ({
                                 name: m.name,
                                 displayName: m.displayName,
                                 description: m.description,
@@ -765,12 +814,12 @@ function handleRequest(req, res) {
                     }
                 });
                 let googleBody = '';
-                googleRes.on('data', chunk => googleBody += chunk);
+                googleRes.on('data', (chunk) => (googleBody += chunk));
                 googleRes.on('end', () => {
                     try {
                         const googleJson = JSON.parse(googleBody);
                         const customModels = loadCustomModels();
-                        const mappedCustom = customModels.map(m => ({
+                        const mappedCustom = customModels.map((m) => ({
                             name: 'models/' + generateModelPlaceholderId(m),
                             version: '1.0',
                             displayName: m.displayName,
@@ -794,7 +843,7 @@ function handleRequest(req, res) {
                     catch (err) {
                         electron_log_1.default.error('[Proxy] Google list models failed, returning custom models list only:', err);
                         const customModels = loadCustomModels();
-                        const mappedCustom = customModels.map(m => ({
+                        const mappedCustom = customModels.map((m) => ({
                             name: 'models/' + generateModelPlaceholderId(m),
                             version: '1.0',
                             displayName: m.displayName,
@@ -813,7 +862,7 @@ function handleRequest(req, res) {
                 const customModels = loadCustomModels();
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
-                    models: customModels.map(m => ({
+                    models: customModels.map((m) => ({
                         name: m.name,
                         displayName: m.displayName,
                         description: m.description,
@@ -834,7 +883,7 @@ function handleRequest(req, res) {
                 electron_log_1.default.info(`[Proxy] Cloud Code generation request model: ${modelName}, modelId: ${modelId}, url: ${req.url}, bodyKeys: ${Object.keys(reqJson).join(',')}`);
                 if (modelName) {
                     const customModels = loadCustomModels();
-                    const matchedCustomModel = customModels.find(m => {
+                    const matchedCustomModel = customModels.find((m) => {
                         const enumName = generateModelPlaceholderId(m);
                         return m.name === modelName || toSlug(m) === modelName || enumName === modelName || enumName === modelId;
                     });
@@ -859,12 +908,12 @@ function handleRequest(req, res) {
         if (req.method === 'POST' && (isGenerate || isStandardStream)) {
             const matchedModelName = isGenerate ? generateMatch[1] : streamMatch[1];
             const customModels = loadCustomModels();
-            const matchedCustomModel = customModels.find(m => {
+            const matchedCustomModel = customModels.find((m) => {
                 const enumName = generateModelPlaceholderId(m);
-                return m.name === matchedModelName ||
+                return (m.name === matchedModelName ||
                     toSlug(m) === matchedModelName ||
                     enumName === matchedModelName ||
-                    ('models/' + enumName) === matchedModelName;
+                    'models/' + enumName === matchedModelName);
             });
             if (matchedCustomModel) {
                 try {

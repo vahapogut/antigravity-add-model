@@ -81,8 +81,18 @@ const isWindows = process.platform === 'win32';
 const binName = isWindows ? 'language_server.exe' : 'language_server';
 exports.LS_BINARY = electron_1.app.isPackaged
     ? path_1.default.join(process.resourcesPath, 'bin', binName)
-    : process.env.CODEIUM_LANGUAGE_SERVER_BIN ||
-        path_1.default.join(__dirname, '..', 'bin', binName);
+    : process.env.CODEIUM_LANGUAGE_SERVER_BIN || path_1.default.join(__dirname, '..', 'bin', binName);
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+let _lsProcess = null;
+let _lsPort = 0;
+let _intentionalTermination = false;
+let _restartCount = 0;
+let _lastRestartTime = 0;
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 /**
  * Gets the build CL of the language server by running it with --stamp.
  */
@@ -108,14 +118,6 @@ function getLsCL() {
 const PORT_PATTERN = /listening on \w+ port at (\d+) for HTTP(S)?\b/i;
 // Pattern: OAuth authorization URL
 const AUTH_URL_PATTERN = /https:\/\/accounts\.google\.com\/o\/oauth2\/auth\S+/;
-// ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
-let _lsProcess = null;
-let _lsPort = 0;
-let _intentionalTermination = false;
-let _restartCount = 0;
-let _lastRestartTime = 0;
 /** Returns the active language server process, or null if not running. */
 function getLsProcess() {
     return _lsProcess;
@@ -188,16 +190,14 @@ function setupNodeModules(env, modules) {
 function startLanguageServer(port, csrf, headless) {
     return new Promise(async (resolve, reject) => {
         const logStream = fs.createWriteStream((0, paths_1.getLsLogPath)(), { flags: 'w' });
-        
         let proxyPort;
         try {
-            proxyPort = await proxy_1.startProxy();
-        } catch (err) {
+            proxyPort = await (0, proxy_1.startProxy)();
+        }
+        catch (err) {
             console.error('[LanguageServer] Failed to start local proxy:', err);
         }
-        
         const apiServerUrl = proxyPort ? `http://localhost:${proxyPort}` : 'https://generativelanguage.googleapis.com';
-
         // We need to pass the override flags because the LS is running in standalone mode
         const args = [
             '--standalone',
@@ -225,7 +225,7 @@ function startLanguageServer(port, csrf, headless) {
             args.push('--headless');
         }
         // P0-3: Mask CSRF token in terminal output
-        const safeArgs = args.map(a => a === csrf ? '***' : a);
+        const safeArgs = args.map((a) => (a === csrf ? '***' : a));
         console.log(`\nSpawning: ${exports.LS_BINARY} ${safeArgs.join(' ')}\n`);
         // Electron apps don't inherit shell environment variables when they are not launched through the terminal.
         // We need to load the shell env explicitly so the language server can discover tools in the user's environment.
@@ -243,19 +243,19 @@ function startLanguageServer(port, csrf, headless) {
         ]);
         _lsProcess = (0, child_process_1.spawn)(exports.LS_BINARY, args, {
             stdio: ['pipe', 'pipe', 'pipe'],
-            env,
+            env: env,
         });
         if (!headless) {
             // Close stdin immediately — the LS may block waiting for metadata on stdin.
-            _lsProcess.stdin.end();
+            _lsProcess.stdin?.end();
         }
         const combined = new stream_1.PassThrough();
-        _lsProcess.stdout.pipe(combined, { end: false });
-        _lsProcess.stderr.pipe(combined, { end: false });
+        _lsProcess.stdout?.pipe(combined, { end: false });
+        _lsProcess.stderr?.pipe(combined, { end: false });
         // Buffer stderr for crash log extraction (ring buffer)
         const stderrChunks = [];
         let stderrLength = 0;
-        _lsProcess.stderr.on('data', (data) => {
+        _lsProcess.stderr?.on('data', (data) => {
             const str = data.toString();
             stderrChunks.push(str);
             stderrLength += str.length;
@@ -351,9 +351,7 @@ function monitorLsCrashInternal(handle, port, csrf, options) {
             return;
         }
         const { code, signal, crashStackTrace } = exitInfo;
-        const summary = signal
-            ? `killed by signal ${signal}`
-            : `exited with code ${code}`;
+        const summary = signal ? `killed by signal ${signal}` : `exited with code ${code}`;
         console.error(`\nLanguage server crashed: ${summary}`);
         if (crashStackTrace) {
             console.error('--- Crash Stack Trace ---');
@@ -395,7 +393,7 @@ function sleep(ms) {
 }
 async function killLanguageServer() {
     setIntentionalTermination(true);
-    await proxy_1.stopProxy();
+    await (0, proxy_1.stopProxy)();
     const proc = getLsProcess();
     if (proc) {
         const pid = proc.pid;
@@ -440,3 +438,4 @@ function setupLocalCertTrust() {
         }
     });
 }
+//# sourceMappingURL=languageServer.js.map

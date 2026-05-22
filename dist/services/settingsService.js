@@ -35,9 +35,7 @@ class SettingsService {
     applySideEffects(settings) {
         const val = settings[SettingKey.KEEP_COMPUTER_AWAKE];
         if (val !== undefined) {
-            const preventSleep = val === null
-                ? exports.DEFAULTS.get(SettingKey.KEEP_COMPUTER_AWAKE)
-                : val === 'true';
+            const preventSleep = val === null ? exports.DEFAULTS.get(SettingKey.KEEP_COMPUTER_AWAKE) : val === 'true';
             utils_1.SleepBlocker.getInstance().shouldKeepComputerAwake(preventSleep);
         }
     }
@@ -47,3 +45,4 @@ class SettingsService {
     }
 }
 exports.SettingsService = SettingsService;
+//# sourceMappingURL=settingsService.js.map

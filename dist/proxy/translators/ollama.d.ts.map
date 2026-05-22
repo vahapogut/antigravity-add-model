@@ -1,0 +1,1 @@
+{"version":3,"file":"ollama.d.ts","sourceRoot":"","sources":["../../../src/proxy/translators/ollama.ts"],"names":[],"mappings":"AAAA;;;;;;;;GAQG;AASH,OAAO,EAAE,iBAAiB,EAAE,iBAAiB,EAAE,sBAAsB,EAAE,MAAM,UAAU,CAAC;AAIxF;;;;;;;;;;GAUG;AACH,wBAAgB,eAAe,CAAC,OAAO,EAAE,MAAM,GAAG,MAAM,CA6BvD;AAED;;GAEG;AACH,wBAAgB,oBAAoB,CAAC,UAAU,EAAE,MAAM,EAAE,IAAI,EAAE,MAAM,GAAG,MAAM,CAqB7E"}

@@ -203,12 +203,7 @@ function headlessQuitAndInstall(downloadedFilePath) {
     try {
         const currentPid = process.pid;
         const appPath = process.env.APPIMAGE || process.execPath;
-        const args = [
-            '--ozone-platform=headless',
-            '--headless',
-            '--disable-gpu',
-            '--no-sandbox',
-        ];
+        const args = ['--ozone-platform=headless', '--headless', '--disable-gpu', '--no-sandbox'];
         let script = '';
         if (downloadedFilePath) {
             console.log(`[AutoUpdater] Will manually replace ${appPath} with ${downloadedFilePath}`);
@@ -239,3 +234,4 @@ function headlessQuitAndInstall(downloadedFilePath) {
     }
     electron_1.app.quit();
 }
+//# sourceMappingURL=updater.js.map

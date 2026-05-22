@@ -126,3 +126,4 @@ class StorageManager {
     }
 }
 exports.StorageManager = StorageManager;
+//# sourceMappingURL=storage.js.map

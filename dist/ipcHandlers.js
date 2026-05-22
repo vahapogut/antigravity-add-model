@@ -42,8 +42,11 @@ const electron_updater_1 = require("electron-updater");
 const updater_1 = require("./updater");
 const main_1 = __importDefault(require("electron-log/main"));
 const fs = __importStar(require("fs/promises"));
+const path = __importStar(require("path"));
 const customScheme_1 = require("./customScheme");
 const tray_1 = require("./tray");
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const cryptoStore = require('./cryptoStore');
 /**
  * Registers all IPC handlers for the main process.
  */
@@ -71,7 +74,7 @@ function registerIpcHandlers(storageManager) {
         electron_updater_1.autoUpdater.quitAndInstall();
     });
     // Notifications
-    electron_1.ipcMain.handle('notification:send', (_, options) => {
+    electron_1.ipcMain.handle('notification:send', (_event, options) => {
         const notification = new electron_1.Notification({
             title: options.title,
             body: options.body,
@@ -129,38 +132,35 @@ function registerIpcHandlers(storageManager) {
         await storageManager.updateItems(changes);
     });
     electron_1.ipcMain.handle('storage:get-custom-models', async () => {
-        const path = require('path');
-        const cryptoStore = require('./cryptoStore');
         const geminiDir = path.join(electron_1.app.getPath('home'), '.gemini', 'antigravity');
         const filePath = path.join(geminiDir, 'custom_models.json');
         try {
             const content = await fs.readFile(filePath, 'utf-8');
             const parsed = JSON.parse(content);
             const models = parsed.models || [];
-            
             // Return models with masked API keys to the UI
-            return models.map(m => {
+            return models.map((m) => {
                 let maskedKey = m.apiKey;
                 if (m.apiKey && m.apiKey !== 'none') {
                     const decrypted = cryptoStore.decryptString(m.apiKey);
                     if (decrypted.length <= 8) {
                         maskedKey = '********';
-                    } else {
+                    }
+                    else {
                         maskedKey = decrypted.substring(0, 4) + '...' + decrypted.substring(decrypted.length - 4);
                     }
                 }
                 return {
                     ...m,
-                    apiKey: maskedKey
+                    apiKey: maskedKey,
                 };
             });
-        } catch (err) {
+        }
+        catch {
             return [];
         }
     });
     electron_1.ipcMain.handle('storage:save-custom-model', async (_event, newModel) => {
-        const path = require('path');
-        const cryptoStore = require('./cryptoStore');
         const geminiDir = path.join(electron_1.app.getPath('home'), '.gemini', 'antigravity');
         const filePath = path.join(geminiDir, 'custom_models.json');
         try {
@@ -169,41 +169,41 @@ function registerIpcHandlers(storageManager) {
                 const content = await fs.readFile(filePath, 'utf-8');
                 const parsed = JSON.parse(content);
                 models = parsed.models || [];
-            } catch {
+            }
+            catch {
                 // Ignore if file doesn't exist
             }
-            
             // Check if model already exists, if so update it, otherwise push
-            const existingIdx = models.findIndex(m => m.name === newModel.name);
-            
-            // Düzenleme çakışması koruması: Eğer yeni gelen anahtar maskeliyse ve eski kayıt varsa, eski şifreli anahtarı koru
-            const isMasked = newModel.apiKey && (newModel.apiKey.includes('...') || newModel.apiKey.startsWith('***') || newModel.apiKey === '********');
+            const existingIdx = models.findIndex((m) => m.name === newModel.name);
+            // Edit collision protection: If new key is masked and old record exists, preserve old encrypted key
+            const isMasked = newModel.apiKey &&
+                (newModel.apiKey.includes('...') || newModel.apiKey.startsWith('***') || newModel.apiKey === '********');
             if (isMasked && existingIdx !== -1) {
                 newModel.apiKey = models[existingIdx].apiKey;
                 newModel.encrypted = models[existingIdx].encrypted;
-            } else {
+            }
+            else {
                 if (newModel.apiKey && newModel.apiKey !== 'none') {
                     newModel.apiKey = cryptoStore.encryptString(newModel.apiKey);
                     newModel.encrypted = true;
                 }
             }
-            
             if (existingIdx !== -1) {
                 models[existingIdx] = newModel;
-            } else {
+            }
+            else {
                 models.push(newModel);
             }
-            
             await fs.mkdir(path.dirname(filePath), { recursive: true });
             await fs.writeFile(filePath, JSON.stringify({ models }, null, 2), 'utf-8');
             return { success: true };
-        } catch (err) {
+        }
+        catch (err) {
             console.error('[IPC] Failed to save custom model:', err);
             return { success: false, error: err.message };
         }
     });
     electron_1.ipcMain.handle('storage:delete-custom-model', async (_event, modelName) => {
-        const path = require('path');
         const geminiDir = path.join(electron_1.app.getPath('home'), '.gemini', 'antigravity');
         const filePath = path.join(geminiDir, 'custom_models.json');
         try {
@@ -212,25 +212,26 @@ function registerIpcHandlers(storageManager) {
                 const content = await fs.readFile(filePath, 'utf-8');
                 const parsed = JSON.parse(content);
                 models = parsed.models || [];
-            } catch {
+            }
+            catch {
                 // Ignore if file doesn't exist
             }
-            
-            models = models.filter(m => m.name !== modelName);
-            
+            models = models.filter((m) => m.name !== modelName);
             await fs.mkdir(path.dirname(filePath), { recursive: true });
             await fs.writeFile(filePath, JSON.stringify({ models }, null, 2), 'utf-8');
             return { success: true };
-        } catch (err) {
+        }
+        catch (err) {
             console.error('[IPC] Failed to delete custom model:', err);
             return { success: false, error: err.message };
         }
     });
     // P3-17: Test model connectivity — sends a lightweight HEAD/GET to the model endpoint
     electron_1.ipcMain.handle('storage:test-model-connection', async (_event, model) => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const https = require('https');
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const http = require('http');
-        
         return new Promise((resolve) => {
             try {
                 let urlStr = model.apiUrl;
@@ -239,87 +240,89 @@ function registerIpcHandlers(storageManager) {
                     if (!urlStr.toLowerCase().includes('/chat/completions') && !urlStr.toLowerCase().includes('/completions')) {
                         if (urlStr.endsWith('/v1')) {
                             urlStr += '/chat/completions';
-                        } else if (!urlStr.endsWith('/')) {
+                        }
+                        else if (!urlStr.endsWith('/')) {
                             urlStr += '/v1/chat/completions';
-                        } else {
+                        }
+                        else {
                             urlStr += 'v1/chat/completions';
                         }
                     }
                 }
-                
                 const url = new URL(urlStr);
                 const client = url.protocol === 'https:' ? https : http;
-                
                 const options = {
                     method: 'HEAD',
                     hostname: url.hostname,
-                    port: url.port || (url.protocol === 'https:' ? 443 : 80),
+                    port: parseInt(url.port || (url.protocol === 'https:' ? '443' : '80'), 10),
                     path: url.pathname + url.search,
                     timeout: 10000,
                     rejectUnauthorized: !model.allowUnauthorized,
                 };
-                
                 // Add auth header
                 if (model.apiKey && model.apiKey !== 'none') {
-                    const cryptoStore = require('./cryptoStore');
                     let key = model.apiKey;
                     try {
                         key = cryptoStore.decryptString(model.apiKey);
-                    } catch { /* key might not be encrypted */ }
-                    
+                    }
+                    catch {
+                        /* key might not be encrypted */
+                    }
                     if (model.provider === 'anthropic') {
                         options.headers = {
                             'x-api-key': key,
                             'anthropic-version': '2025-04-01',
                         };
-                    } else if (model.provider === 'google') {
+                    }
+                    else if (model.provider === 'google') {
                         options.headers = {
                             'x-goog-api-key': key,
                         };
-                    } else {
+                    }
+                    else {
                         options.headers = {
-                            'Authorization': `Bearer ${key}`,
+                            Authorization: `Bearer ${key}`,
                         };
                     }
                 }
-                
                 const req = client.request(options, (res) => {
                     // Any response (even 401/403) means the endpoint is reachable
                     if (res.statusCode >= 200 && res.statusCode < 500) {
-                        resolve({ 
-                            success: true, 
+                        resolve({
+                            success: true,
                             status: res.statusCode,
-                            message: `Endpoint reachable (HTTP ${res.statusCode})` 
+                            message: `Endpoint reachable (HTTP ${res.statusCode})`,
                         });
-                    } else {
-                        resolve({ 
-                            success: false, 
+                    }
+                    else {
+                        resolve({
+                            success: false,
                             status: res.statusCode,
-                            error: `Server returned HTTP ${res.statusCode}` 
+                            error: `Server returned HTTP ${res.statusCode}`,
                         });
                     }
                     res.resume(); // consume response to free memory
                 });
-                
                 req.setTimeout(10000, () => {
                     req.destroy();
                     resolve({ success: false, error: 'Connection timed out after 10 seconds' });
                 });
-                
                 req.on('error', (err) => {
                     let message = err.message;
                     if (message.includes('ECONNREFUSED')) {
                         message = 'Connection refused — server may not be running';
-                    } else if (message.includes('ENOTFOUND') || message.includes('getaddrinfo')) {
+                    }
+                    else if (message.includes('ENOTFOUND') || message.includes('getaddrinfo')) {
                         message = 'Host not found — check the API URL';
-                    } else if (message.includes('CERT') || message.includes('certificate') || message.includes('SSL')) {
+                    }
+                    else if (message.includes('CERT') || message.includes('certificate') || message.includes('SSL')) {
                         message = 'SSL/TLS error — try enabling "allowUnauthorized" for self-signed certs';
                     }
                     resolve({ success: false, error: message });
                 });
-                
                 req.end();
-            } catch (err) {
+            }
+            catch (err) {
                 resolve({ success: false, error: `Invalid URL: ${err.message}` });
             }
         });
@@ -402,3 +405,4 @@ function registerIpcHandlers(storageManager) {
         }
     });
 }
+//# sourceMappingURL=ipcHandlers.js.map

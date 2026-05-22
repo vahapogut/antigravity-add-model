@@ -58,16 +58,12 @@ if (!gotTheLock) {
     electron_1.app.quit();
     process.exit(0);
 }
-// ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
+// ─── State ─────────────────────────────────────────────────────────────────
 let storageManager;
 let settingsService;
 let hasStartedMainApplication = false;
 let isQuitting = false;
-// ---------------------------------------------------------------------------
-// Config
-// ---------------------------------------------------------------------------
+// ─── Config ────────────────────────────────────────────────────────────────
 // Driven by ELECTRON_OZONE_PLATFORM_HINT=headless env var.
 // This single env var both prevents GTK from crashing (Electron 33+)
 // and tells our code to skip createWindow().
@@ -83,9 +79,7 @@ if (HEADLESS) {
 if (!electron_1.app.commandLine.hasSwitch('remote-debugging-port')) {
     electron_1.app.commandLine.appendSwitch('remote-debugging-port', '0');
 }
-// ---------------------------------------------------------------------------
-// Application Lifecycle
-// ---------------------------------------------------------------------------
+// ─── Application Lifecycle ─────────────────────────────────────────────────
 let pendingDeepLink = null;
 function handleDeepLink(url) {
     const wins = electron_1.BrowserWindow.getAllWindows();
@@ -103,7 +97,7 @@ function handleDeepLink(url) {
         pendingDeepLink = url;
     }
 }
-electron_1.app.on('second-instance', (event, commandLine) => {
+electron_1.app.on('second-instance', (_event, commandLine) => {
     const wins = electron_1.BrowserWindow.getAllWindows();
     if (wins.length > 0) {
         if (wins[0].isMinimized()) {
@@ -157,8 +151,8 @@ electron_1.app
     });
     // Handle requests coming from custom schemes
     (0, customScheme_1.registerCustomSchemeHandlers)();
-    
-    // Intercept and block SetCloudCodeURL requests to prevent the frontend from overriding the local proxy endpoint
+    // Intercept and block SetCloudCodeURL requests to prevent the frontend
+    // from overriding the local proxy endpoint
     electron_1.session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
         if (details.url.includes('SetCloudCodeURL')) {
             console.log(`[Proxy Intercept] Blocked SetCloudCodeURL: ${details.url}`);
@@ -170,7 +164,6 @@ electron_1.app
         }
         callback({});
     });
-    
     // Set About panel options with LS CL
     const cl = await (0, languageServer_1.getLsCL)();
     electron_1.app.setAboutPanelOptions({
@@ -190,7 +183,7 @@ electron_1.app
         return;
     }
     if (!fs.existsSync(languageServer_1.LS_BINARY)) {
-        const msg = `language_server binary not found at:\n${languageServer_1.LS_BINARY}\n\nPlease build set a valid location.`;
+        const msg = `language_server binary not found at:\n${languageServer_1.LS_BINARY}\n\nPlease build/set a valid location.`;
         if (HEADLESS) {
             console.error('ERROR:', msg);
         }
@@ -377,3 +370,4 @@ electron_1.app.on('activate', () => {
         (0, utils_1.createWindow)(url);
     }
 });
+//# sourceMappingURL=main.js.map

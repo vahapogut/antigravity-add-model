@@ -176,7 +176,7 @@ function mapGeminiToolsToOpenAI(geminiTools: GeminiTool[]): OpenAITool[] {
     if (toolGroup.functionDeclarations && Array.isArray(toolGroup.functionDeclarations)) {
       for (const func of toolGroup.functionDeclarations) {
         const params = func.parameters
-          ? JSON.parse(JSON.stringify(func.parameters)) as Record<string, unknown>
+          ? (JSON.parse(JSON.stringify(func.parameters)) as Record<string, unknown>)
           : { type: 'object', properties: {} };
         if (params.type && typeof params.type === 'string') {
           (params as Record<string, string>).type = (params.type as string).toLowerCase();
@@ -202,7 +202,7 @@ export function mapGeminiToOpenAI(geminiBody: GeminiRequestBody, modelName: stri
   const messages: OpenAIMessage[] = [];
 
   if (geminiBody.systemInstruction && geminiBody.systemInstruction.parts) {
-    const systemText = geminiBody.systemInstruction.parts.map(p => p.text || '').join('');
+    const systemText = geminiBody.systemInstruction.parts.map((p) => p.text || '').join('');
     if (systemText) {
       messages.push({ role: 'system', content: systemText });
     }
@@ -211,14 +211,14 @@ export function mapGeminiToOpenAI(geminiBody: GeminiRequestBody, modelName: stri
   if (geminiBody.contents) {
     for (const item of geminiBody.contents) {
       if (item.parts) {
-        const hasFunctionCall = item.parts.some(p => p.functionCall);
-        const hasFunctionResponse = item.parts.some(p => p.functionResponse);
+        const hasFunctionCall = item.parts.some((p) => p.functionCall);
+        const hasFunctionResponse = item.parts.some((p) => p.functionResponse);
 
         if (hasFunctionCall && item.role === 'model') {
           const toolCalls: OpenAIToolCall[] = [];
           for (const p of item.parts) {
             if (p.functionCall) {
-              const callId = p.functionCall.id || ('call_' + Math.random().toString(36).slice(2, 10));
+              const callId = p.functionCall.id || 'call_' + Math.random().toString(36).slice(2, 10);
               let originalName = p.functionCall.name;
               let originalArgs = p.functionCall.args;
               const translatedInfo = translatedToolCalls.get(callId);
@@ -242,7 +242,7 @@ export function mapGeminiToOpenAI(geminiBody: GeminiRequestBody, modelName: stri
             if (p.functionResponse) {
               const funcName = p.functionResponse.name || '';
               const modelTCIds = modelToolCallIds.get(modelName) || {};
-              const toolCallId = p.functionResponse.id || modelTCIds[funcName] || ('call_' + funcName);
+              const toolCallId = p.functionResponse.id || modelTCIds[funcName] || 'call_' + funcName;
               const responseData = p.functionResponse.response;
               let contentStr = '';
               const translatedInfo = translatedToolCalls.get(toolCallId);
@@ -255,16 +255,16 @@ export function mapGeminiToOpenAI(geminiBody: GeminiRequestBody, modelName: stri
             }
           }
         } else {
-          const role = item.role === 'model' ? 'assistant' : (item.role || 'user');
+          const role = item.role === 'model' ? 'assistant' : item.role || 'user';
           let content = '';
           let reasoning_content = '';
           if (role === 'assistant') {
-            const regularParts = (item.parts || []).filter(p => !p.thought);
-            const thoughtParts = (item.parts || []).filter(p => p.thought);
-            content = regularParts.map(p => p.text || '').join('');
-            reasoning_content = thoughtParts.map(p => p.text || '').join('');
+            const regularParts = (item.parts || []).filter((p) => !p.thought);
+            const thoughtParts = (item.parts || []).filter((p) => p.thought);
+            content = regularParts.map((p) => p.text || '').join('');
+            reasoning_content = thoughtParts.map((p) => p.text || '').join('');
           } else {
-            content = (item.parts || []).map(p => p.text || '').join('');
+            content = (item.parts || []).map((p) => p.text || '').join('');
           }
           const msg: OpenAIMessage = { role, content };
           if (reasoning_content) msg.reasoning_content = reasoning_content;
@@ -282,8 +282,7 @@ export function mapGeminiToOpenAI(geminiBody: GeminiRequestBody, modelName: stri
   for (let i = 0; i < messages.length; i++) {
     if (messages[i].role === 'assistant' && !(messages[i] as OpenAIMessage).reasoning_content) {
       const preservedReasoning = modelReasoningContent.get(modelName) || '';
-      messages[i].reasoning_content =
-        (i === lastAssistantIdx && preservedReasoning) ? preservedReasoning : '';
+      messages[i].reasoning_content = i === lastAssistantIdx && preservedReasoning ? preservedReasoning : '';
     }
   }
 
@@ -320,14 +319,20 @@ function parseDSMLToolCalls(text: string): DSMLParsedResult | null {
         let paramValue: unknown = paramMatch[3].trim();
         const isString = paramMatch[2] === 'true';
         if (!isString) {
-          try { paramValue = JSON.parse(paramValue as string); } catch (e) { log.debug('[OpenAI] DSML param parse fallback:', (e as Error).message); /* keep as string */ }
+          try {
+            paramValue = JSON.parse(paramValue as string);
+          } catch (e) {
+            log.debug('[OpenAI] DSML param parse fallback:', (e as Error).message); /* keep as string */
+          }
         }
         args[paramName] = paramValue;
       }
       functionCalls.push({ name: funcName, args });
     }
     if (functionCalls.length === 0) return null;
-    log.info(`[Proxy] Detected ${functionCalls.length} DSML tool call(s): ${functionCalls.map(f => f.name).join(', ')}`);
+    log.info(
+      `[Proxy] Detected ${functionCalls.length} DSML tool call(s): ${functionCalls.map((f) => f.name).join(', ')}`,
+    );
     let cleanText = text;
     cleanText = cleanText.replace(/<DSML\|tool_calls>[\s\S]*?<\/DSML\|tool_calls>/g, '');
     cleanText = cleanText.replace(/<DSML\|invoke name="[^"]+">[\s\S]*?<\/DSML\|invoke>/g, '');
@@ -343,13 +348,17 @@ export function mapOpenAIToGemini(openAiRes: OpenAIResponse, modelName: string):
   const choice = openAiRes.choices?.[0];
 
   if (choice?.message?.tool_calls && choice.message.tool_calls.length > 0) {
-    const parts: GeminiPart[] = choice.message.tool_calls.map(tc => {
+    const parts: GeminiPart[] = choice.message.tool_calls.map((tc) => {
       let args: ToolCallArgs;
       try {
-        args = typeof tc.function.arguments === 'string'
-          ? JSON.parse(tc.function.arguments)
-          : tc.function.arguments as unknown as ToolCallArgs;
-      } catch (e) { log.debug('[OpenAI] Tool call args parse fallback:', (e as Error).message); args = {}; }
+        args =
+          typeof tc.function.arguments === 'string'
+            ? JSON.parse(tc.function.arguments)
+            : (tc.function.arguments as unknown as ToolCallArgs);
+      } catch (e) {
+        log.debug('[OpenAI] Tool call args parse fallback:', (e as Error).message);
+        args = {};
+      }
       args = normalizeToolArgs(tc.function.name, args) as ToolCallArgs;
       const modelTCIds = modelToolCallIds.get(modelName) || {};
       modelTCIds[tc.function.name] = tc.id;
@@ -381,7 +390,7 @@ export function mapOpenAIToGemini(openAiRes: OpenAIResponse, modelName: string):
   const text = choice?.message?.content || '';
   const dsml = parseDSMLToolCalls(text);
   if (dsml && dsml.functionCalls.length > 0) {
-    const parts: GeminiPart[] = dsml.functionCalls.map(fc => {
+    const parts: GeminiPart[] = dsml.functionCalls.map((fc) => {
       const na = normalizeToolArgs(fc.name, fc.args);
       const tr = translateToolCallToNative(fc.name, na);
       return { functionCall: { name: tr.name, args: tr.args as Record<string, unknown> } };
@@ -418,7 +427,7 @@ export function mapOpenAIChunkToGemini(chunk: OpenAIResponse, modelName: string)
   const choice = chunk.choices?.[0];
   if (!choice) return null;
   const delta = choice.delta;
-  const streamId = (chunk as Record<string, unknown>).id as string || 'default_stream';
+  const streamId = ((chunk as Record<string, unknown>).id as string) || 'default_stream';
 
   if (!activeStreamContexts.has(streamId)) {
     activeStreamContexts.set(streamId, { accumulatedText: '', accumulatedReasoning: '', toolCalls: {} });
@@ -446,7 +455,7 @@ export function mapOpenAIChunkToGemini(chunk: OpenAIResponse, modelName: string)
 
   const dsml = parseDSMLToolCalls(context.accumulatedText);
   if (dsml && dsml.functionCalls.length > 0) {
-    const parts: GeminiPart[] = dsml.functionCalls.map(fc => {
+    const parts: GeminiPart[] = dsml.functionCalls.map((fc) => {
       const na = normalizeToolArgs(fc.name, fc.args);
       const tr = translateToolCallToNative(fc.name, na);
       return { functionCall: { name: tr.name, args: tr.args as Record<string, unknown> } };
@@ -458,11 +467,15 @@ export function mapOpenAIChunkToGemini(chunk: OpenAIResponse, modelName: string)
   const finishReason = choice.finish_reason;
   if (finishReason === 'stop' || finishReason === 'length') {
     // Check for pending native tool_calls before closing stream
-    const pendingToolCalls = Object.values(context.toolCalls).filter(tc => tc.name && tc.arguments);
+    const pendingToolCalls = Object.values(context.toolCalls).filter((tc) => tc.name && tc.arguments);
     if (pendingToolCalls.length > 0) {
-      const parts: GeminiPart[] = pendingToolCalls.map(tc => {
+      const parts: GeminiPart[] = pendingToolCalls.map((tc) => {
         let args: ToolCallArgs = {};
-        try { args = JSON.parse(tc.arguments); } catch (_e) { args = {}; }
+        try {
+          args = JSON.parse(tc.arguments);
+        } catch (_e) {
+          args = {};
+        }
         args = normalizeToolArgs(tc.name, args) as ToolCallArgs;
         const modelTCIds = modelToolCallIds.get(modelName) || {};
         modelTCIds[tc.name] = tc.id;
@@ -471,8 +484,10 @@ export function mapOpenAIChunkToGemini(chunk: OpenAIResponse, modelName: string)
         const translated = translateToolCallToNative(tc.name, args);
         if (translated.name !== tc.name) {
           translatedToolCalls.set(tc.id, {
-            originalName: tc.name, translatedName: translated.name,
-            cmd: args.CommandLine || '', cwd: args.Cwd || '',
+            originalName: tc.name,
+            translatedName: translated.name,
+            cmd: args.CommandLine || '',
+            cwd: args.Cwd || '',
           });
           touchStateTimestamp(stateTimestamps.translatedCalls, tc.id);
         }
@@ -485,7 +500,7 @@ export function mapOpenAIChunkToGemini(chunk: OpenAIResponse, modelName: string)
     if (context.accumulatedText) {
       const dsml2 = parseDSMLToolCalls(context.accumulatedText);
       if (dsml2 && dsml2.functionCalls.length > 0) {
-        const parts: GeminiPart[] = dsml2.functionCalls.map(fc => {
+        const parts: GeminiPart[] = dsml2.functionCalls.map((fc) => {
           const na = normalizeToolArgs(fc.name, fc.args);
           const tr = translateToolCallToNative(fc.name, na);
           return { functionCall: { name: tr.name, args: tr.args as Record<string, unknown> } };
@@ -501,9 +516,14 @@ export function mapOpenAIChunkToGemini(chunk: OpenAIResponse, modelName: string)
 
   // Only emit tool calls when finishReason signals completion (args are fully accumulated)
   if (finishReason === 'tool_calls') {
-    const parts: GeminiPart[] = Object.values(context.toolCalls).map(tc => {
+    const parts: GeminiPart[] = Object.values(context.toolCalls).map((tc) => {
       let args: ToolCallArgs = {};
-      try { args = JSON.parse(tc.arguments); } catch (e) { log.debug('[OpenAI] Stream tool args parse fallback:', (e as Error).message); args = {}; }
+      try {
+        args = JSON.parse(tc.arguments);
+      } catch (e) {
+        log.debug('[OpenAI] Stream tool args parse fallback:', (e as Error).message);
+        args = {};
+      }
       args = normalizeToolArgs(tc.name, args) as ToolCallArgs;
       const modelTCIds = modelToolCallIds.get(modelName) || {};
       modelTCIds[tc.name] = tc.id;

@@ -57,57 +57,195 @@ export type ToolResponse = string | DirectoryItem[] | MatchResult[] | FileListRe
 // ─── Tool Parameter Normalization ──────────────────────────────────────────
 
 const TOOL_PARAM_NORMALIZATION: Record<string, { primaryKey: string; aliases: string[] }> = {
-  'view_file': {
+  view_file: {
     primaryKey: 'AbsolutePath',
-    aliases: ['absolute_path', 'absolutePath', 'path', 'file_path', 'filePath', 'file', 'filename', 'FilePath', 'FileName', 'target', 'source', 'input', 'uri'],
+    aliases: [
+      'absolute_path',
+      'absolutePath',
+      'path',
+      'file_path',
+      'filePath',
+      'file',
+      'filename',
+      'FilePath',
+      'FileName',
+      'target',
+      'source',
+      'input',
+      'uri',
+    ],
   },
-  'list_dir': {
+  list_dir: {
     primaryKey: 'DirectoryPath',
-    aliases: ['directory_path', 'directoryPath', 'path', 'dir_path', 'dirPath', 'dir', 'directory', 'folder', 'FolderPath', 'folder_path', 'target', 'root', 'base'],
+    aliases: [
+      'directory_path',
+      'directoryPath',
+      'path',
+      'dir_path',
+      'dirPath',
+      'dir',
+      'directory',
+      'folder',
+      'FolderPath',
+      'folder_path',
+      'target',
+      'root',
+      'base',
+    ],
   },
-  'grep_search': {
+  grep_search: {
     primaryKey: 'Query',
-    aliases: ['query', 'search', 'SearchQuery', 'search_query', 'searchQuery', 'pattern', 'Pattern', 'regex', 'Regex', 'term', 'keyword', 'text', 'needle'],
+    aliases: [
+      'query',
+      'search',
+      'SearchQuery',
+      'search_query',
+      'searchQuery',
+      'pattern',
+      'Pattern',
+      'regex',
+      'Regex',
+      'term',
+      'keyword',
+      'text',
+      'needle',
+    ],
   },
   'grep_search.SearchPath': {
     primaryKey: 'SearchPath',
-    aliases: ['search_path', 'searchPath', 'path', 'directory', 'DirectoryPath', 'directory_path', 'folder', 'dir', 'root', 'base'],
+    aliases: [
+      'search_path',
+      'searchPath',
+      'path',
+      'directory',
+      'DirectoryPath',
+      'directory_path',
+      'folder',
+      'dir',
+      'root',
+      'base',
+    ],
   },
-  'replace_file_content': {
+  replace_file_content: {
     primaryKey: 'TargetFile',
-    aliases: ['target_file', 'targetFile', 'file', 'AbsolutePath', 'absolute_path', 'filePath', 'file_path', 'path', 'FilePath', 'target', 'filename', 'source'],
+    aliases: [
+      'target_file',
+      'targetFile',
+      'file',
+      'AbsolutePath',
+      'absolute_path',
+      'filePath',
+      'file_path',
+      'path',
+      'FilePath',
+      'target',
+      'filename',
+      'source',
+    ],
   },
-  'write_file': {
+  write_file: {
     primaryKey: 'AbsolutePath',
-    aliases: ['absolute_path', 'absolutePath', 'path', 'file_path', 'filePath', 'file', 'filename', 'FilePath', 'FileName', 'target_file', 'targetFile', 'target', 'dest', 'destination'],
+    aliases: [
+      'absolute_path',
+      'absolutePath',
+      'path',
+      'file_path',
+      'filePath',
+      'file',
+      'filename',
+      'FilePath',
+      'FileName',
+      'target_file',
+      'targetFile',
+      'target',
+      'dest',
+      'destination',
+    ],
   },
-  'run_command': {
+  run_command: {
     primaryKey: 'CommandLine',
-    aliases: ['command_line', 'commandLine', 'cmd', 'command', 'Command', 'Cmd', 'shell_command', 'shellCommand', 'script', 'exec', 'execute'],
+    aliases: [
+      'command_line',
+      'commandLine',
+      'cmd',
+      'command',
+      'Command',
+      'Cmd',
+      'shell_command',
+      'shellCommand',
+      'script',
+      'exec',
+      'execute',
+    ],
   },
   'run_command.Cwd': {
     primaryKey: 'Cwd',
     aliases: ['cwd', 'working_dir', 'workingDirectory', 'working_directory', 'dir', 'directory', 'path', 'folder'],
   },
-  'read_file': {
+  read_file: {
     primaryKey: 'AbsolutePath',
-    aliases: ['absolute_path', 'absolutePath', 'path', 'file_path', 'filePath', 'file', 'filename', 'FilePath', 'FileName', 'target', 'source', 'input'],
+    aliases: [
+      'absolute_path',
+      'absolutePath',
+      'path',
+      'file_path',
+      'filePath',
+      'file',
+      'filename',
+      'FilePath',
+      'FileName',
+      'target',
+      'source',
+      'input',
+    ],
   },
-  'search_files': {
+  search_files: {
     primaryKey: 'SearchPath',
-    aliases: ['search_path', 'searchPath', 'path', 'directory', 'DirectoryPath', 'directory_path', 'folder', 'dir', 'root', 'base'],
+    aliases: [
+      'search_path',
+      'searchPath',
+      'path',
+      'directory',
+      'DirectoryPath',
+      'directory_path',
+      'folder',
+      'dir',
+      'root',
+      'base',
+    ],
   },
-  'create_directory': {
+  create_directory: {
     primaryKey: 'DirectoryPath',
     aliases: ['directory_path', 'directoryPath', 'path', 'dir_path', 'dirPath', 'dir', 'folder', 'target', 'name'],
   },
-  'delete_file': {
+  delete_file: {
     primaryKey: 'AbsolutePath',
-    aliases: ['absolute_path', 'absolutePath', 'path', 'file_path', 'filePath', 'file', 'filename', 'FilePath', 'target'],
+    aliases: [
+      'absolute_path',
+      'absolutePath',
+      'path',
+      'file_path',
+      'filePath',
+      'file',
+      'filename',
+      'FilePath',
+      'target',
+    ],
   },
-  'move_file': {
+  move_file: {
     primaryKey: 'SourcePath',
-    aliases: ['source_path', 'sourcePath', 'source', 'from', 'src', 'path', 'file_path', 'filePath', 'AbsolutePath', 'absolute_path'],
+    aliases: [
+      'source_path',
+      'sourcePath',
+      'source',
+      'from',
+      'src',
+      'path',
+      'file_path',
+      'filePath',
+      'AbsolutePath',
+      'absolute_path',
+    ],
   },
   'move_file.DestinationPath': {
     primaryKey: 'DestinationPath',
@@ -118,7 +256,10 @@ const TOOL_PARAM_NORMALIZATION: Record<string, { primaryKey: string; aliases: st
 /**
  * Normalizes parameter names from external models to match Antigravity's expected PascalCase format.
  */
-export function normalizeToolArgs(name: string, args: Record<string, unknown> | null | undefined): Record<string, unknown> {
+export function normalizeToolArgs(
+  name: string,
+  args: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
   if (!args || typeof args !== 'object') return args || {};
 
   // Handle array args
@@ -175,17 +316,25 @@ export function normalizeToolArgs(name: string, args: Record<string, unknown> | 
 
   if (!normalized[config.primaryKey]) {
     const unassigned = Object.entries(args).filter(([k]) => !usedKeys.has(k));
-    let found = unassigned.find(([, v]) => typeof v === 'string' && (v.includes('/') || v.includes('\\') || v.includes('.')));
+    let found = unassigned.find(
+      ([, v]) => typeof v === 'string' && (v.includes('/') || v.includes('\\') || v.includes('.')),
+    );
     if (!found) found = unassigned.find(([, v]) => typeof v === 'string' && v.length > 0);
     if (!found) {
-      found = Object.entries(args).find(([, v]) => typeof v === 'string' && (v.includes('/') || v.includes('\\') || v.includes('.')));
+      found = Object.entries(args).find(
+        ([, v]) => typeof v === 'string' && (v.includes('/') || v.includes('\\') || v.includes('.')),
+      );
       if (!found) found = Object.entries(args).find(([, v]) => typeof v === 'string' && v.length > 0);
     }
     if (found) {
       normalized[config.primaryKey] = found[1];
-      log.info(`[Utils] normalizeToolArgs fallback: "${name}" extracted ${config.primaryKey}=${found[1]} from key "${found[0]}"`);
+      log.info(
+        `[Utils] normalizeToolArgs fallback: "${name}" extracted ${config.primaryKey}=${found[1]} from key "${found[0]}"`,
+      );
     } else {
-      log.warn(`[Utils] normalizeToolArgs: "${name}" could not find value for "${config.primaryKey}". args=${JSON.stringify(args)}`);
+      log.warn(
+        `[Utils] normalizeToolArgs: "${name}" could not find value for "${config.primaryKey}". args=${JSON.stringify(args)}`,
+      );
     }
   }
 
@@ -195,13 +344,24 @@ export function normalizeToolArgs(name: string, args: Record<string, unknown> | 
 function applyUniversalPathFallback(args: Record<string, unknown>): Record<string, unknown> {
   const result = { ...args };
   const aliasMap: Record<string, string> = {
-    'path': 'AbsolutePath', 'file_path': 'AbsolutePath', 'filePath': 'AbsolutePath',
-    'file': 'AbsolutePath', 'filename': 'AbsolutePath', 'target': 'AbsolutePath',
-    'directory_path': 'DirectoryPath', 'directoryPath': 'DirectoryPath',
-    'dir': 'DirectoryPath', 'directory': 'DirectoryPath', 'folder': 'DirectoryPath',
-    'target_file': 'TargetFile', 'targetFile': 'TargetFile',
-    'source': 'SourcePath', 'sourcePath': 'SourcePath', 'source_path': 'SourcePath',
-    'dest': 'DestinationPath', 'destination': 'DestinationPath',
+    path: 'AbsolutePath',
+    file_path: 'AbsolutePath',
+    filePath: 'AbsolutePath',
+    file: 'AbsolutePath',
+    filename: 'AbsolutePath',
+    target: 'AbsolutePath',
+    directory_path: 'DirectoryPath',
+    directoryPath: 'DirectoryPath',
+    dir: 'DirectoryPath',
+    directory: 'DirectoryPath',
+    folder: 'DirectoryPath',
+    target_file: 'TargetFile',
+    targetFile: 'TargetFile',
+    source: 'SourcePath',
+    sourcePath: 'SourcePath',
+    source_path: 'SourcePath',
+    dest: 'DestinationPath',
+    destination: 'DestinationPath',
   };
 
   for (const [key, value] of Object.entries(args)) {
@@ -270,7 +430,7 @@ export function translateToolCallToNative(name: string, args: ToolCallArgs): Tra
   if (isListDir) {
     let dirPath = cwd;
     const tokens = cmd.split(/\s+/).slice(1);
-    const pathToken = tokens.find(t => !t.startsWith('-') && !t.startsWith('/'));
+    const pathToken = tokens.find((t) => !t.startsWith('-') && !t.startsWith('/'));
     if (pathToken) {
       dirPath = path.isAbsolute(pathToken) ? pathToken : path.resolve(cwd, pathToken);
     }
@@ -310,7 +470,10 @@ export function translateToolCallToNative(name: string, args: ToolCallArgs): Tra
       query = tokens[tokens.length - 1];
     }
     const tokens = cmd.split(/\s+/);
-    const pathToken = tokens.find((t, idx) => idx > 0 && !t.startsWith('-') && !t.startsWith('/') && !t.includes('"') && !t.includes("'") && t !== query);
+    const pathToken = tokens.find(
+      (t, idx) =>
+        idx > 0 && !t.startsWith('-') && !t.startsWith('/') && !t.includes('"') && !t.includes("'") && t !== query,
+    );
     if (pathToken) {
       searchPath = path.isAbsolute(pathToken) ? pathToken : path.resolve(cwd, pathToken);
     }
@@ -341,17 +504,19 @@ export function formatTranslatedResponse(translatedInfo: TranslatedCallInfo, res
 
   if (translatedName === 'list_dir') {
     if (Array.isArray(responseData)) {
-      return (responseData as DirectoryItem[]).map(item => {
-        const typeIndicator = item.isDir ? '<DIR>' : '     ';
-        const sizeStr = item.isDir ? '' : ` (${item.sizeBytes || 0} bytes)`;
-        return `${typeIndicator}  ${item.name}${sizeStr}`;
-      }).join('\n');
+      return (responseData as DirectoryItem[])
+        .map((item) => {
+          const typeIndicator = item.isDir ? '<DIR>' : '     ';
+          const sizeStr = item.isDir ? '' : ` (${item.sizeBytes || 0} bytes)`;
+          return `${typeIndicator}  ${item.name}${sizeStr}`;
+        })
+        .join('\n');
     }
     if (responseData && typeof responseData === 'object') {
       const data = responseData as FileListResponse;
       const items = data.files || data.children || [];
       if (Array.isArray(items)) {
-        return items.map(item => `${item.isDir ? '<DIR>' : '     '}  ${item.name}`).join('\n');
+        return items.map((item) => `${item.isDir ? '<DIR>' : '     '}  ${item.name}`).join('\n');
       }
     }
     return typeof responseData === 'string' ? responseData : JSON.stringify(responseData);
@@ -367,7 +532,9 @@ export function formatTranslatedResponse(translatedInfo: TranslatedCallInfo, res
 
   if (translatedName === 'grep_search') {
     if (Array.isArray(responseData)) {
-      return (responseData as MatchResult[]).map(match => `${match.Filename}:${match.LineNumber}:${match.LineContent}`).join('\n');
+      return (responseData as MatchResult[])
+        .map((match) => `${match.Filename}:${match.LineNumber}:${match.LineContent}`)
+        .join('\n');
     }
     return typeof responseData === 'string' ? responseData : JSON.stringify(responseData);
   }
