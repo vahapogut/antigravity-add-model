@@ -219,6 +219,8 @@ function startLanguageServer(port, csrf, headless) {
             apiServerUrl,
             '--cloud_code_endpoint',
             apiServerUrl,
+            '--inference_api_server_url',
+            apiServerUrl,
             '--enable_sidecars',
         ];
         if (headless) {

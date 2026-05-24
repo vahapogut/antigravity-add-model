@@ -1093,6 +1093,132 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }, 1500);
 
-  // Start the observer on initial load
+  // --- Network Interceptor for Model Injection --------------------------
+
+  const customModelsCache: { models: any[]; ts: number } = { models: [], ts: 0 };
+
+  async function getCustomModelsForInjection(): Promise<any[]> {
+    if (Date.now() - customModelsCache.ts < 30000) return customModelsCache.models;
+    try {
+      customModelsCache.models = await storageAPI.getCustomModels();
+      customModelsCache.ts = Date.now();
+    } catch { /* ignore */ }
+    return customModelsCache.models;
+  }
+
+  // Intercept XHR to inject custom models into GetAvailableModels responses
+  const origXHROpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function (
+    method: string,
+    url: string | URL,
+    async?: boolean,
+    username?: string | null,
+    password?: string | null,
+  ) {
+    (this as any)._agy_url = typeof url === 'string' ? url : url.toString();
+    (this as any)._agy_method = method;
+    return origXHROpen.call(this, method, url, async as boolean, username, password);
+  };
+
+  const origXHRSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.send = function (body?: Document | XMLHttpRequestBodyInit | null) {
+    const xhr = this;
+    const url: string = (xhr as any)._agy_url || '';
+
+    if (url.includes('GetAvailableModels') || url.includes('fetchAvailableModels')) {
+      const origOnReady = xhr.onreadystatechange;
+      xhr.onreadystatechange = async function (ev: Event) {
+        if (xhr.readyState === 4 && xhr.status === 200) {
+          const customModels = await getCustomModelsForInjection();
+          if (customModels && customModels.length > 0) {
+            try {
+              const responseText = xhr.responseText;
+              if (responseText && responseText.length > 10) {
+                const parsed = JSON.parse(responseText) as Record<string, unknown>;
+                const modelsObj = (parsed.models || parsed.availableModels || parsed.available_models || {}) as Record<string, unknown>;
+                for (const m of customModels) {
+                  const slug = 'custom-' + ((m.externalModelName || m.name || '') as string)
+                    .replace(/^models\//, '')
+                    .replace(/[^a-zA-Z0-9]+/g, '-')
+                    .replace(/^-+|-+$/g, '')
+                    .toLowerCase();
+                  (modelsObj as Record<string, unknown>)[slug] = {
+                    displayName: m.displayName || m.name,
+                    recommended: true,
+                    maxTokens: 1048576,
+                    maxOutputTokens: 4096,
+                    tokenizerType: 'LLAMA_WITH_SPECIAL',
+                    model: 'MODEL_PLACEHOLDER_M' + (400 + (Math.abs(hashCodeStr(m.displayName || m.name || '') as number) % 200)),
+                    apiProvider: 'API_PROVIDER_GOOGLE_GEMINI',
+                    modelProvider: 'MODEL_PROVIDER_GOOGLE',
+                  };
+                }
+                // Override response
+                Object.defineProperty(xhr, 'responseText', { value: JSON.stringify(parsed), writable: true });
+                Object.defineProperty(xhr, 'response', { value: JSON.stringify(parsed), writable: true });
+              }
+            } catch { /* ignore parse errors */ }
+          }
+        }
+        if (origOnReady) origOnReady.call(xhr, ev);
+      };
+    }
+    return origXHRSend.call(xhr, body);
+  };
+
+  // Intercept fetch responses for model endpoints
+  const origFetch = window.fetch;
+  window.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    const url = typeof input === 'string' ? input : (input as Request).url;
+    const response = await origFetch.call(window, input, init);
+
+    if ((url.includes('GetAvailableModels') || url.includes('fetchAvailableModels')) && response.ok) {
+      const customModels = await getCustomModelsForInjection();
+      if (customModels && customModels.length > 0) {
+        try {
+          const cloned = response.clone();
+          const text = await cloned.text();
+          if (text && text.length > 10) {
+            const parsed = JSON.parse(text) as Record<string, unknown>;
+            const modelsObj = (parsed.models || parsed.availableModels || parsed.available_models || {}) as Record<string, unknown>;
+            for (const m of customModels) {
+              const slug = 'custom-' + ((m.externalModelName || m.name || '') as string)
+                .replace(/^models\//, '')
+                .replace(/[^a-zA-Z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '')
+                .toLowerCase();
+              (modelsObj as Record<string, unknown>)[slug] = {
+                displayName: m.displayName || m.name,
+                recommended: true,
+                maxTokens: 1048576,
+                maxOutputTokens: 4096,
+                tokenizerType: 'LLAMA_WITH_SPECIAL',
+                model: 'MODEL_PLACEHOLDER_M' + (400 + (Math.abs(hashCodeStr(m.displayName || m.name || '') as number) % 200)),
+                apiProvider: 'API_PROVIDER_GOOGLE_GEMINI',
+                modelProvider: 'MODEL_PROVIDER_GOOGLE',
+              };
+            }
+            return new Response(JSON.stringify(parsed), {
+              status: response.status,
+              statusText: response.statusText,
+              headers: response.headers,
+            });
+          }
+        } catch { /* ignore parse errors */ }
+      }
+    }
+    return response;
+  };
+
+  function hashCodeStr(s: string): number {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) {
+      h = (h << 5) + h + s.charCodeAt(i);
+      h = h & h;
+    }
+    return Math.abs(h);
+  }
+
+  // Start the observer
   setupInjectionObserver();
 });

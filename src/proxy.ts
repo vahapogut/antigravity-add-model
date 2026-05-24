@@ -631,10 +631,273 @@ function handleCustomModelRequest(
   request.end();
 }
 
+// ─── Protobuf Utilities ────────────────────────────────────────────────────
+
+interface ProtoField {
+  tag: number;        // full tag (field_number << 3 | wire_type)
+  wireType: number;
+  fieldNum: number;
+  value: number | Buffer | ProtoField[];
+  start: number;
+  end: number;
+}
+
+function readVarint(buf: Buffer, offset: number): { value: number; bytes: number } {
+  let result = 0;
+  let shift = 0;
+  let bytes = 0;
+  while (offset + bytes < buf.length) {
+    const byte = buf[offset + bytes];
+    result |= (byte & 0x7f) << shift;
+    bytes++;
+    if (!(byte & 0x80)) break;
+    shift += 7;
+  }
+  return { value: result >>> 0, bytes };
+}
+
+function encodeVarint(value: number): Buffer {
+  const parts: number[] = [];
+  let v = value >>> 0;
+  do {
+    let b = v & 0x7f;
+    v >>>= 7;
+    if (v !== 0) b |= 0x80;
+    parts.push(b);
+  } while (v !== 0);
+  return Buffer.from(parts);
+}
+
+function parseProto(buf: Buffer, offset: number, end: number): ProtoField[] {
+  const fields: ProtoField[] = [];
+  let pos = offset;
+  while (pos < end) {
+    const start = pos;
+    const tagVarint = readVarint(buf, pos);
+    const tag = tagVarint.value;
+    const wireType = tag & 0x07;
+    const fieldNum = tag >>> 3;
+    pos += tagVarint.bytes;
+
+    if (wireType === 0) {
+      const v = readVarint(buf, pos);
+      fields.push({ tag, wireType, fieldNum, value: v.value, start, end: pos + v.bytes });
+      pos += v.bytes;
+    } else if (wireType === 2) {
+      const lenVarint = readVarint(buf, pos);
+      pos += lenVarint.bytes;
+      const len = lenVarint.value;
+      const children = parseProto(buf, pos, pos + len);
+      const hasChildren = children.length > 0;
+      fields.push({ tag, wireType, fieldNum, value: hasChildren ? children : buf.subarray(pos, pos + len), start, end: pos + len });
+      pos += len;
+    } else if (wireType === 1) {
+      fields.push({ tag, wireType, fieldNum, value: buf.subarray(pos, pos + 8), start, end: pos + 8 });
+      pos += 8;
+    } else if (wireType === 5) {
+      fields.push({ tag, wireType, fieldNum, value: buf.subarray(pos, pos + 4), start, end: pos + 4 });
+      pos += 4;
+    } else {
+      break;
+    }
+  }
+  return fields;
+}
+
+function encodeProtoBuf(fields: { tag: number; value: Buffer }[]): Buffer {
+  const parts: Buffer[] = [];
+  for (const field of fields) {
+    const tagBuf = encodeVarint(field.tag);
+    const data = field.value;
+    const lenBuf = encodeVarint(data.length);
+    parts.push(tagBuf, lenBuf, data);
+  }
+  return Buffer.concat(parts);
+}
+
+function findModelEntryFieldTag(fields: ProtoField[]): number | null {
+  const tagCounts = new Map<number, number>();
+  for (const f of fields) {
+    if (f.wireType === 2) {
+      tagCounts.set(f.tag, (tagCounts.get(f.tag) || 0) + 1);
+    }
+  }
+  let bestTag: number | null = null;
+  let bestCount = 0;
+  for (const [tag, count] of tagCounts) {
+    if (count > bestCount) {
+      bestCount = count;
+      bestTag = tag;
+    }
+  }
+  if (bestTag !== null && bestCount >= 2) {
+    // Verify it has nested messages
+    const sample = fields.find((f) => f.tag === bestTag && Array.isArray(f.value));
+    if (sample) return bestTag;
+  }
+  return bestTag;
+}
+
+function extractFieldMapping(entry: ProtoField[]): Map<number, 'string' | 'varint' | 'bytes'> {
+  const mapping = new Map<number, 'string' | 'varint' | 'bytes'>();
+  for (const f of entry) {
+    if (f.wireType === 2 && Buffer.isBuffer(f.value)) {
+      mapping.set(f.fieldNum, 'string');
+    } else if (f.wireType === 0) {
+      mapping.set(f.fieldNum, 'varint');
+    } else if (f.wireType === 2 && Array.isArray(f.value)) {
+      mapping.set(f.fieldNum, 'bytes');
+    }
+  }
+  return mapping;
+}
+
+function encodeModelEntryForGetModels(
+  name: string,
+  displayName: string,
+  mapping: Map<number, 'string' | 'varint' | 'bytes'>,
+): Buffer {
+  const fields: { tag: number; value: Buffer }[] = [];
+  for (const [fieldNum, protoType] of mapping) {
+    if (protoType === 'string') {
+      const tag = (fieldNum << 3) | 2;
+      if (fieldNum === 1) {
+        fields.push({ tag, value: Buffer.from(name, 'utf-8') });
+      } else if (fieldNum === 2) {
+        fields.push({ tag, value: Buffer.from(displayName, 'utf-8') });
+      } else {
+        fields.push({ tag, value: Buffer.alloc(0) });
+      }
+    } else if (protoType === 'varint') {
+      const tag = (fieldNum << 3) | 0;
+      fields.push({ tag, value: encodeVarint(0) });
+    } else {
+      const tag = (fieldNum << 3) | 2;
+      fields.push({ tag, value: Buffer.alloc(0) });
+    }
+  }
+  return encodeProtoBuf(fields);
+}
+
+// ─── GetAvailableModels Proxy Handler ───────────────────────────────────────
+
+function handleGetAvailableModelsProxy(
+  res: http.ServerResponse,
+  reqBody: Buffer,
+  lsUrl: string,
+): void {
+  const lsParsed = new URL(lsUrl);
+  const client = lsParsed.protocol === 'https:' ? https : http;
+
+  const options: https.RequestOptions = {
+    method: 'POST',
+    hostname: lsParsed.hostname,
+    port: lsParsed.port || (lsParsed.protocol === 'https:' ? '443' : '80'),
+    path: lsParsed.pathname + lsParsed.search,
+    headers: {
+      'Content-Type': 'application/grpc-web+proto',
+      'Accept': 'application/grpc-web+proto',
+      'Content-Length': String(reqBody.length),
+    },
+    rejectUnauthorized: false,
+  };
+
+  const lsReq = client.request(options, (lsRes) => {
+    const chunks: Buffer[] = [];
+    lsRes.on('data', (chunk: Buffer) => chunks.push(chunk));
+    lsRes.on('end', () => {
+      const responseBuf = Buffer.concat(chunks);
+      const customModels = loadCustomModels();
+      let modifiedBuf = responseBuf;
+
+      if (customModels.length > 0 && responseBuf.length > 6) {
+        try {
+          const flags = responseBuf[0];
+          const msgLen = responseBuf.readUInt32BE(1);
+          if (5 + msgLen <= responseBuf.length) {
+            const msgBody = responseBuf.subarray(5, 5 + msgLen);
+            const parsed = parseProto(msgBody, 0, msgBody.length);
+            const modelTag = findModelEntryFieldTag(parsed);
+
+            if (modelTag !== null) {
+              const sampleEntry = parsed.find(
+                (f) => f.tag === modelTag && Array.isArray(f.value),
+              );
+              if (sampleEntry && Array.isArray(sampleEntry.value)) {
+                const fieldMapping = extractFieldMapping(sampleEntry.value);
+                const newParts: Buffer[] = [msgBody];
+
+                for (const m of customModels) {
+                  const placeholderId = generateModelPlaceholderId(m);
+                  const entry = encodeModelEntryForGetModels(
+                    'models/' + placeholderId,
+                    m.displayName,
+                    fieldMapping,
+                  );
+                  const tagBuf = encodeVarint(modelTag);
+                  const lenBuf = encodeVarint(entry.length);
+                  newParts.push(tagBuf, lenBuf, entry);
+                  log.info(
+                    `[Proxy] Injected into GetAvailableModels: ${m.displayName} => ${placeholderId}`,
+                  );
+                }
+
+                const newMsgBody = Buffer.concat(newParts);
+                const newHeader = Buffer.alloc(5);
+                newHeader[0] = flags;
+                newHeader.writeUInt32BE(newMsgBody.length, 1);
+                modifiedBuf = Buffer.concat([newHeader, newMsgBody]);
+              }
+            }
+          }
+        } catch (err) {
+          log.error('[Proxy] Failed to inject models into GetAvailableModels:', err);
+        }
+      }
+
+      res.writeHead(lsRes.statusCode || 200, {
+        'Content-Type': 'application/grpc-web+proto',
+        'Content-Length': String(modifiedBuf.length),
+      });
+      res.end(modifiedBuf);
+    });
+
+    lsRes.on('error', (err) => {
+      log.error('[Proxy] LS error for GetAvailableModels:', err.message);
+      if (!res.headersSent) {
+        res.writeHead(502);
+        res.end();
+      }
+    });
+  });
+
+  lsReq.setTimeout(30_000, () => {
+    log.error('[Proxy] GetAvailableModels forward timed out');
+    lsReq.destroy();
+    if (!res.headersSent) {
+      res.writeHead(504);
+      res.end();
+    }
+  });
+
+  lsReq.on('error', (err) => {
+    log.error('[Proxy] GetAvailableModels forward error:', err.message);
+    if (!res.headersSent) {
+      res.writeHead(502);
+      res.end();
+    }
+  });
+
+  lsReq.write(reqBody);
+  lsReq.end();
+}
+
 // ─── Main Request Handler ─────────────────────────────────────────────────
 
 function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): void {
   req.url = req.url!.replace(/^.*\/dummy_path_padding/, '');
+  // Strip binary patch padding (from LS hostname replacement)
+  req.url = req.url!.replace(/\/v1internal\/x{7}/, '');
 
   // Health check
   if (req.method === 'GET' && (req.url === '/health' || req.url === '/healthz')) {
@@ -693,6 +956,19 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
     const bodyStr = fullBody.toString('utf-8');
 
     log.info(`[Proxy] Request: ${req.method} ${req.url}`);
+
+    // 0. Intercept GetAvailableModels (redirected from Electron webRequest)
+    if (req.url!.startsWith('/GetAvailableModels')) {
+      const gavParsed = new URL(req.url!, 'http://127.0.0.1');
+      const lsUrl = gavParsed.searchParams.get('ls');
+      if (lsUrl) {
+        handleGetAvailableModelsProxy(res, fullBody, lsUrl);
+        return;
+      }
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Missing ls parameter' }));
+      return;
+    }
 
     // 1. Intercept /v1internal:fetchAvailableModels
     if (req.url!.includes('/v1internal:fetchAvailableModels')) {
@@ -773,9 +1049,9 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
                 customModels.forEach((m) => {
                   const slug = toSlug(m);
                   const cap = detectModelCapabilities(m, true);
-                  (result as Record<string, unknown>)[slug] = {
+                  const entry: Record<string, unknown> = {
                     displayName: m.displayName,
-                    supportsImages: false,
+                    supportsImages: cap.supportsImages,
                     supportsThinking: cap.isThinking,
                     recommended: true,
                     maxTokens: cap.maxTokens,
@@ -785,9 +1061,49 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
                     apiProvider: 'API_PROVIDER_GOOGLE_GEMINI',
                     modelProvider: 'MODEL_PROVIDER_GOOGLE',
                   };
+                  if (cap.supportsImages) {
+                    entry.supportsVideo = false;
+                    entry.supportedMimeTypes = {
+                      'image/png': true,
+                      'image/jpeg': true,
+                      'image/webp': true,
+                      'image/gif': true,
+                      'image/heic': true,
+                      'image/heif': true,
+                      'text/plain': true,
+                      'text/markdown': true,
+                      'text/html': true,
+                      'text/css': true,
+                      'text/xml': true,
+                      'text/csv': true,
+                      'application/json': true,
+                      'application/pdf': true,
+                      'application/x-javascript': true,
+                      'application/x-typescript': true,
+                      'application/x-python-code': true,
+                      'application/x-ipynb+json': true,
+                    };
+                  } else {
+                    entry.supportsVideo = false;
+                    entry.supportedMimeTypes = {
+                      'text/plain': true,
+                      'text/markdown': true,
+                      'text/html': true,
+                      'text/css': true,
+                      'text/xml': true,
+                      'text/csv': true,
+                      'application/json': true,
+                      'application/pdf': true,
+                      'application/x-javascript': true,
+                      'application/x-typescript': true,
+                      'application/x-python-code': true,
+                      'application/x-ipynb+json': true,
+                    };
+                  }
+                  (result as Record<string, unknown>)[slug] = entry;
                   m._slug = slug;
                   log.info(
-                    `[Proxy] Custom model "${m.displayName}" => slug: ${slug} => model: ${generateModelPlaceholderId(m)} => supportsThinking: ${cap.isThinking}`,
+                    `[Proxy] Custom model "${m.displayName}" => slug: ${slug} => model: ${generateModelPlaceholderId(m)} => thinking: ${cap.isThinking} => images: ${cap.supportsImages}`,
                   );
                 });
                 return result;

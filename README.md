@@ -324,6 +324,106 @@ npx -y @electron/asar pack . "<antigravity_resources_dir>/app.asar"
 
 ---
 
+## Antigravity Update Recovery
+
+### The Problem
+
+Starting with **Antigravity v2.0.6**, Google hardcoded the `fetchAvailableModels` API URL to `https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels` inside the Language Server binary. This call **bypasses the local proxy entirely**, meaning:
+
+- Custom models remain in `custom_models.json` and appear in **Settings → Custom Models**
+- But they **do NOT appear** in the chat model dropdown
+- The chat dropdown only shows Google's built-in Gemini models
+
+### The Fix: Binary Patch
+
+The `deploy.ps1` / `deploy.sh` / `deploy_linux.sh` scripts **automatically apply a binary patch** to the Language Server executable. The hardcoded URL:
+
+```
+https://daily-cloudcode-pa.googleapis.com
+```
+
+is replaced with:
+
+```
+http://localhost:50999/v1internal/xxxxxxx
+```
+
+This forces the Language Server to route **all** `fetchAvailableModels` calls through the local proxy, where custom models are injected before the response reaches the Antigravity frontend.
+
+### After EVERY Antigravity Update
+
+When Google releases a new Antigravity version (e.g., v2.0.7, v2.1.0):
+
+1. **Antigravity auto-updates** → The Language Server binary is replaced with an unpatched version
+2. **Custom models disappear** from the chat dropdown again
+3. **Re-run the deploy script** to re-apply the binary patch:
+
+```powershell
+# Windows (PowerShell)
+npm run build
+powershell -ExecutionPolicy Bypass -File ".\deploy.ps1"
+```
+
+```bash
+# macOS / Linux
+npm run build
+bash deploy.sh        # macOS
+bash deploy_linux.sh  # Linux
+```
+
+> [!IMPORTANT]
+> **You must redeploy after every Antigravity update.** The update replaces `language_server.exe` with a clean version, removing the binary patch. Running `deploy.ps1` re-applies the patch automatically.
+
+### How to Check if the Patch is Active
+
+Check the Language Server log after startup:
+
+```
+# Windows
+%APPDATA%\Antigravity\logs\language_server.log
+```
+
+If the patch is active, you'll see:
+```
+URL: http://localhost:50999/v1internal/xxxxxxx/v1internal:fetchAvailableModels
+```
+
+If the patch is NOT active (after an update), you'll see:
+```
+URL: https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels
+```
+
+### Technical Details
+
+The binary patch works by:
+
+1. **Finding** the string `https://daily-cloudcode-pa.googleapis.com` (41 bytes) in the LS binary
+2. **Replacing** it with `http://localhost:50999/v1internal/xxxxxxx` (exactly 41 bytes)
+3. **URL cleanup**: The proxy strips the `/v1internal/xxxxxxx` padding from incoming requests before forwarding to Google
+
+The patch also affects other hardcoded Cloud Code calls (`listExperiments`, `streamGenerateContent`, `loadCodeAssist`), routing them all through the proxy for consistent behavior.
+
+### Manual Binary Patch (if deploy script fails)
+
+```powershell
+# Find the offset of the hardcoded URL
+$offset = (Select-String -Path "language_server.exe" -Pattern "daily-cloudcode-pa.googleapis.com" -Encoding byte).Matches[0].Index - 8
+
+# Apply the patch
+$newUrl = [System.Text.Encoding]::ASCII.GetBytes("http://localhost:50999/v1internal/xxxxxxx")
+$fs = [System.IO.File]::OpenWrite("language_server.exe")
+$fs.Seek($offset, [System.IO.SeekOrigin]::Begin)
+$fs.Write($newUrl, 0, $newUrl.Length)
+$fs.Close()
+```
+
+> [!NOTE]
+> The script above finds the `https://` prefix (8 bytes before the hostname) and replaces the full 41-byte URL. The `xxxxxxx` padding ensures the replacement stays exactly the same length as the original string.
+>
+> A backup of the original binary is automatically created at `language_server.exe.bak` before patching.
+
+---
+
 ## Configuration
 
 Models are stored in your home directory at `~/.gemini/antigravity/custom_models.json`. You can easily add them via the **"Add Model"** modal in Settings, or edit the JSON file directly. 
@@ -577,6 +677,12 @@ Set `DEBUG=antigravity:*` for verbose logging (debug level captures stream parse
 - **Error handling**: Added error handlers for streaming and non-streaming API responses
 - **Fixed**: `deploy.ps1` hardcoded path to now uses `$PSScriptRoot`
 - **Documentation**: Added Security Considerations, Troubleshooting, and Developer Guide
+
+### v2.0.2 (2026-05-24)
+- **Critical fix**: Antigravity v2.0.6 update hardcoded `fetchAvailableModels` URL to `daily-cloudcode-pa.googleapis.com`, bypassing the local proxy. Custom models disappeared from the chat dropdown.
+- **Binary patch**: The Language Server binary is now automatically patched at build time to replace the hardcoded Google URL with the local proxy URL.
+- **URL padding handler**: Added regex-based URL cleanup in the proxy to strip binary patch padding.
+- **Model API fallbacks**: Added `GetAvailableModels` redirect, preload network interceptors, and forced page reload for robust model loading across Antigravity versions.
 
 ### v2.0.0
 - Initial release: multi-provider proxy, API key encryption, streaming, tool calls, custom UI

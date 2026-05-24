@@ -211,6 +211,8 @@ export function startLanguageServer(port: number, csrf: string, headless?: boole
       apiServerUrl,
       '--cloud_code_endpoint',
       apiServerUrl,
+      '--inference_api_server_url',
+      apiServerUrl,
       '--enable_sidecars',
     ];
     if (headless) {

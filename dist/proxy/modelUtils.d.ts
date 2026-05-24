@@ -14,6 +14,7 @@ export interface ModelCapabilities {
     isClaude: boolean;
     maxTokens: number;
     maxOutputTokens: number;
+    supportsImages: boolean;
 }
 export interface ModelNameCapabilities {
     isClaudeThinkingModel: boolean;
