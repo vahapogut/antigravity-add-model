@@ -201,11 +201,18 @@ function mapGeminiToOpenAI(geminiBody, modelName) {
             messages[i].reasoning_content = i === lastAssistantIdx && preservedReasoning ? preservedReasoning : '';
         }
     }
+    // OpenAI reasoning/o-series and gpt-4.1 models require max_completion_tokens
+    // and don't support temperature
+    const isReasoningModel = /(^|\/)(o1|o3|o4)(-|$)/i.test(modelName);
+    const is41Model = /(^|\/)(gpt-4\.1)/i.test(modelName);
+    const needsCompletionTokens = isReasoningModel || is41Model;
+    const needsNoTemperature = isReasoningModel;
+    const maxTokens = geminiBody.generationConfig?.maxOutputTokens ?? 4000;
     const payload = {
         model: modelName,
         messages,
-        temperature: geminiBody.generationConfig?.temperature ?? 0.7,
-        max_tokens: geminiBody.generationConfig?.maxOutputTokens ?? 4000,
+        ...(needsNoTemperature ? {} : { temperature: geminiBody.generationConfig?.temperature ?? 0.7 }),
+        ...(needsCompletionTokens ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens }),
     };
     if (geminiBody.tools && Array.isArray(geminiBody.tools)) {
         const openaiTools = mapGeminiToolsToOpenAI(geminiBody.tools);

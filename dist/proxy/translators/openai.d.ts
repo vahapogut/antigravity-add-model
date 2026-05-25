@@ -77,6 +77,7 @@ interface OpenAIRequestBody {
     messages: OpenAIMessage[];
     temperature?: number;
     max_tokens?: number;
+    max_completion_tokens?: number;
     tools?: OpenAITool[];
     stream?: boolean;
 }
