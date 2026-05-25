@@ -282,6 +282,19 @@ You can configure **multiple models from different providers simultaneously**. A
 
 ## Installation
 
+### One-Click Re-Deploy (After Antigravity Updates)
+
+When Google releases a new Antigravity version, the update replaces the Language Server binary and custom models stop working. Simply run:
+
+```
+repatch.bat
+```
+
+Or double-click `repatch.bat` in the project folder. This rebuilds, redeploys the patch, and restarts Antigravity in one step.
+
+> [!IMPORTANT]
+> Run `repatch.bat` after **every** Antigravity auto-update to restore custom model support.
+
 ### Automatic (Windows)
 
 ```powershell
