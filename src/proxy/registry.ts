@@ -71,29 +71,25 @@ function loadTranslators(): void {
   );
 }
 
+// Providers grouped by transport compatibility
+const OPENAI_COMPAT = new Set(['openai', 'ollama', 'openrouter', 'custom', 'groq', 'mistral', 'cerebras', 'nvidia', 'opencode', 'codestral']);
+const ANTHROPIC_COMPAT = new Set(['anthropic', 'deepseek', 'kimi', 'fireworks', 'lmstudio', 'llamacpp', 'wafer', 'zai']);
+
 // ─── Public API ───────────────────────────────────────────────────────────
 
 export function getTranslator(provider: string): TranslatorModule | null {
-  // openrouter uses OpenAI-compatible API — reuse OpenAI translator
-  if (provider === 'openrouter') return translators.get('openai') || null;
-  const key = provider === 'custom' ? 'openai' : provider;
-  return translators.get(key) || translators.get('openai') || null;
+  if (OPENAI_COMPAT.has(provider)) return translators.get('openai') || null;
+  if (ANTHROPIC_COMPAT.has(provider)) return translators.get('anthropic') || null;
+  if (provider === 'google') return translators.get('google') || null;
+  return translators.get('openai') || null;
 }
 
 export function translateRequest(provider: string, geminiBody: unknown, modelName: string): unknown {
   const t = getTranslator(provider);
 
-  if (provider === 'google') {
-    return geminiBody; // passthrough
-  }
-
-  if (provider === 'openai' || provider === 'ollama' || provider === 'custom' || provider === 'openrouter') {
-    return t?.mapGeminiToOpenAI ? t.mapGeminiToOpenAI(geminiBody, modelName) : geminiBody;
-  }
-
-  if (provider === 'anthropic') {
-    return t?.mapGeminiToAnthropic ? t.mapGeminiToAnthropic(geminiBody, modelName) : geminiBody;
-  }
+  if (provider === 'google') return geminiBody;
+  if (OPENAI_COMPAT.has(provider)) return t?.mapGeminiToOpenAI ? t.mapGeminiToOpenAI(geminiBody, modelName) : geminiBody;
+  if (ANTHROPIC_COMPAT.has(provider)) return t?.mapGeminiToAnthropic ? t.mapGeminiToAnthropic(geminiBody, modelName) : geminiBody;
 
   // Generic: try mapGeminiTo<Provider> convention
   const fnName = `mapGeminiTo${provider.charAt(0).toUpperCase() + provider.slice(1)}`;
@@ -109,14 +105,8 @@ export function translateResponse(provider: string, providerRes: unknown, modelN
   const t = getTranslator(provider);
 
   if (provider === 'google') return providerRes;
-
-  if (provider === 'openai' || provider === 'ollama' || provider === 'custom' || provider === 'openrouter') {
-    return t?.mapOpenAIToGemini ? t.mapOpenAIToGemini(providerRes, modelName) : providerRes;
-  }
-
-  if (provider === 'anthropic') {
-    return t?.mapAnthropicToGemini ? t.mapAnthropicToGemini(providerRes, modelName) : providerRes;
-  }
+  if (OPENAI_COMPAT.has(provider)) return t?.mapOpenAIToGemini ? t.mapOpenAIToGemini(providerRes, modelName) : providerRes;
+  if (ANTHROPIC_COMPAT.has(provider)) return t?.mapAnthropicToGemini ? t.mapAnthropicToGemini(providerRes, modelName) : providerRes;
 
   const fnName = `map${provider.charAt(0).toUpperCase() + provider.slice(1)}ToGemini`;
   if (t && typeof t[fnName] === 'function') {
@@ -130,17 +120,9 @@ export function translateResponse(provider: string, providerRes: unknown, modelN
 export function translateStreamChunk(provider: string, chunk: unknown, modelName: string): unknown {
   const t = getTranslator(provider);
 
-  if (provider === 'google') {
-    return t?.mapGoogleChunkToGemini ? t.mapGoogleChunkToGemini(chunk, modelName) : null;
-  }
-
-  if (provider === 'openai' || provider === 'ollama' || provider === 'custom' || provider === 'openrouter') {
-    return t?.mapOpenAIChunkToGemini ? t.mapOpenAIChunkToGemini(chunk, modelName) : null;
-  }
-
-  if (provider === 'anthropic') {
-    return t?.mapAnthropicChunkToGemini ? t.mapAnthropicChunkToGemini(chunk, modelName) : null;
-  }
+  if (provider === 'google') return t?.mapGoogleChunkToGemini ? t.mapGoogleChunkToGemini(chunk, modelName) : null;
+  if (OPENAI_COMPAT.has(provider)) return t?.mapOpenAIChunkToGemini ? t.mapOpenAIChunkToGemini(chunk, modelName) : null;
+  if (ANTHROPIC_COMPAT.has(provider)) return t?.mapAnthropicChunkToGemini ? t.mapAnthropicChunkToGemini(chunk, modelName) : null;
 
   const fnName = `map${provider.charAt(0).toUpperCase() + provider.slice(1)}ChunkToGemini`;
   if (t && typeof t[fnName] === 'function') {
@@ -152,40 +134,25 @@ export function translateStreamChunk(provider: string, chunk: unknown, modelName
 
 export function getProviderHeaders(provider: string, apiKey: string): ProviderHeaders {
   const headers: ProviderHeaders = { 'Content-Type': 'application/json' };
+  if (!apiKey || apiKey === 'none') return headers;
 
-  switch (provider) {
-    case 'openai':
-    case 'custom':
-      headers['Authorization'] = `Bearer ${apiKey}`;
-      break;
-    case 'openrouter':
-      headers['Authorization'] = `Bearer ${apiKey}`;
-      // OpenRouter optional headers for leaderboard attribution
-      headers['HTTP-Referer'] = 'https://antigravity.google';
-      headers['X-Title'] = 'Antigravity';
-      break;
-    case 'anthropic':
-      headers['x-api-key'] = apiKey;
-      headers['anthropic-version'] = '2025-04-01';
-      break;
-    case 'google':
-      headers['x-goog-api-key'] = apiKey;
-      break;
-    case 'ollama':
-      // Ollama typically doesn't need auth headers
-      break;
-    default:
-      if (apiKey && apiKey !== 'none') {
-        headers['Authorization'] = `Bearer ${apiKey}`;
-      }
-      break;
+  if (provider === 'anthropic' || ANTHROPIC_COMPAT.has(provider)) {
+    headers['x-api-key'] = apiKey;
+    headers['anthropic-version'] = '2025-04-01';
+  } else if (provider === 'google') {
+    headers['x-goog-api-key'] = apiKey;
+  } else if (provider === 'openrouter') {
+    headers['Authorization'] = `Bearer ${apiKey}`;
+    headers['HTTP-Referer'] = 'https://antigravity.google';
+    headers['X-Title'] = 'Antigravity';
+  } else if (provider !== 'ollama') {
+    headers['Authorization'] = `Bearer ${apiKey}`;
   }
-
   return headers;
 }
 
 export function supportsStreaming(provider: string): boolean {
-  return ['openai', 'ollama', 'custom', 'anthropic', 'google', 'openrouter'].includes(provider);
+  return OPENAI_COMPAT.has(provider) || ANTHROPIC_COMPAT.has(provider) || provider === 'google';
 }
 
 // ─── URL Helpers ──────────────────────────────────────────────────────────

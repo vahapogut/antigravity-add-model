@@ -514,6 +514,15 @@ window.addEventListener('DOMContentLoaded', () => {
                         <option value="google">Google AI Studio (Gemini)</option>
                         <option value="ollama">Ollama (Local)</option>
                         <option value="openrouter">OpenRouter</option>
+                        <option value="deepseek">DeepSeek</option>
+                        <option value="groq">Groq</option>
+                        <option value="mistral">Mistral</option>
+                        <option value="cerebras">Cerebras</option>
+                        <option value="kimi">Kimi (Moonshot)</option>
+                        <option value="fireworks">Fireworks AI</option>
+                        <option value="lmstudio">LM Studio (Local)</option>
+                        <option value="llamacpp">llama.cpp (Local)</option>
+                        <option value="nvidia">NVIDIA NIM</option>
                         <option value="custom">Custom / Other</option>
                     </select>
                 </div>
@@ -596,6 +605,15 @@ window.addEventListener('DOMContentLoaded', () => {
             anthropic: 'https://api.anthropic.com/v1/messages',
             ollama: 'http://localhost:11434/v1/chat/completions',
             openrouter: 'https://openrouter.ai/api/v1/chat/completions',
+            deepseek: 'https://api.deepseek.com/anthropic',
+            groq: 'https://api.groq.com/openai/v1',
+            mistral: 'https://api.mistral.ai/v1',
+            cerebras: 'https://api.cerebras.ai/v1',
+            kimi: 'https://api.moonshot.ai/anthropic/v1',
+            fireworks: 'https://api.fireworks.ai/inference/v1',
+            lmstudio: 'http://localhost:1234/v1',
+            llamacpp: 'http://localhost:8080/v1',
+            nvidia: 'https://integrate.api.nvidia.com/v1',
             custom: '',
         };
         // Real-time URL validation
@@ -795,12 +813,11 @@ window.addEventListener('DOMContentLoaded', () => {
                 return;
             if (!displayName) {
                 const providerNames = {
-                    openai: 'OpenAI',
-                    anthropic: 'Anthropic',
-                    google: 'Google Studio',
-                    ollama: 'Ollama',
-                    openrouter: 'OpenRouter',
-                    custom: 'Custom',
+                    openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google Studio',
+                    ollama: 'Ollama', openrouter: 'OpenRouter', custom: 'Custom',
+                    deepseek: 'DeepSeek', groq: 'Groq', mistral: 'Mistral',
+                    cerebras: 'Cerebras', kimi: 'Kimi', fireworks: 'Fireworks',
+                    lmstudio: 'LM Studio', llamacpp: 'llama.cpp', nvidia: 'NVIDIA',
                 };
                 displayName = `${modelId} (${providerNames[provider]})`;
             }
