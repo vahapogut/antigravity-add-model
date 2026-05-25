@@ -320,15 +320,17 @@ export function mapGeminiToOpenAI(geminiBody: GeminiRequestBody, modelName: stri
   }
 
   // Models requiring max_completion_tokens instead of max_tokens:
-  // - Legacy o-series: o1, o3, o4-mini
-  // - Legacy gpt-4.1 series: gpt-4.1, gpt-4.1-mini, gpt-4.1-nano
-  // - GPT-5.x thinking models: gpt-5.4-thinking, gpt-5.5-pro etc.
+  // - Legacy o-series: o1, o3, o4-mini (any format: o1, o1-mini, openai/o3, etc.)
+  // - Legacy gpt-4.1 series: gpt-4.1, 4.1-mini, gpt-4.1-nano (any prefix)
+  // - GPT-5.x thinking/pro: gpt-5.4-thinking, gpt-5.5-pro, etc.
   //   (OpenAI unified under GPT-5.x in Feb 2026, deprecated all previous models)
-  const isThinkingModel = /thinking|reasoning/i.test(modelName);
-  const isReasoningModel = /(^|\/)(o1|o3|o4)(-|$)/i.test(modelName);
-  const is41Model = /(^|\/)(gpt-4\.1)/i.test(modelName);
-  const is5Pro = /(^|\/)(gpt-5\.5-pro)/i.test(modelName);
-  const needsCompletionTokens = isThinkingModel || isReasoningModel || is41Model || is5Pro;
+  const lowerName = modelName.toLowerCase();
+  const isThinkingModel = /thinking|reasoning/i.test(lowerName);
+  const isReasoningModel = /(^|\/|^openai\/)(o1|o3|o4)(-|$|mini|pro)/i.test(lowerName);
+  const is41Model = /(^|\/|^openai\/)(gpt-)?4\.1(-|mini|nano)/i.test(lowerName);
+  const is5Pro = /(^|\/|^openai\/)(gpt-)?5\.5-pro/i.test(lowerName);
+  const is5Thinking = /(^|\/|^openai\/)(gpt-)?5\.4/i.test(lowerName);
+  const needsCompletionTokens = isThinkingModel || isReasoningModel || is41Model || is5Pro || is5Thinking;
   const needsNoTemperature = isThinkingModel || isReasoningModel;
 
   const maxTokens = geminiBody.generationConfig?.maxOutputTokens ?? 4000;
