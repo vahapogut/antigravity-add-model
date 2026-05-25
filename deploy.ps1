@@ -99,44 +99,26 @@ Write-Host "   OK" -ForegroundColor Green
 # Temizlik
 Remove-Item $TempDir -Recurse -Force -ErrorAction SilentlyContinue
 
-# 6.5 Binary patch: Language Server'a hardcoded Google URL'yi local proxy ile degistir
+# Binary patch - fast string-based (no byte loop on 150MB binary)
 Write-Host "[6/7] Language Server binary patch uygulaniyor..." -ForegroundColor Yellow
 $LsBinary = "$env:LOCALAPPDATA\Programs\antigravity\resources\bin\language_server.exe"
 $OriginalUrl = "https://daily-cloudcode-pa.googleapis.com"
 $PatchedUrl = "http://localhost:50999/v1internal/xxxxxxx"
 
 if (Test-Path $LsBinary) {
-    # Backup original binary if not already backed up
-    $LsBackup = "$LsBinary.bak"
-    if (-not (Test-Path $LsBackup)) {
-        Copy-Item $LsBinary $LsBackup -Force
-        Write-Host "   Binary yedeklendi: $LsBackup" -ForegroundColor Gray
-    }
-
-    # Find and replace the hardcoded URL
-    $bytes = [System.IO.File]::ReadAllBytes($LsBinary)
-    $searchBytes = [System.Text.Encoding]::ASCII.GetBytes($OriginalUrl)
-    $replaceBytes = [System.Text.Encoding]::ASCII.GetBytes($PatchedUrl)
-
-    # Find the offset
-    $offset = -1
-    for ($i = 0; $i -lt $bytes.Length - $searchBytes.Length; $i++) {
-        $match = $true
-        for ($j = 0; $j -lt $searchBytes.Length; $j++) {
-            if ($bytes[$i + $j] -ne $searchBytes[$j]) { $match = $false; break }
-        }
-        if ($match) { $offset = $i; break }
-    }
-
-    if ($offset -ge 0) {
-        [System.Array]::Copy($replaceBytes, 0, $bytes, $offset, $replaceBytes.Length)
-        [System.IO.File]::WriteAllBytes($LsBinary, $bytes)
-        Write-Host "   OK - Binary patch uygulandi (offset: $offset)" -ForegroundColor Green
+    $content = [System.IO.File]::ReadAllText($LsBinary, [System.Text.Encoding]::ASCII)
+    if ($content.Contains($PatchedUrl)) {
+        Write-Host "   OK - Binary zaten patch'li" -ForegroundColor Green
     } else {
-        # Check if already patched
-        $alreadyPatched = [System.Text.Encoding]::ASCII.GetString($bytes) -match [regex]::Escape($PatchedUrl)
-        if ($alreadyPatched) {
-            Write-Host "   OK - Binary zaten patch'li" -ForegroundColor Green
+        $offset = $content.IndexOf($OriginalUrl, [StringComparison]::Ordinal)
+        if ($offset -ge 0) {
+            $LsBackup = "$LsBinary.bak"
+            if (-not (Test-Path $LsBackup)) { Copy-Item $LsBinary $LsBackup -Force }
+            $replaceBytes = [System.Text.Encoding]::ASCII.GetBytes($PatchedUrl)
+            $outBytes = [System.IO.File]::ReadAllBytes($LsBinary)
+            [System.Array]::Copy($replaceBytes, 0, $outBytes, $offset, $replaceBytes.Length)
+            [System.IO.File]::WriteAllBytes($LsBinary, $outBytes)
+            Write-Host "   OK - Binary patch uygulandi (offset: $offset)" -ForegroundColor Green
         } else {
             Write-Host "   UYARI: Hardcoded URL bulunamadi! Binary patch atlandi." -ForegroundColor Yellow
         }
