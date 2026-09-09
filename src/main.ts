@@ -257,15 +257,6 @@ app
     if (!HEADLESS) {
       setupApplicationMenu(url);
       const mainWindow = createWindow(url);
-      // Force a single reload after initial load to ensure fresh model list
-      mainWindow.webContents.once('did-finish-load', () => {
-        console.log('[Startup] Initial page loaded. Reloading once to refresh models...');
-        setTimeout(() => {
-          if (!mainWindow.isDestroyed()) {
-            (mainWindow.webContents as any).reload();
-          }
-        }, 500);
-      });
       if (app.dock) {
         const dockMenu = Menu.buildFromTemplate([
           {

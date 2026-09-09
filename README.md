@@ -665,6 +665,11 @@ Set `DEBUG=antigravity:*` for verbose logging (debug level captures stream parse
 
 ## Changelog
 
+### v2.1.1
+- **Critical Fix**: Fixed a startup crash (`a.getState is not a function`) when launching with Antigravity v2.12.2.
+- **Architecture**: Removed a hardcoded 500ms page reload during startup that interrupted the Antigravity frontend's state hydration.
+- **Compatibility**: Injected missing ContextBridge APIs (`getState`, `showOpenMultipleFolderDialog`, `revealInFilePicker`, `ideAPI`) into `preload.ts` that were introduced in Antigravity v2.12 and are required by the newer frontend renderer.
+
 ### v2.1.0
 - **TypeScript**: Full migration — all 23 source files converted from JavaScript to TypeScript (`dist/*.js` → `src/*.ts`)
 - **New Provider**: OpenRouter support (300+ models via unified API, OpenAI-compatible format)

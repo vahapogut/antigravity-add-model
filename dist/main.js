@@ -262,15 +262,6 @@ electron_1.app
     if (!HEADLESS) {
         (0, menu_1.setupApplicationMenu)(url);
         const mainWindow = (0, utils_1.createWindow)(url);
-        // Force a single reload after initial load to ensure fresh model list
-        mainWindow.webContents.once('did-finish-load', () => {
-            console.log('[Startup] Initial page loaded. Reloading once to refresh models...');
-            setTimeout(() => {
-                if (!mainWindow.isDestroyed()) {
-                    mainWindow.webContents.reload();
-                }
-            }, 500);
-        });
         if (electron_1.app.dock) {
             const dockMenu = electron_1.Menu.buildFromTemplate([
                 {

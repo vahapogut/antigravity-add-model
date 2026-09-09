@@ -20,10 +20,12 @@ interface UpdaterAPI {
   applyUpdate: () => Promise<void>;
   quitAndInstall: () => Promise<void>;
   checkForUpdates: () => Promise<void>;
+  getState: () => Promise<UpdaterState>;
 }
 
 interface DialogAPI {
   showOpenDialog: () => Promise<string | undefined>;
+  showOpenMultipleFolderDialog: () => Promise<string[] | undefined>;
 }
 
 interface NotificationOptions {
@@ -84,6 +86,11 @@ interface ElectronNativeAPI {
   zoomOut: () => void;
   resetZoom: () => void;
   openExternal: (url: string) => Promise<void>;
+  revealInFilePicker: (path: string) => Promise<void>;
+}
+
+interface IdeAPI {
+  isInstalled: () => Promise<boolean>;
 }
 
 interface CustomModelEntry {
@@ -129,10 +136,12 @@ const updaterAPI: UpdaterAPI = {
   applyUpdate: () => ipcRenderer.invoke('updater:apply'),
   quitAndInstall: () => ipcRenderer.invoke('updater:quit-and-install'),
   checkForUpdates: () => ipcRenderer.invoke('updater:check-for-updates'),
+  getState: () => ipcRenderer.invoke('updater:get-state'),
 };
 
 const dialogAPI: DialogAPI = {
   showOpenDialog: () => ipcRenderer.invoke('dialog:open-workspace'),
+  showOpenMultipleFolderDialog: () => ipcRenderer.invoke('dialog:open-workspaces'),
 };
 
 const notificationAPI: NotificationAPI = {
@@ -213,6 +222,11 @@ const electronNativeAPI: ElectronNativeAPI = {
     webFrame.setZoomLevel(0);
   },
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
+  revealInFilePicker: (path) => ipcRenderer.invoke('shell:reveal-in-file-picker', path),
+};
+
+const ideAPI: IdeAPI = {
+  isInstalled: () => ipcRenderer.invoke('ide:is-installed'),
 };
 
 // ─── Expose all APIs via contextBridge ──────────────────────────────────────
@@ -226,6 +240,7 @@ contextBridge.exposeInMainWorld('extensions', extensionsAPI);
 contextBridge.exposeInMainWorld('deepLink', deepLinkAPI);
 contextBridge.exposeInMainWorld('agent', agentAPI);
 contextBridge.exposeInMainWorld('electronNative', electronNativeAPI);
+contextBridge.exposeInMainWorld('ide', ideAPI);
 
 // ─── Renderer Augmentations (for TypeScript global type declarations) ──────
 
@@ -240,6 +255,7 @@ declare global {
     deepLink: DeepLinkAPI;
     agent: AgentAPI;
     electronNative: ElectronNativeAPI;
+    ide: IdeAPI;
   }
 }
 
@@ -1112,6 +1128,15 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // --- Network Interceptor for Model Injection --------------------------
 
+  function isSafeToIntercept(url: string): boolean {
+    // Never touch the internal Connect-RPC LanguageServerService channel —
+    // those responses are protocol-framed, not plain JSON, and rewriting
+    // them corrupts the renderer's RPC client / store hydration.
+    if (url.includes('exa.language_server_pb.')) return false;
+    if (url.includes('/LanguageServerService/')) return false;
+    return true;
+  }
+
   const customModelsCache: { models: any[]; ts: number } = { models: [], ts: 0 };
 
   async function getCustomModelsForInjection(): Promise<any[]> {
@@ -1142,7 +1167,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const xhr = this;
     const url: string = (xhr as any)._agy_url || '';
 
-    if (url.includes('GetAvailableModels') || url.includes('fetchAvailableModels')) {
+    if ((url.includes('GetAvailableModels') || url.includes('fetchAvailableModels')) && isSafeToIntercept(url)) {
       const origOnReady = xhr.onreadystatechange;
       xhr.onreadystatechange = async function (ev: Event) {
         if (xhr.readyState === 4 && xhr.status === 200) {
@@ -1189,7 +1214,11 @@ window.addEventListener('DOMContentLoaded', () => {
     const url = typeof input === 'string' ? input : (input as Request).url;
     const response = await origFetch.call(window, input, init);
 
-    if ((url.includes('GetAvailableModels') || url.includes('fetchAvailableModels')) && response.ok) {
+    if ((url.includes('GetAvailableModels') || url.includes('fetchAvailableModels')) && isSafeToIntercept(url) && response.ok) {
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.startsWith('application/json')) {
+        return response;
+      }
       const customModels = await getCustomModelsForInjection();
       if (customModels && customModels.length > 0) {
         try {

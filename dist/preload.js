@@ -21,9 +21,11 @@ const updaterAPI = {
     applyUpdate: () => electron_1.ipcRenderer.invoke('updater:apply'),
     quitAndInstall: () => electron_1.ipcRenderer.invoke('updater:quit-and-install'),
     checkForUpdates: () => electron_1.ipcRenderer.invoke('updater:check-for-updates'),
+    getState: () => electron_1.ipcRenderer.invoke('updater:get-state'),
 };
 const dialogAPI = {
     showOpenDialog: () => electron_1.ipcRenderer.invoke('dialog:open-workspace'),
+    showOpenMultipleFolderDialog: () => electron_1.ipcRenderer.invoke('dialog:open-workspaces'),
 };
 const notificationAPI = {
     send: (options) => electron_1.ipcRenderer.invoke('notification:send', options),
@@ -97,6 +99,10 @@ const electronNativeAPI = {
         electron_1.webFrame.setZoomLevel(0);
     },
     openExternal: (url) => electron_1.ipcRenderer.invoke('shell:open-external', url),
+    revealInFilePicker: (path) => electron_1.ipcRenderer.invoke('shell:reveal-in-file-picker', path),
+};
+const ideAPI = {
+    isInstalled: () => electron_1.ipcRenderer.invoke('ide:is-installed'),
 };
 // ─── Expose all APIs via contextBridge ──────────────────────────────────────
 electron_1.contextBridge.exposeInMainWorld('electronUpdater', updaterAPI);
@@ -108,6 +114,7 @@ electron_1.contextBridge.exposeInMainWorld('extensions', extensionsAPI);
 electron_1.contextBridge.exposeInMainWorld('deepLink', deepLinkAPI);
 electron_1.contextBridge.exposeInMainWorld('agent', agentAPI);
 electron_1.contextBridge.exposeInMainWorld('electronNative', electronNativeAPI);
+electron_1.contextBridge.exposeInMainWorld('ide', ideAPI);
 // ─── Custom Models UI Injection ─────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
     function findRefreshButton() {
@@ -903,6 +910,16 @@ window.addEventListener('DOMContentLoaded', () => {
         }
     }, 1500);
     // --- Network Interceptor for Model Injection --------------------------
+    function isSafeToIntercept(url) {
+        // Never touch the internal Connect-RPC LanguageServerService channel —
+        // those responses are protocol-framed, not plain JSON, and rewriting
+        // them corrupts the renderer's RPC client / store hydration.
+        if (url.includes('exa.language_server_pb.'))
+            return false;
+        if (url.includes('/LanguageServerService/'))
+            return false;
+        return true;
+    }
     const customModelsCache = { models: [], ts: 0 };
     async function getCustomModelsForInjection() {
         if (Date.now() - customModelsCache.ts < 30000)
@@ -925,7 +942,7 @@ window.addEventListener('DOMContentLoaded', () => {
     XMLHttpRequest.prototype.send = function (body) {
         const xhr = this;
         const url = xhr._agy_url || '';
-        if (url.includes('GetAvailableModels') || url.includes('fetchAvailableModels')) {
+        if ((url.includes('GetAvailableModels') || url.includes('fetchAvailableModels')) && isSafeToIntercept(url)) {
             const origOnReady = xhr.onreadystatechange;
             xhr.onreadystatechange = async function (ev) {
                 if (xhr.readyState === 4 && xhr.status === 200) {
@@ -972,7 +989,11 @@ window.addEventListener('DOMContentLoaded', () => {
     window.fetch = async function (input, init) {
         const url = typeof input === 'string' ? input : input.url;
         const response = await origFetch.call(window, input, init);
-        if ((url.includes('GetAvailableModels') || url.includes('fetchAvailableModels')) && response.ok) {
+        if ((url.includes('GetAvailableModels') || url.includes('fetchAvailableModels')) && isSafeToIntercept(url) && response.ok) {
+            const contentType = response.headers.get('content-type') || '';
+            if (!contentType.startsWith('application/json')) {
+                return response;
+            }
             const customModels = await getCustomModelsForInjection();
             if (customModels && customModels.length > 0) {
                 try {
