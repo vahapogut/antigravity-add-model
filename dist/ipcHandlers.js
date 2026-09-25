@@ -260,14 +260,14 @@ function registerIpcHandlers(storageManager) {
                 }
                 const url = new URL(urlStr);
                 const client = url.protocol === 'https:' ? https : http;
-                const options = {
-                    method: 'HEAD',
+                const baseOptions = {
                     hostname: url.hostname,
                     port: parseInt(url.port || (url.protocol === 'https:' ? '443' : '80'), 10),
                     path: url.pathname + url.search,
                     timeout: 10000,
                     rejectUnauthorized: !model.allowUnauthorized,
                 };
+                const headers = {};
                 // Add auth header
                 if (model.apiKey && model.apiKey !== 'none') {
                     let key = model.apiKey;
@@ -277,65 +277,138 @@ function registerIpcHandlers(storageManager) {
                     catch {
                         /* key might not be encrypted */
                     }
-                    if (model.provider === 'anthropic') {
-                        options.headers = {
-                            'x-api-key': key,
-                            'anthropic-version': '2025-04-01',
-                        };
-                    }
-                    else if (model.provider === 'google') {
-                        options.headers = {
-                            'x-goog-api-key': key,
-                        };
-                    }
-                    else {
-                        options.headers = {
-                            Authorization: `Bearer ${key}`,
-                        };
-                    }
-                }
-                const req = client.request(options, (res) => {
-                    if (res.statusCode >= 200 && res.statusCode < 400) {
-                        resolve({
-                            success: true,
-                            status: res.statusCode,
-                            message: `Endpoint reachable (HTTP ${res.statusCode})`,
-                        });
-                    }
-                    else {
-                        const guidance = {
-                            401: 'Authentication rejected (HTTP 401) — check your API key and provider configuration',
-                            403: 'Access denied (HTTP 403) — check provider permissions, account eligibility, and location availability',
-                            404: 'Endpoint not found (HTTP 404) — check the API URL and provider model/route availability',
-                            405: 'Endpoint does not support HEAD (HTTP 405) — this connection test cannot verify model access',
-                            429: 'Rate limited (HTTP 429) — check provider quota and retry later',
-                        };
+                    if (key.startsWith('DECRYPTION_FAILED')) {
                         resolve({
                             success: false,
-                            status: res.statusCode,
-                            error: guidance[res.statusCode] || `Server returned HTTP ${res.statusCode}`,
+                            error: 'Stored API key could not be decrypted on this system — delete the model and re-enter its key',
                         });
+                        return;
                     }
-                    res.resume(); // consume response to free memory
+                    if (model.provider === 'anthropic') {
+                        headers['x-api-key'] = key;
+                        headers['anthropic-version'] = '2025-04-01';
+                    }
+                    else if (model.provider === 'google') {
+                        headers['x-goog-api-key'] = key;
+                    }
+                    else {
+                        headers['Authorization'] = `Bearer ${key}`;
+                    }
+                }
+                // OpenCode Go/Zen rejects requests without a session id (HTTP 400).
+                if (/opencode\.ai/i.test(model.apiUrl || '')) {
+                    headers['x-opencode-session'] =
+                        'antigravity-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+                    headers['User-Agent'] = 'antigravity-add-model/2.0';
+                }
+                const guidance = {
+                    401: 'Authentication rejected (HTTP 401) — check your API key and provider configuration',
+                    403: 'Access denied (HTTP 403) — check provider permissions, account eligibility, and location availability',
+                    404: 'Endpoint not found (HTTP 404) — check the API URL and provider model/route availability',
+                    405: 'Endpoint does not support HEAD (HTTP 405) — this connection test cannot verify model access',
+                    429: 'Rate limited (HTTP 429) — check provider quota and retry later',
+                };
+                const utf8ByteLength = (value) => {
+                    let bytes = 0;
+                    for (const ch of value) {
+                        const cp = ch.codePointAt(0);
+                        bytes += cp <= 0x7f ? 1 : cp <= 0x7ff ? 2 : cp <= 0xffff ? 3 : 4;
+                    }
+                    return bytes;
+                };
+                const probe = (method, body) => new Promise((done) => {
+                    const opts = {
+                        ...baseOptions,
+                        method,
+                        headers: body === undefined
+                            ? headers
+                            : {
+                                ...headers,
+                                'Content-Type': 'application/json',
+                                'Content-Length': String(utf8ByteLength(body)),
+                            },
+                    };
+                    const req = client.request(opts, (res) => {
+                        done({ status: res.statusCode });
+                        res.resume(); // consume response to free memory
+                    });
+                    req.setTimeout(10000, () => {
+                        req.destroy();
+                        done({ error: 'Connection timed out after 10 seconds' });
+                    });
+                    req.on('error', (err) => {
+                        let message = err.message;
+                        if (message.includes('ECONNREFUSED')) {
+                            message = 'Connection refused — server may not be running';
+                        }
+                        else if (message.includes('ENOTFOUND') || message.includes('getaddrinfo')) {
+                            message = 'Host not found — check the API URL';
+                        }
+                        else if (message.includes('CERT') || message.includes('certificate') || message.includes('SSL')) {
+                            message = 'SSL/TLS error — try enabling "allowUnauthorized" for self-signed certs';
+                        }
+                        done({ error: message });
+                    });
+                    req.end(body);
                 });
-                req.setTimeout(10000, () => {
-                    req.destroy();
-                    resolve({ success: false, error: 'Connection timed out after 10 seconds' });
-                });
-                req.on('error', (err) => {
-                    let message = err.message;
-                    if (message.includes('ECONNREFUSED')) {
-                        message = 'Connection refused — server may not be running';
+                const isOpenAiCompatible = model.provider === 'openai' ||
+                    model.provider === 'custom' ||
+                    model.provider === 'ollama' ||
+                    model.provider === 'openrouter';
+                void (async () => {
+                    const head = await probe('HEAD');
+                    if (head.status !== undefined && head.status >= 200 && head.status < 400) {
+                        resolve({
+                            success: true,
+                            status: head.status,
+                            message: `Endpoint reachable (HTTP ${head.status})`,
+                        });
+                        return;
                     }
-                    else if (message.includes('ENOTFOUND') || message.includes('getaddrinfo')) {
-                        message = 'Host not found — check the API URL';
+                    // Many chat/completions routes answer HEAD with 404/405, which makes the
+                    // probe a false negative. Retry with a minimal POST so the request
+                    // actually reaches the generation route and can verify auth/routing.
+                    if (isOpenAiCompatible && (head.status === 404 || head.status === 405)) {
+                        const body = JSON.stringify({
+                            model: model.externalModelName || 'gpt-4o-mini',
+                            messages: [{ role: 'user', content: 'ping' }],
+                            max_tokens: 1,
+                            stream: false,
+                        });
+                        const post = await probe('POST', body);
+                        const s = post.status;
+                        // 2xx: real answer. 400/422: the API itself rejected the request, so
+                        // authentication and routing are working. Other codes are meaningful.
+                        if (s !== undefined && ((s >= 200 && s < 400) || s === 400 || s === 422)) {
+                            resolve({
+                                success: true,
+                                status: s,
+                                message: `Endpoint reachable (HTTP ${s} — auth/routing OK)`,
+                            });
+                            return;
+                        }
+                        if (s !== undefined && guidance[s]) {
+                            resolve({ success: false, status: s, error: guidance[s] });
+                            return;
+                        }
+                        if (post.error) {
+                            resolve({ success: false, error: post.error });
+                            return;
+                        }
+                        resolve({ success: false, status: s, error: `Server returned HTTP ${s}` });
+                        return;
                     }
-                    else if (message.includes('CERT') || message.includes('certificate') || message.includes('SSL')) {
-                        message = 'SSL/TLS error — try enabling "allowUnauthorized" for self-signed certs';
+                    if (head.error) {
+                        resolve({ success: false, error: head.error });
+                        return;
                     }
-                    resolve({ success: false, error: message });
-                });
-                req.end();
+                    const st = head.status;
+                    resolve({
+                        success: false,
+                        status: st,
+                        error: (st !== undefined && guidance[st]) || `Server returned HTTP ${st}`,
+                    });
+                })();
             }
             catch (err) {
                 resolve({ success: false, error: `Invalid URL: ${err.message}` });

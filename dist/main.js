@@ -260,6 +260,7 @@ electron_1.app
     }
     // Initial window — opened once after the LS has successfully started.
     if (!HEADLESS) {
+        (0, languageServer_1.setupLocalCertTrust)();
         (0, menu_1.setupApplicationMenu)(url);
         const mainWindow = (0, utils_1.createWindow)(url);
         if (electron_1.app.dock) {

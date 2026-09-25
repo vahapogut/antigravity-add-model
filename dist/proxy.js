@@ -50,6 +50,20 @@ const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const electron_1 = require("electron");
 const electron_log_1 = __importDefault(require("electron-log"));
+const OPENCODE_USER_AGENT = 'antigravity-add-model/2.0';
+let openCodeSessionId = null;
+/**
+ * OpenCode Go/Zen rejects requests that omit `x-opencode-session`, and its docs
+ * ask clients to identify themselves rather than masquerade as a generic SDK.
+ * Reuse one stable id per proxy process so routing/prompt caching stays coherent.
+ */
+function getOpenCodeSessionId() {
+    if (!openCodeSessionId) {
+        openCodeSessionId =
+            'agy-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+    }
+    return openCodeSessionId;
+}
 // ─── Imports ──────────────────────────────────────────────────────────────
 let server = null;
 let proxyPort = 0;
@@ -347,6 +361,15 @@ function handleCustomModelRequest(res, model, geminiBody, isStream, retryCount =
     const provider = model.provider === 'custom' || model.provider === 'openrouter' ? 'openai' : model.provider;
     const payload = registry.translateRequest(provider, geminiBody, model.externalModelName);
     const headers = registry.getProviderHeaders(provider, model.apiKey);
+    if (/^DECRYPTION_FAILED/.test(model.apiKey || '')) {
+        electron_log_1.default.error(`[Proxy] API key for ${model.name} could not be decrypted on this system. ` +
+            'Delete the model and re-enter its key in Settings → Models → Custom Models.');
+    }
+    // OpenCode Go/Zen requires a session id header and a descriptive user agent.
+    if (/opencode\.ai/i.test(model.apiUrl || '')) {
+        headers['x-opencode-session'] = getOpenCodeSessionId();
+        headers['User-Agent'] = OPENCODE_USER_AGENT;
+    }
     if (isStream && registry.supportsStreaming(provider)) {
         payload.stream = true;
     }

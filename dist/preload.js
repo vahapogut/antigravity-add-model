@@ -141,6 +141,36 @@ window.addEventListener('DOMContentLoaded', () => {
             contentBlock,
         };
     }
+    /**
+     * Antigravity 2.17+ moved MCP under "Customizations" and its refresh control
+     * is now an icon button with no text, so the MCP-based anchor in
+     * `findMcpSectionContainer` no longer resolves. Anchor to the
+     * Settings → Models screen instead, using its "Models & Usage" heading, so the
+     * Custom Models dashboard is appended to that pane.
+     */
+    function findModelsRefreshButton() {
+        const buttons = Array.from(document.querySelectorAll('button'));
+        return (buttons.find((b) => /refresh quota/i.test(`${b.getAttribute('aria-label') || ''} ${b.getAttribute('title') || ''}`)) || null);
+    }
+    function findModelsScreenLayout() {
+        const candidates = Array.from(document.querySelectorAll('h1,h2,h3,h4,span,div')).filter((e) => e.children.length === 0 && (e.textContent || '').trim() === 'Models & Usage');
+        const heading = candidates.find((e) => e.getClientRects().length > 0);
+        if (!heading)
+            return null;
+        let el = heading;
+        while (el && el.parentElement) {
+            const parentClass = (el.parentElement.className || '').toString();
+            if (parentClass.includes('overflow-y-auto')) {
+                return {
+                    mainContainer: el,
+                    heading,
+                    refreshBtn: findModelsRefreshButton(),
+                };
+            }
+            el = el.parentElement;
+        }
+        return null;
+    }
     // ─── Provider Icons & Status Helpers ──────────────────────────────
     const PROVIDER_ICONS = {
         openai: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>`,
@@ -316,6 +346,7 @@ window.addEventListener('DOMContentLoaded', () => {
                                 provider: model.provider,
                                 apiKey: model.apiKey,
                                 allowUnauthorized: model.allowUnauthorized,
+                                externalModelName: model.externalModelName,
                             });
                             if (result.success) {
                                 statusDot.style.backgroundColor = '#22c55e'; // green
@@ -401,12 +432,21 @@ window.addEventListener('DOMContentLoaded', () => {
         }
     }
     async function injectCustomModelsSection() {
-        const layout = findMcpSectionContainer();
-        if (!layout)
-            return;
-        const { mainContainer, headerRow, contentBlock } = layout;
         if (document.getElementById('agy-custom-models-section'))
             return;
+        const layout = findMcpSectionContainer();
+        const modelsLayout = layout ? null : findModelsScreenLayout();
+        if (!layout && !modelsLayout)
+            return;
+        const mainContainer = layout
+            ? layout.mainContainer
+            : modelsLayout.mainContainer;
+        const headerRow = layout ? layout.headerRow : null;
+        const contentBlock = layout ? layout.contentBlock : null;
+        const styleHeading = layout
+            ? headerRow.firstElementChild
+            : modelsLayout.heading;
+        const styleButton = findRefreshButton() || (modelsLayout ? modelsLayout.refreshBtn : null);
         const section = document.createElement('div');
         section.id = 'agy-custom-models-section';
         section.style.marginTop = '24px';
@@ -414,13 +454,15 @@ window.addEventListener('DOMContentLoaded', () => {
         section.style.flexDirection = 'column';
         section.style.gap = '12px';
         const newHeaderRow = document.createElement('div');
-        newHeaderRow.className = headerRow.className;
-        newHeaderRow.style.cssText = headerRow.style.cssText;
+        if (headerRow) {
+            newHeaderRow.className = headerRow.className;
+            newHeaderRow.style.cssText = headerRow.style.cssText;
+        }
         newHeaderRow.style.display = 'flex';
         newHeaderRow.style.justifyContent = 'space-between';
         newHeaderRow.style.alignItems = 'center';
         newHeaderRow.style.marginBottom = '8px';
-        const originalHeading = headerRow.firstElementChild;
+        const originalHeading = styleHeading;
         const newHeading = document.createElement(originalHeading ? originalHeading.tagName : 'div');
         if (originalHeading) {
             newHeading.className = originalHeading.className;
@@ -428,7 +470,7 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         newHeading.textContent = 'Custom Models';
         const newBtnGroup = document.createElement('div');
-        const originalBtnGroup = headerRow.lastElementChild;
+        const originalBtnGroup = headerRow ? headerRow.lastElementChild : null;
         if (originalBtnGroup) {
             newBtnGroup.className = originalBtnGroup.className;
             newBtnGroup.style.cssText = originalBtnGroup.style.cssText;
@@ -439,7 +481,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const addModelBtn = document.createElement('button');
         addModelBtn.id = 'agy-add-model-btn';
         addModelBtn.textContent = 'Add Model';
-        const refreshBtn = findRefreshButton();
+        const refreshBtn = styleButton;
         if (refreshBtn) {
             addModelBtn.className = refreshBtn.className;
             addModelBtn.style.cssText = refreshBtn.style.cssText;
@@ -737,6 +779,7 @@ window.addEventListener('DOMContentLoaded', () => {
                     apiUrl,
                     provider,
                     apiKey,
+                    externalModelName: modelId,
                 });
                 if (result.success) {
                     urlStatus.style.backgroundColor = '#22c55e';
@@ -907,6 +950,14 @@ window.addEventListener('DOMContentLoaded', () => {
             }
             // Re-initialize after a short delay (for new DOM to render)
             setTimeout(setupInjectionObserver, 500);
+            return;
+        }
+        // The Settings screens stay mounted and the observer disconnects after the
+        // first successful injection, so re-inject if the Models pane is visible and
+        // our section was removed (e.g. after a React remount).
+        if (location.search.includes('settingsOpen=true') &&
+            !document.getElementById('agy-custom-models-section')) {
+            void injectCustomModelsSection();
         }
     }, 1500);
     // --- Network Interceptor for Model Injection --------------------------

@@ -1,1 +1,1 @@
-{"version":3,"file":"ipcHandlers.d.ts","sourceRoot":"","sources":["../src/ipcHandlers.ts"],"names":[],"mappings":"AAQA,OAAO,EAAE,cAAc,EAAE,MAAM,WAAW,CAAC;AAM3C;;GAEG;AACH,wBAAgB,mBAAmB,CAAC,cAAc,EAAE,cAAc,GAAG,IAAI,CAuZxE"}
+{"version":3,"file":"ipcHandlers.d.ts","sourceRoot":"","sources":["../src/ipcHandlers.ts"],"names":[],"mappings":"AAQA,OAAO,EAAE,cAAc,EAAE,MAAM,WAAW,CAAC;AAM3C;;GAEG;AACH,wBAAgB,mBAAmB,CAAC,cAAc,EAAE,cAAc,GAAG,IAAI,CAifxE"}

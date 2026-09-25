@@ -99,6 +99,7 @@ interface TestModelParams {
     provider: string;
     apiKey?: string;
     allowUnauthorized?: boolean;
+    externalModelName?: string;
 }
 interface ConnectionTestResult {
     success: boolean;

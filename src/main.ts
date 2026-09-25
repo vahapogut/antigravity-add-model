@@ -255,6 +255,7 @@ app
 
     // Initial window — opened once after the LS has successfully started.
     if (!HEADLESS) {
+      setupLocalCertTrust();
       setupApplicationMenu(url);
       const mainWindow = createWindow(url);
       if (app.dock) {
