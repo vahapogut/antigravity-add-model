@@ -324,7 +324,7 @@ describe('mapAnthropicToGemini', () => {
       stop_reason: 'tool_use',
     };
     const result = mapAnthropicToGemini(res, 'claude-3-5-sonnet-latest');
-    expect(result.candidates[0].finishReason).toBe('TOOL_CALL');
+    expect(result.candidates[0].finishReason).toBe('STOP');
     const fcParts = result.candidates[0].content.parts.filter((p) => p.functionCall);
     expect(fcParts).toHaveLength(1);
     expect(fcParts[0].functionCall!.name).toBe('search');
@@ -415,7 +415,7 @@ describe('mapAnthropicChunkToGemini', () => {
       streamKey,
       schemas,
     );
-    expect(result?.finishReason).toBe('TOOL_CALL');
+    expect(result?.finishReason).toBe('STOP');
     expect(result?.content.parts).toEqual([{ functionCall: { name, args, id: 'fragmented-call' } }]);
     expect(shared.activeStreamContexts.has(streamKey)).toBe(false);
   });
@@ -494,7 +494,7 @@ describe('mapAnthropicChunkToGemini', () => {
       'claude-3-5-sonnet-latest',
     );
     expect(result).not.toBeNull();
-    expect(result!.finishReason).toBe('TOOL_CALL');
+    expect(result!.finishReason).toBe('STOP');
   });
 
   it('should handle message_stop', () => {
