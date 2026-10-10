@@ -313,7 +313,7 @@ describe('mapOpenAIToGemini', () => {
       { text: explanation },
       { functionCall: { name: 'write_to_file', args, id: 'retry-write' } },
     ]);
-    expect(result.candidates[0].finishReason).toBe('TOOL_CALL');
+    expect(result.candidates[0].finishReason).toBe('STOP');
   });
 
   it('keeps valid write_to_file arguments within the schema sent to the provider', () => {
@@ -417,7 +417,7 @@ describe('mapOpenAIToGemini', () => {
       usage: { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 },
     };
     const result = mapOpenAIToGemini(res, 'gpt-4o');
-    expect(result.candidates[0].finishReason).toBe('TOOL_CALL');
+    expect(result.candidates[0].finishReason).toBe('STOP');
     expect(result.candidates[0].content.parts[0].functionCall).toBeDefined();
     expect(result.candidates[0].content.parts[0].functionCall!.name).toBe('search');
   });
@@ -436,7 +436,7 @@ describe('mapOpenAIToGemini', () => {
       usage: { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 },
     };
     const result = mapOpenAIToGemini(res, 'deepseek-v4');
-    expect(result.candidates[0].finishReason).toBe('TOOL_CALL');
+    expect(result.candidates[0].finishReason).toBe('STOP');
     const fcParts = result.candidates[0].content.parts.filter((p) => p.functionCall);
     expect(fcParts.length).toBeGreaterThan(0);
   });
@@ -517,7 +517,7 @@ describe('mapOpenAIChunkToGemini', () => {
         streamKey,
         schemas,
       );
-      expect(result?.finishReason).toBe('TOOL_CALL');
+      expect(result?.finishReason).toBe('STOP');
       expect(result?.content.parts).toEqual([{ functionCall: { name, args, id: 'fragmented-call' } }]);
       expect(shared.activeStreamContexts.has(streamKey)).toBe(false);
     });
@@ -574,7 +574,7 @@ describe('mapOpenAIChunkToGemini', () => {
       'gpt-4o',
     );
     expect(result).not.toBeNull();
-    expect(result!.finishReason).toBe('TOOL_CALL');
+    expect(result!.finishReason).toBe('STOP');
   });
 
   it('should handle stop finish with pending tool calls', () => {

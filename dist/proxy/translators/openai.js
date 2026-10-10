@@ -334,7 +334,7 @@ function mapOpenAIToGemini(openAiRes, modelName, toolSchemas) {
         if (choice.message.content)
             parts.unshift({ text: choice.message.content });
         return {
-            candidates: [{ content: { parts, role: 'model' }, finishReason: 'TOOL_CALL', index: 0 }],
+            candidates: [{ content: { parts, role: 'model' }, finishReason: 'STOP', index: 0 }],
             usageMetadata: {
                 promptTokenCount: openAiRes.usage?.prompt_tokens || 0,
                 candidatesTokenCount: openAiRes.usage?.completion_tokens || 0,
@@ -353,7 +353,7 @@ function mapOpenAIToGemini(openAiRes, modelName, toolSchemas) {
         if (dsml.cleanText)
             parts.unshift({ text: dsml.cleanText });
         return {
-            candidates: [{ content: { parts, role: 'model' }, finishReason: 'TOOL_CALL', index: 0 }],
+            candidates: [{ content: { parts, role: 'model' }, finishReason: 'STOP', index: 0 }],
             usageMetadata: {
                 promptTokenCount: openAiRes.usage?.prompt_tokens || 0,
                 candidatesTokenCount: openAiRes.usage?.completion_tokens || 0,
@@ -418,7 +418,7 @@ function mapOpenAIChunkToGemini(chunk, modelName, streamKey, toolSchemas) {
             return { functionCall: { name: tr.name, args: tr.args } };
         });
         context.accumulatedText = '';
-        return { content: { parts, role: 'model' }, finishReason: 'TOOL_CALL', index: 0 };
+        return { content: { parts, role: 'model' }, finishReason: 'STOP', index: 0 };
     }
     const finishReason = choice.finish_reason;
     if (finishReason === 'stop' || finishReason === 'length') {
@@ -451,7 +451,7 @@ function mapOpenAIChunkToGemini(chunk, modelName, streamKey, toolSchemas) {
                 return { functionCall: { name: translated.name, args: translated.args, id: tc.id } };
             });
             shared_1.activeStreamContexts.delete(streamId);
-            return { content: { parts, role: 'model' }, finishReason: 'TOOL_CALL', index: 0 };
+            return { content: { parts, role: 'model' }, finishReason: 'STOP', index: 0 };
         }
         // Check for accumulated DSML tool calls
         if (context.accumulatedText) {
@@ -465,7 +465,7 @@ function mapOpenAIChunkToGemini(chunk, modelName, streamKey, toolSchemas) {
                 if (dsml2.cleanText)
                     parts.unshift({ text: dsml2.cleanText });
                 shared_1.activeStreamContexts.delete(streamId);
-                return { content: { parts, role: 'model' }, finishReason: 'TOOL_CALL', index: 0 };
+                return { content: { parts, role: 'model' }, finishReason: 'STOP', index: 0 };
             }
         }
         shared_1.activeStreamContexts.delete(streamId);
@@ -501,7 +501,7 @@ function mapOpenAIChunkToGemini(chunk, modelName, streamKey, toolSchemas) {
             return { functionCall: { name: translated.name, args: translated.args, id: tc.id } };
         });
         shared_1.activeStreamContexts.delete(streamId);
-        return { content: { parts, role: 'model' }, finishReason: 'TOOL_CALL', index: 0 };
+        return { content: { parts, role: 'model' }, finishReason: 'STOP', index: 0 };
     }
     if (text) {
         return { content: { parts: [{ text }], role: 'model' }, finishReason: 'OTHER', index: 0 };

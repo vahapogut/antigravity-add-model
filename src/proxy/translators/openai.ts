@@ -464,7 +464,7 @@ export function mapOpenAIToGemini(
     });
     if (choice.message.content) parts.unshift({ text: choice.message.content });
     return {
-      candidates: [{ content: { parts, role: 'model' }, finishReason: 'TOOL_CALL', index: 0 }],
+      candidates: [{ content: { parts, role: 'model' }, finishReason: 'STOP', index: 0 }],
       usageMetadata: {
         promptTokenCount: openAiRes.usage?.prompt_tokens || 0,
         candidatesTokenCount: openAiRes.usage?.completion_tokens || 0,
@@ -483,7 +483,7 @@ export function mapOpenAIToGemini(
     });
     if (dsml.cleanText) parts.unshift({ text: dsml.cleanText });
     return {
-      candidates: [{ content: { parts, role: 'model' }, finishReason: 'TOOL_CALL', index: 0 }],
+      candidates: [{ content: { parts, role: 'model' }, finishReason: 'STOP', index: 0 }],
       usageMetadata: {
         promptTokenCount: openAiRes.usage?.prompt_tokens || 0,
         candidatesTokenCount: openAiRes.usage?.completion_tokens || 0,
@@ -552,7 +552,7 @@ export function mapOpenAIChunkToGemini(
       return { functionCall: { name: tr.name, args: tr.args as Record<string, unknown> } };
     });
     context.accumulatedText = '';
-    return { content: { parts, role: 'model' }, finishReason: 'TOOL_CALL', index: 0 };
+    return { content: { parts, role: 'model' }, finishReason: 'STOP', index: 0 };
   }
 
   const finishReason = choice.finish_reason;
@@ -585,7 +585,7 @@ export function mapOpenAIChunkToGemini(
         return { functionCall: { name: translated.name, args: translated.args as Record<string, unknown>, id: tc.id } };
       });
       activeStreamContexts.delete(streamId);
-      return { content: { parts, role: 'model' }, finishReason: 'TOOL_CALL', index: 0 };
+      return { content: { parts, role: 'model' }, finishReason: 'STOP', index: 0 };
     }
     // Check for accumulated DSML tool calls
     if (context.accumulatedText) {
@@ -598,7 +598,7 @@ export function mapOpenAIChunkToGemini(
         });
         if (dsml2.cleanText) parts.unshift({ text: dsml2.cleanText });
         activeStreamContexts.delete(streamId);
-        return { content: { parts, role: 'model' }, finishReason: 'TOOL_CALL', index: 0 };
+        return { content: { parts, role: 'model' }, finishReason: 'STOP', index: 0 };
       }
     }
     activeStreamContexts.delete(streamId);
@@ -634,7 +634,7 @@ export function mapOpenAIChunkToGemini(
       return { functionCall: { name: translated.name, args: translated.args as Record<string, unknown>, id: tc.id } };
     });
     activeStreamContexts.delete(streamId);
-    return { content: { parts, role: 'model' }, finishReason: 'TOOL_CALL', index: 0 };
+    return { content: { parts, role: 'model' }, finishReason: 'STOP', index: 0 };
   }
 
   if (text) {
