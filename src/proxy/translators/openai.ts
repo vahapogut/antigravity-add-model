@@ -184,7 +184,7 @@ function normalizeSchemaIntegerBounds(schema: unknown): void {
     'minProperties', 'maxProperties', 'minContains', 'maxContains',
   ]) {
     const value = node[key];
-    if (typeof value === 'string' && /^(0|[1-9]\\d*)$/.test(value)) {
+    if (typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value)) {
       const parsed = Number(value);
       if (Number.isSafeInteger(parsed)) node[key] = parsed;
     }
