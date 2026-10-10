@@ -175,6 +175,39 @@ interface DSMLParsedResult {
 
 // ─── REQUEST: Gemini → OpenAI ──────────────────────────────────────────────
 
+/** Normalize string-encoded JSON Schema integer bounds for OpenAI-compatible APIs. */
+function normalizeSchemaIntegerBounds(schema: unknown): void {
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return;
+  const node = schema as Record<string, unknown>;
+  for (const key of [
+    'minLength', 'maxLength', 'minItems', 'maxItems',
+    'minProperties', 'maxProperties', 'minContains', 'maxContains',
+  ]) {
+    const value = node[key];
+    if (typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value)) {
+      const parsed = Number(value);
+      if (Number.isSafeInteger(parsed)) node[key] = parsed;
+    }
+  }
+  for (const key of ['properties', 'patternProperties', '$defs', 'definitions', 'dependentSchemas']) {
+    const children = node[key];
+    if (children && typeof children === 'object' && !Array.isArray(children)) {
+      for (const child of Object.values(children)) normalizeSchemaIntegerBounds(child);
+    }
+  }
+  for (const key of [
+    'items', 'additionalProperties', 'contains', 'not', 'if', 'then', 'else', 'propertyNames',
+  ]) {
+    normalizeSchemaIntegerBounds(node[key]);
+  }
+  for (const key of ['prefixItems', 'allOf', 'anyOf', 'oneOf']) {
+    const variants = node[key];
+    if (Array.isArray(variants)) {
+      for (const variant of variants) normalizeSchemaIntegerBounds(variant);
+    }
+  }
+}
+
 function mapGeminiToolsToOpenAI(geminiTools: GeminiTool[]): OpenAITool[] {
   if (!geminiTools || !Array.isArray(geminiTools)) return [];
   const openaiTools: OpenAITool[] = [];
@@ -191,6 +224,7 @@ function mapGeminiToolsToOpenAI(geminiTools: GeminiTool[]): OpenAITool[] {
         if (params.properties) {
           fixParamTypes(params.properties as Record<string, unknown>);
         }
+        normalizeSchemaIntegerBounds(params);
         openaiTools.push({
           type: 'function',
           function: {

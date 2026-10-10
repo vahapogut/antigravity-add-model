@@ -80,6 +80,39 @@ describe('mapGeminiToOpenAI', () => {
     expect(parametersJsonSchema).toEqual(original);
   });
 
+  it('normalizes string integer schema bounds without mutating input', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        entries: { type: 'array', minItems: '1', maxItems: '10', items: { type: 'string', minLength: '2' } },
+        mode: { oneOf: [{ type: 'string', maxLength: '20', default: '1', enum: ['1', '2'] }] },
+      },
+      definitions: { thing: { type: 'object', minProperties: '1' } },
+    };
+    const original = structuredClone(schema);
+    const result = mapGeminiToOpenAI(
+      { contents: [], tools: [{ functionDeclarations: [{ name: 'list_resources', parametersJsonSchema: schema }] }] },
+      'deepseek-flash',
+    );
+    expect(result.tools![0].function.parameters).toMatchObject({
+      properties: {
+        entries: { minItems: 1, maxItems: 10, items: { minLength: 2 } },
+        mode: { oneOf: [{ maxLength: 20, default: '1', enum: ['1', '2'] }] },
+      },
+      definitions: { thing: { minProperties: 1 } },
+    });
+    expect(schema).toEqual(original);
+  });
+
+  it('preserves invalid and unsafe integer constraints', () => {
+    const schema = { type: 'object', minProperties: '-1', maxProperties: '9007199254740992' };
+    const result = mapGeminiToOpenAI(
+      { contents: [], tools: [{ functionDeclarations: [{ name: 'list_resources', parametersJsonSchema: schema }] }] },
+      'deepseek-flash',
+    );
+    expect(result.tools![0].function.parameters).toEqual(schema);
+  });
+
   it('should convert systemInstruction to system message', () => {
     const body = {
       systemInstruction: { parts: [{ text: 'You are helpful.' }] },
