@@ -156,6 +156,139 @@ async function readToolCalls(response: Response, stream: boolean) {
 }
 
 describe('real upstream HTTP routing', () => {
+  it.each([1, 2])('preserves %i tool calls whose final arguments arrive with finish_reason', async (count) => {
+    const upstream = await serve((_req, res) => {
+      res.setHeader('Content-Type', 'text/event-stream');
+      sse(res, { choices: [{ delta: { content: 'Checking now.' } }] });
+      for (let index = 0; index < count; index++) {
+        sse(res, {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index,
+                    id: `call-${index}`,
+                    function: {
+                      name: 'run_command',
+                      arguments: '{"CommandLine":"node --version"',
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        });
+      }
+      sse(res, {
+        choices: [
+          {
+            delta: {
+              tool_calls: Array.from({ length: count }, (_, index) => ({
+                index,
+                function: { arguments: '}' },
+              })),
+            },
+            finish_reason: 'tool_calls',
+          },
+        ],
+      });
+      sse(res, '[DONE]');
+      res.end();
+    });
+    const configured = model(upstream);
+    const response = await fetch(await proxy([configured], true));
+    const text = await response.text();
+    expect(text).not.toContain('event: error');
+    const calls = text
+      .split('\n')
+      .filter((line) => line.startsWith('data: '))
+      .flatMap((line) => JSON.parse(line.slice(6)).candidates || [])
+      .flatMap((candidate) => candidate.content.parts)
+      .filter((part) => part.functionCall)
+      .map((part) => part.functionCall);
+    expect(calls).toEqual(
+      Array.from({ length: count }, (_, index) => ({
+        name: 'run_command',
+        id: `call-${index}`,
+        args: { CommandLine: 'node --version' },
+      })),
+    );
+  });
+
+  it.each(['{"CommandLine":"node --version"}', '{"CommandLine":}'])(
+    'validates a complete tool call first introduced in the terminal chunk: %s',
+    async (argumentsText) => {
+      const upstream = await serve((_req, res) => {
+        res.setHeader('Content-Type', 'text/event-stream');
+        sse(res, { choices: [{ delta: { content: 'Checking now.' } }] });
+        sse(res, {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'terminal-call',
+                    function: {
+                      name: 'run_command',
+                      arguments: argumentsText,
+                    },
+                  },
+                ],
+              },
+              finish_reason: 'tool_calls',
+            },
+          ],
+        });
+        sse(res, '[DONE]');
+        res.end();
+      });
+      const text = await (await fetch(await proxy([model(upstream)], true))).text();
+      if (argumentsText.endsWith(':}')) {
+        expect(text).toContain('event: error');
+        expect(text).not.toContain('"functionCall"');
+      } else {
+        expect(text).not.toContain('event: error');
+        expect(text).toContain('"CommandLine":"node --version"');
+        expect(text).toContain('"id":"terminal-call"');
+      }
+    },
+  );
+
+  it('rejects malformed final tool arguments before emitting a function call', async () => {
+    const upstream = await serve((_req, res) => {
+      res.setHeader('Content-Type', 'text/event-stream');
+      sse(res, { choices: [{ delta: { content: 'Checking now.' } }] });
+      sse(res, {
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: 'invalid-call',
+                  function: {
+                    name: 'run_command',
+                    arguments: '{"CommandLine":',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      });
+      sse(res, {
+        choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '}' } }] }, finish_reason: 'tool_calls' }],
+      });
+      sse(res, '[DONE]');
+      res.end();
+    });
+    const text = await (await fetch(await proxy([model(upstream)], true))).text();
+    expect(text).toContain('event: error');
+    expect(text).not.toContain('"functionCall"');
+  });
+
   it.each([
     { provider: 'openai' as const, stream: false },
     { provider: 'anthropic' as const, stream: true },

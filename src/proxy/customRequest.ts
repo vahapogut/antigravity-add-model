@@ -334,8 +334,21 @@ export async function runCustomModelRequest(
                 (chunk.type === 'message_delta' && chunk.delta?.stop_reason === 'tool_use') ||
                 chunk.choices?.[0]?.finish_reason
               ) {
-                for (const tool of Object.values(activeStreamContexts.get(stateKey)?.toolCalls || {}))
-                  validateToolArguments(tool.arguments);
+                const pendingTools = activeStreamContexts.get(stateKey)?.toolCalls || {};
+                if (format === 'openai') {
+                  // A terminal delta can contain the last argument fragment (or a whole call).
+                  // Validate the completed snapshot before translation consumes/deletes the context.
+                  const argumentsByIndex = new Map(
+                    Object.entries(pendingTools).map(([index, tool]) => [Number(index), tool.arguments]),
+                  );
+                  for (const tool of delta?.tool_calls || []) {
+                    const index = tool.index ?? 0;
+                    argumentsByIndex.set(index, (argumentsByIndex.get(index) || '') + (tool.function?.arguments || ''));
+                  }
+                  for (const args of argumentsByIndex.values()) validateToolArguments(args);
+                } else {
+                  for (const tool of Object.values(pendingTools)) validateToolArguments(tool.arguments);
+                }
               }
               const mapped = registry.translateStreamChunk(
                 model.provider,
