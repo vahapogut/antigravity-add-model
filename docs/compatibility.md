@@ -132,6 +132,14 @@ original, so hooks do not accumulate. An old overlay without a valid restore poi
 requires a clean vendor reinstall; arbitrary `.backup` files are never guessed.
 
 After an upstream update, run `--check` again and rebuild before redeploying.
+
+**Before updating Antigravity:** the auto-updater verifies file fingerprints before replacing them, and patched files will cause the updater to hang with "Cannot close Antigravity". Restore the original files first, then update, then rebuild and re-deploy:
+
+1. Kill all Antigravity processes (`Antigravity.exe`, `language_server.exe`, and any pending `Antigravity-x64.exe` installer).
+2. Run `node scripts/deploy.mjs --restore` to put originals back.
+3. Let the Antigravity update complete normally.
+4. After the update, run `--check`, rebuild, and re-deploy.
+
 Report a new failure with the desktop/IDE distinction, app version, OS, installer
 output, and first application error. Do not include API keys or auth headers.
 
