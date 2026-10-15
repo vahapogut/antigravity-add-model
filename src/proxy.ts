@@ -141,6 +141,7 @@ import { subagentRouting, SubagentRoutingError } from './proxy/subagentRouting';
 import { resolveConfiguredSubagentModel } from './proxy/subagentModels';
 import { authenticatedGoogleFileUrl, guardLoopbackRequest, languageServerModelsUrl } from './proxy/loopbackSecurity';
 import { forwardNativeGeneration, NativeSubagentRouting } from './proxy/nativeSubagentResponse';
+import { attemptGooglePoolFailover } from './proxy/googlePoolFailover';
 
 let languageServerPortResolver: (() => number | undefined) | undefined;
 let languageServerRoutingEnabled = false;
@@ -577,6 +578,46 @@ function forwardToGoogle(
     res.end(JSON.stringify({ error: { message } }));
   };
   const proxyReq = https.request(parsedUrl, options, (proxyRes) => {
+    const isRateLimit =
+      isGeneration &&
+      isCloudCodeUrl &&
+      (proxyRes.statusCode === 429 || proxyRes.statusCode === 403);
+
+    if (isRateLimit) {
+      const errorChunks: Buffer[] = [];
+      let totalLen = 0;
+      proxyRes.on('data', (chunk: Buffer) => {
+        if (totalLen < 16384) {
+          errorChunks.push(chunk);
+          totalLen += chunk.length;
+        }
+      });
+      proxyRes.on('end', async () => {
+        const errorBody = Buffer.concat(errorChunks).toString('utf8');
+        const handled = await attemptGooglePoolFailover(
+          req,
+          res,
+          reqBody,
+          proxyRes,
+          errorBody,
+          {
+            loadCustomModels,
+            forwardingHeaders,
+            cloudCodeRouting,
+            log,
+          },
+          nativeSubagent,
+          cloudCodeOrigin,
+        );
+        if (!handled) {
+          if (res.destroyed || res.writableEnded) return;
+          res.writeHead(proxyRes.statusCode || 429, forwardingHeaders(proxyRes.headers));
+          res.end(Buffer.concat(errorChunks));
+        }
+      });
+      return;
+    }
+
     if (nativeSubagent && isGeneration) {
       nativeResponse = proxyRes;
       const streamHint = req.url!.includes('streamGenerateContent') || req.url!.includes('alt=sse');

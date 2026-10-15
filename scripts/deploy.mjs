@@ -55,6 +55,7 @@ export const REQUIRED_BUILD_FILES = [
   'proxy/cloudCodeRouting.js',
   'proxy/translators/utils.js',
   'proxy/translators/images.js',
+  'proxy/googlePoolFailover.js',
 ];
 
 function fail(code, message) {

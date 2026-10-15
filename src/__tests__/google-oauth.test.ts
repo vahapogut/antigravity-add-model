@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import * as http from 'node:http';
 import * as https from 'node:https';
-import { loginGoogleAccount, GOOGLE_AUTHORIZATION_URL, GOOGLE_TOKEN_URL } from '../googleOAuth';
+import { loginGoogleAccount, GOOGLE_AUTHORIZATION_URL, GOOGLE_TOKEN_URL, parseGoogleIdToken } from '../googleOAuth';
 import { GOOGLE_NATIVE_SCOPES } from '../googleNativeClient';
 
 const clientId = 'unit-test-client.apps.googleusercontent.com';
@@ -297,5 +297,43 @@ describe('explicit Google desktop OAuth', () => {
     await expect(attempt.result).rejects.toMatchObject({ name: 'AbortError' });
     expect(exchangeSignal?.aborted).toBe(true);
     expect((await first).status).toBe(502);
+  });
+
+  it('parses email and name from id_token and sets them on the account', async () => {
+    const payload = Buffer.from(JSON.stringify({ email: 'user@gmail.com', name: 'User Name' })).toString('base64url');
+    const fakeIdToken = `eyJhbGciOiJIUzI1NiJ9.${payload}.signature`;
+    const attempt = makeAttempt(
+      { clientId },
+      vi.fn(async () => ({ ...tokenResponse, id_token: fakeIdToken })),
+    );
+    const auth = await attempt.authorization;
+    await request(callback(auth));
+    const account = await attempt.result;
+    expect(account.email).toBe('user@gmail.com');
+    expect(account.label).toBe('user@gmail.com');
+  });
+
+  it('preserves an explicit user label even when email is present in id_token', async () => {
+    const payload = Buffer.from(JSON.stringify({ email: 'user@gmail.com', name: 'User Name' })).toString('base64url');
+    const fakeIdToken = `eyJhbGciOiJIUzI1NiJ9.${payload}.signature`;
+    const attempt = makeAttempt(
+      { clientId, label: 'Custom Work Account' },
+      vi.fn(async () => ({ ...tokenResponse, id_token: fakeIdToken })),
+    );
+    const auth = await attempt.authorization;
+    await request(callback(auth));
+    const account = await attempt.result;
+    expect(account.email).toBe('user@gmail.com');
+    expect(account.label).toBe('Custom Work Account');
+  });
+
+  it('correctly parses valid and invalid id_tokens in parseGoogleIdToken helper', () => {
+    expect(parseGoogleIdToken(undefined)).toBeUndefined();
+    expect(parseGoogleIdToken('invalid')).toBeUndefined();
+    const payload = Buffer.from(JSON.stringify({ email: 'hello@world.com', name: 'Hello World' })).toString('base64url');
+    expect(parseGoogleIdToken(`header.${payload}.sig`)).toEqual({
+      email: 'hello@world.com',
+      name: 'Hello World',
+    });
   });
 });

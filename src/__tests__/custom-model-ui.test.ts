@@ -36,6 +36,13 @@ const presets = [
     apiFormat: 'google',
     keyRequired: false,
   },
+  {
+    id: 'opencode',
+    label: 'OpenCode',
+    defaultUrl: 'https://opencode.ai/inference/v1/chat/completions',
+    apiFormat: 'openai',
+    keyRequired: false,
+  },
 ];
 const openWindows: JSDOM[] = [];
 afterEach(() => {
@@ -1117,5 +1124,226 @@ describe('custom model settings in the preserved vendor preload', () => {
     dialog.style.display = '';
     await vi.waitFor(() => expect(dialog.querySelector('#agy-custom-models-section')).toBeTruthy());
     expect(f.document.querySelectorAll('#agy-custom-models-section')).toHaveLength(1);
+  });
+
+  it('renders Google Account Pool Quota overview and fleet table when accounts exist', async () => {
+    const googleModel = {
+      name: 'models/google-pool',
+      displayName: 'Google Pool',
+      provider: 'google-cloudcode',
+      apiFormat: 'google',
+      apiUrl: 'https://daily-cloudcode-pa.googleapis.com',
+      apiKey: '',
+      externalModelName: 'gemini-3.8-flash-tiered',
+      googlePool: { strategy: 'least-loaded' },
+      googleAccounts: [
+        { id: 'acc-1', label: 'Primary Account', project: 'aicode-consumers', enabled: true },
+        { id: 'acc-2', label: 'Standby Account', project: 'aicode-consumers', enabled: true },
+      ],
+      enabled: true,
+    };
+    const f = await fixture(
+      '<section id="settings"><h2>Models &amp; Usage</h2></section>',
+      [googleModel],
+    );
+    await vi.waitFor(() => {
+      const widget = f.document.querySelector<HTMLElement>('#agy-google-account-pool-section');
+      expect(widget).toBeTruthy();
+      expect(widget?.hidden).toBe(false);
+    });
+
+    const widget = f.document.querySelector<HTMLElement>('#agy-google-account-pool-section')!;
+    expect(widget.textContent).toContain('Google Account Fleet & Quota Overview');
+    expect(widget.textContent).toContain('2 Accounts');
+    expect(widget.textContent).toContain('Primary Account');
+    expect(widget.textContent).toContain('Switcher Status');
+    expect(widget.textContent).toContain('Account Fleet');
+
+    const activeBadge = widget.querySelector('.agy-badge-active');
+    expect(activeBadge).toBeTruthy();
+    expect(activeBadge?.textContent).toContain('Active');
+
+    const switchButtons = widget.querySelectorAll('.agy-btn-switch');
+    expect(switchButtons).toHaveLength(1);
+    expect(switchButtons[0].textContent).toContain('Switch');
+
+    (switchButtons[0] as HTMLButtonElement).click();
+    await vi.waitFor(() => {
+      expect(f.invoke).toHaveBeenCalledWith(
+        'storage:save-custom-model',
+        expect.objectContaining({
+          name: 'models/google-pool',
+          googleAccounts: [
+            expect.objectContaining({ id: 'acc-2' }),
+            expect.objectContaining({ id: 'acc-1' }),
+          ],
+        }),
+      );
+    });
+  });
+
+  it('hides Google Account Pool widget when no Google Cloud Code accounts exist', async () => {
+    const f = await fixture(
+      '<section id="settings"><h2>Models &amp; Usage</h2></section>',
+      [model],
+    );
+    const widget = f.document.querySelector<HTMLElement>('#agy-google-account-pool-section');
+    expect(widget?.hidden).toBe(true);
+    const toolbarAddAccount = f.document.querySelector<HTMLButtonElement>('#agy-add-google-account');
+    expect(toolbarAddAccount).toBeNull();
+  });
+
+  it('triggers direct Google OAuth browser login and syncs account to pool without duplicate', async () => {
+    const googleModel = {
+      name: 'models/google-pool',
+      displayName: 'Google Pool',
+      provider: 'google-cloudcode',
+      apiFormat: 'google',
+      apiUrl: 'https://daily-cloudcode-pa.googleapis.com',
+      apiKey: '',
+      externalModelName: 'gemini-3.8-flash-tiered',
+      googlePool: { strategy: 'least-loaded' },
+      googleAccounts: [
+        { id: 'acc-1', label: 'Existing Account', project: 'aicode-consumers', enabled: true },
+      ],
+      enabled: true,
+    };
+    const newAccount = {
+      id: 'acc-new',
+      label: 'New Connected Account',
+      authMode: 'antigravity',
+      project: 'aicode-consumers',
+      cloudCodeEndpoint: 'https://daily-cloudcode-pa.googleapis.com',
+      enabled: true,
+    };
+    const f = await fixture(
+      '<section id="settings"><h2>Models &amp; Usage</h2></section>',
+      [googleModel],
+    );
+    await vi.waitFor(() => {
+      const btn = f.document.querySelector<HTMLButtonElement>('#agy-pool-add-account-btn');
+      expect(btn).toBeTruthy();
+    });
+
+    const fleetAddBtn = f.document.querySelector<HTMLButtonElement>('#agy-pool-add-account-btn')!;
+    fleetAddBtn.click();
+
+    await vi.waitFor(() => {
+      expect(f.invoke).toHaveBeenCalledWith(
+        'storage:google-login',
+        expect.objectContaining({ authMode: 'antigravity' }),
+      );
+      expect(f.invoke).toHaveBeenCalledWith(
+        'storage:save-custom-model',
+        expect.objectContaining({
+          name: 'models/google-pool',
+          googleAccounts: expect.arrayContaining([
+            expect.objectContaining({ id: 'acc-1' }),
+            expect.objectContaining({ id: 'pending-account', label: 'New account' }),
+          ]),
+        }),
+      );
+    });
+  });
+
+  it('renders Gmail address in Fleet Table and active switcher cards when account has email', async () => {
+    const googleModelWithEmail = {
+      name: 'models/google-pool',
+      displayName: 'Google Pool',
+      provider: 'google-cloudcode',
+      apiFormat: 'google',
+      apiUrl: 'https://daily-cloudcode-pa.googleapis.com',
+      apiKey: '',
+      externalModelName: 'gemini-3.8-flash-tiered',
+      googleAccounts: [
+        { id: 'acc-email-1', email: 'alice@gmail.com', label: 'Work Account', enabled: true },
+        { id: 'acc-email-2', email: 'bob@gmail.com', label: 'Personal', enabled: false },
+      ],
+      enabled: true,
+    };
+    const f = await fixture(
+      '<section id="settings"><h2>Models &amp; Usage</h2></section>',
+      [googleModelWithEmail],
+    );
+    await vi.waitFor(() => {
+      const widget = f.document.querySelector<HTMLElement>('#agy-google-account-pool-section');
+      expect(widget?.hidden).toBe(false);
+    });
+
+    const widget = f.document.querySelector<HTMLElement>('#agy-google-account-pool-section')!;
+    const accountNames = [...widget.querySelectorAll('.agy-account-name')].map((el) => el.textContent);
+    expect(accountNames).toContain('alice@gmail.com');
+    expect(accountNames).toContain('bob@gmail.com');
+
+    const accountSubtitles = [...widget.querySelectorAll('.agy-account-id')].map((el) => el.textContent);
+    expect(accountSubtitles.some((text) => text?.includes('Work Account'))).toBe(true);
+    expect(accountSubtitles.some((text) => text?.includes('Personal'))).toBe(true);
+
+    const activeBadge = widget.querySelector('.agy-pool-badge-active');
+    expect(activeBadge?.textContent).toContain('alice@gmail.com');
+    expect(widget.textContent).toContain('PayG / GCP');
+  });
+
+  it('promotes healthy standby account to active in pool UI when primary account is quota-exhausted', async () => {
+    const googleModelWithAccounts = {
+      name: 'models/google-pool',
+      displayName: 'Google Pool',
+      provider: 'google-cloudcode',
+      apiFormat: 'google',
+      apiUrl: 'https://daily-cloudcode-pa.googleapis.com',
+      apiKey: '',
+      externalModelName: 'gemini-3.8-flash-tiered',
+      googleAccounts: [
+        { id: 'acc-exhausted', email: 'exhausted@gmail.com', label: 'Exhausted Acc', enabled: true, authMode: 'antigravity' },
+        { id: 'acc-healthy', email: 'healthy@gmail.com', label: 'Healthy Acc', enabled: true, authMode: 'antigravity' },
+      ],
+      enabled: true,
+    };
+    const f = await fixture(
+      '<section id="settings"><h2>Models &amp; Usage</h2></section>',
+      [googleModelWithAccounts],
+    );
+    f.handlers['storage:google-test-account'] = async (input: any) => {
+      if (input.accountId === 'acc-exhausted') {
+        return {
+          success: true,
+          quota: {
+            accountId: 'acc-exhausted',
+            email: 'exhausted@gmail.com',
+            remainingFraction: 0,
+            buckets: [
+              { id: '5h', groupName: 'Gemini Models', remainingFraction: 0 },
+              { id: '7d', groupName: 'Gemini Models', remainingFraction: 0 },
+            ],
+          },
+        };
+      }
+      return {
+        success: true,
+        quota: {
+          accountId: 'acc-healthy',
+          email: 'healthy@gmail.com',
+          remainingFraction: 1,
+          buckets: [
+            { id: '5h', groupName: 'Gemini Models', remainingFraction: 1 },
+            { id: '7d', groupName: 'Gemini Models', remainingFraction: 1 },
+          ],
+        },
+      };
+    };
+
+    await f.click('↻ Refresh Quotas');
+
+    await vi.waitFor(() => {
+      const widget = f.document.querySelector<HTMLElement>('#agy-google-account-pool-section');
+      expect(widget?.hidden).toBe(false);
+      const activeBadge = widget?.querySelector('.agy-pool-badge-active');
+      expect(activeBadge?.textContent).toContain('healthy@gmail.com');
+    });
+
+    const widget = f.document.querySelector<HTMLElement>('#agy-google-account-pool-section')!;
+    const activeBoxName = widget.querySelector('.agy-switcher-active-name');
+    expect(activeBoxName?.textContent).toContain('healthy@gmail.com');
+    expect(widget.textContent).toContain('Exhausted');
   });
 });

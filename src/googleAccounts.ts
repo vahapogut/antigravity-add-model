@@ -4,6 +4,7 @@ import * as https from 'https';
 import { createHash, randomInt } from 'crypto';
 import type { GoogleCooldownReason } from './googlePoolPolicy';
 import { describeGoogleAccessError, type GoogleAccessErrorCategory } from './googleAccessErrors';
+import { fetchGoogleUserInfo } from './googleOAuth';
 
 /** A consistent identifier for this application across Cloud Code account and generation requests. */
 export const GOOGLE_CLOUD_CODE_USER_AGENT = 'antigravity-add-model';
@@ -11,6 +12,7 @@ export const GOOGLE_CLOUD_CODE_USER_AGENT = 'antigravity-add-model';
 export interface GoogleAccount {
   id: string;
   label?: string;
+  email?: string;
   refreshToken?: string;
   accessToken?: string;
   expiresAt?: number;
@@ -27,11 +29,27 @@ export interface GooglePoolOptions {
   maxConcurrency?: number;
   cooldownMs?: number;
 }
+export interface GoogleQuotaBucket {
+  id: string;
+  displayName?: string;
+  groupName?: string;
+  remainingFraction?: number;
+  resetTime?: string;
+}
+export interface GoogleQuotaGroup {
+  name: string;
+  displayName?: string;
+  buckets: GoogleQuotaBucket[];
+}
 export interface GoogleQuotaSnapshot {
   accountId: string;
   checkedAt: number;
   remainingFraction?: number;
-  buckets: { id: string; remainingFraction?: number; resetTime?: string }[];
+  planTier?: string;
+  email?: string;
+  name?: string;
+  buckets: GoogleQuotaBucket[];
+  groups?: GoogleQuotaGroup[];
 }
 interface PoolState {
   id: string;
@@ -73,7 +91,7 @@ export class GoogleAccountError extends Error {
 const tokenCache = new Map<string, GoogleAccount>();
 const refreshing = new Map<string, Promise<GoogleAccount>>();
 const poolStates = new Map<string, PoolState>();
-const sticky = new Map<string, { accountKey: string; at: number }>();
+const sticky = new Map<string, { accountKey: string; accountId?: string; at: number }>();
 let selectionOrder = 0;
 const MEASUREMENT_TTL_MS = 10 * 60_000;
 let persistAccount:
@@ -127,19 +145,51 @@ function quotaIsFresh(quota?: GoogleQuotaSnapshot, now = Date.now()): boolean {
     !quota.buckets.some((bucket) => bucket.resetTime && Date.parse(bucket.resetTime) <= now)
   );
 }
-function quotaExhausted(state: PoolState, now = Date.now()): boolean {
-  // A depleted Claude bucket must not disable an account with remaining Gemini quota.
-  return (
-    quotaIsFresh(state.quota, now) &&
-    !!state.quota?.buckets.length &&
-    state.quota.buckets.every((bucket) => bucket.remainingFraction === 0)
-  );
+function quotaExhausted(state: PoolState, now = Date.now(), modelName?: string): boolean {
+  if (!quotaIsFresh(state.quota, now)) return false;
+  const buckets = state.quota?.buckets || [];
+  if (!buckets.length) return false;
+
+  if (modelName) {
+    const isThirdParty = /claude|gpt|anthropic|openai/i.test(modelName);
+    const matching = buckets.filter((b) => {
+      const g = b.groupName || b.id || '';
+      return isThirdParty
+        ? /claude|gpt|anthropic|openai|third[- ]?party/i.test(g)
+        : !/claude|gpt|anthropic|openai|third[- ]?party/i.test(g);
+    });
+    if (matching.length > 0) {
+      return matching.every((b) => b.remainingFraction === 0);
+    }
+    if (isThirdParty && state.quota?.groups && state.quota.groups.length > 0) {
+      const hasThirdParty = state.quota.groups.some((g) =>
+        /claude|gpt|anthropic|openai|third[- ]?party/i.test(g.name || g.displayName || ''),
+      );
+      if (!hasThirdParty) return true;
+    }
+  }
+
+  // Depleted Claude bucket must not disable an account with remaining Gemini quota
+  return buckets.every((bucket) => bucket.remainingFraction === 0);
 }
 function measuredLatency(state: PoolState, now = Date.now()): number | undefined {
   return state.latency && now - state.latency.measuredAt < MEASUREMENT_TTL_MS ? state.latency.average : undefined;
 }
-function adaptiveScore(state: PoolState): number {
-  const quota = quotaIsFresh(state.quota) ? state.quota?.remainingFraction : undefined;
+function adaptiveScore(state: PoolState, modelName?: string): number {
+  let quota = quotaIsFresh(state.quota) ? state.quota?.remainingFraction : undefined;
+  if (modelName && quotaIsFresh(state.quota) && state.quota?.buckets?.length) {
+    const isThirdParty = /claude|gpt|anthropic|openai/i.test(modelName);
+    const matching = state.quota.buckets.filter((b) => {
+      const g = b.groupName || b.id || '';
+      return isThirdParty
+        ? /claude|gpt|anthropic|openai|third[- ]?party/i.test(g)
+        : !/claude|gpt|anthropic|openai|third[- ]?party/i.test(g);
+    });
+    if (matching.length > 0) {
+      const nums = matching.flatMap((b) => (b.remainingFraction !== undefined ? [b.remainingFraction] : []));
+      if (nums.length > 0) quota = Math.min(...nums);
+    }
+  }
   return (
     (quota ?? 0.5) * 100 -
     state.inFlight * 20 -
@@ -147,14 +197,14 @@ function adaptiveScore(state: PoolState): number {
     Math.min(30, state.consecutiveFailures * 10)
   );
 }
-function selectAdaptive(candidates: GoogleAccount[]): GoogleAccount | undefined {
+function selectAdaptive(candidates: GoogleAccount[], modelName?: string): GoogleAccount | undefined {
   if (candidates.length < 2) return candidates[0];
   const first = randomInt(candidates.length);
   let second = randomInt(candidates.length - 1);
   if (second >= first) second++;
   const a = stateFor(candidates[first]),
     b = stateFor(candidates[second]);
-  const difference = adaptiveScore(a) - adaptiveScore(b);
+  const difference = adaptiveScore(a, modelName) - adaptiveScore(b, modelName);
   return difference > 0 || (difference === 0 && a.lastUsed <= b.lastUsed) ? candidates[first] : candidates[second];
 }
 function validAccess(account: GoogleAccount): boolean {
@@ -328,28 +378,124 @@ export async function fetchGoogleQuota(account: GoogleAccount, baseURL?: string)
   );
   if (status < 200 || status >= 300)
     throw new GoogleAccountError(describeGoogleAccessError(status, 'quota').message, status);
-  const buckets: GoogleQuotaSnapshot['buckets'] = [];
-  const groups = Array.isArray(data.groups) ? data.groups : [{ buckets: data.buckets }];
-  for (const group of groups) {
+  const buckets: GoogleQuotaBucket[] = [];
+  const groups: GoogleQuotaGroup[] = [];
+  const rawGroups = Array.isArray(data.groups)
+    ? data.groups
+    : Array.isArray(data.buckets)
+      ? [{ buckets: data.buckets }]
+      : [];
+  for (const group of rawGroups) {
+    if (!group || typeof group !== 'object') continue;
+    const groupName =
+      typeof group.displayName === 'string' && group.displayName.trim()
+        ? group.displayName.trim()
+        : typeof group.name === 'string' && group.name.trim()
+          ? group.name.trim()
+          : typeof group.title === 'string' && group.title.trim()
+            ? group.title.trim()
+            : typeof group.label === 'string' && group.label.trim()
+              ? group.label.trim()
+              : typeof group.id === 'string' && group.id.trim()
+                ? group.id.trim()
+                : undefined;
+
+    const groupBuckets: GoogleQuotaBucket[] = [];
     for (const bucket of Array.isArray(group?.buckets) ? group.buckets : []) {
       if (!bucket || typeof bucket !== 'object') continue;
-      buckets.push({
-        id: typeof bucket.bucketId === 'string' ? bucket.bucketId : typeof bucket.id === 'string' ? bucket.id : 'quota',
-        remainingFraction:
-          typeof bucket.remainingFraction === 'number' && Number.isFinite(bucket.remainingFraction)
-            ? Math.max(0, Math.min(1, bucket.remainingFraction))
-            : undefined,
-        resetTime: typeof bucket.resetTime === 'string' ? bucket.resetTime : undefined,
+      const bId =
+        typeof bucket.bucketId === 'string'
+          ? bucket.bucketId
+          : typeof bucket.id === 'string'
+            ? bucket.id
+            : 'quota';
+      const bDisplayName =
+        typeof bucket.displayName === 'string'
+          ? bucket.displayName
+          : typeof bucket.title === 'string'
+            ? bucket.title
+            : typeof bucket.label === 'string'
+              ? bucket.label
+              : undefined;
+      const bFraction =
+        typeof bucket.remainingFraction === 'number' && Number.isFinite(bucket.remainingFraction)
+          ? Math.max(0, Math.min(1, bucket.remainingFraction))
+          : undefined;
+      const bReset = typeof bucket.resetTime === 'string' ? bucket.resetTime : undefined;
+
+      const item: GoogleQuotaBucket = {
+        id: bId,
+        ...(bDisplayName ? { displayName: bDisplayName } : {}),
+        ...(groupName ? { groupName } : {}),
+        remainingFraction: bFraction,
+        resetTime: bReset,
+      };
+      groupBuckets.push(item);
+      buckets.push(item);
+    }
+    if (groupBuckets.length > 0 || groupName) {
+      groups.push({
+        name: groupName || 'Models',
+        displayName: groupName || 'Models',
+        buckets: groupBuckets,
       });
     }
   }
   const remaining = buckets.flatMap((bucket) =>
     bucket.remainingFraction === undefined ? [] : [bucket.remainingFraction],
   );
+  const rawTier =
+    typeof data?.subscriptionTier === 'string'
+      ? data.subscriptionTier
+      : typeof data?.userTier === 'string'
+        ? data.userTier
+        : typeof data?.planTier === 'string'
+          ? data.planTier
+          : typeof (data?.paidTier as any)?.tier === 'string'
+            ? (data?.paidTier as any).tier
+            : undefined;
+  let planTier: string | undefined;
+  if (rawTier) {
+    const lower = rawTier.toLowerCase();
+    if (lower.includes('enterprise')) planTier = 'Enterprise';
+    else if (lower.includes('trial')) planTier = 'Pro Trial';
+    else if (lower.includes('pro')) planTier = 'Pro';
+    else if (lower.includes('free')) planTier = 'Free';
+    else planTier = rawTier.charAt(0).toUpperCase() + rawTier.slice(1);
+  }
+  const rawData = data as Record<string, any> | undefined;
+  let email =
+    account.email ||
+    (typeof rawData?.userEmail === 'string'
+      ? rawData.userEmail
+      : typeof rawData?.email === 'string'
+        ? rawData.email
+        : typeof rawData?.user?.email === 'string'
+          ? rawData.user.email
+          : undefined);
+  let name: string | undefined;
+  if (!email && current.accessToken) {
+    try {
+      const info = await fetchGoogleUserInfo(current.accessToken);
+      if (info.email) email = info.email;
+      if (info.name) name = info.name;
+    } catch {}
+  }
+  if (email && !account.email) {
+    account.email = email;
+  }
+  if (email && (!account.label || account.label.toLowerCase() === 'google account')) {
+    account.label = email;
+    stateFor(account).label = email;
+  }
   const snapshot: GoogleQuotaSnapshot = {
     accountId: account.id,
     checkedAt: Date.now(),
+    planTier,
+    ...(email ? { email } : {}),
+    ...(name ? { name } : {}),
     buckets,
+    ...(groups.length > 0 ? { groups } : {}),
     remainingFraction: remaining.length ? Math.min(...remaining) : undefined,
   };
   stateFor(account).quota = snapshot;
@@ -416,7 +562,7 @@ export async function acquireGoogleAccount(
         !state.authState &&
         state.cooldownUntil <= now &&
         (state.modelCooldowns.get(cooldownScope)?.until ?? 0) <= now &&
-        !quotaExhausted(state, now) &&
+        !quotaExhausted(state, now, modelName) &&
         state.inFlight < (options.maxConcurrency ?? 2)
       );
     });
@@ -425,16 +571,38 @@ export async function acquireGoogleAccount(
         b = stateFor(right);
       if (options.strategy === 'least-loaded' && a.inFlight !== b.inFlight) return a.inFlight - b.inFlight;
       if (options.strategy === 'quota') {
-        const qa = (quotaIsFresh(a.quota) ? a.quota?.remainingFraction : undefined) ?? 0.5,
-          qb = (quotaIsFresh(b.quota) ? b.quota?.remainingFraction : undefined) ?? 0.5;
+        const getFraction = (state: PoolState) => {
+          if (!quotaIsFresh(state.quota, now) || !state.quota?.buckets?.length) return 0.5;
+          if (modelName) {
+            const isThirdParty = /claude|gpt|anthropic|openai/i.test(modelName);
+            const matching = state.quota.buckets.filter((bucket) => {
+              const g = bucket.groupName || bucket.id || '';
+              return isThirdParty
+                ? /claude|gpt|anthropic|openai|third[- ]?party/i.test(g)
+                : !/claude|gpt|anthropic|openai|third[- ]?party/i.test(g);
+            });
+            if (matching.length > 0) {
+              const nums = matching.flatMap((bucket) => (bucket.remainingFraction !== undefined ? [bucket.remainingFraction] : []));
+              if (nums.length > 0) return Math.min(...nums);
+            }
+          }
+          return state.quota.remainingFraction ?? 0.5;
+        };
+        const qa = getFraction(a),
+          qb = getFraction(b);
         if (qa !== qb) return qb - qa;
       }
       return a.lastUsed - b.lastUsed;
     });
     const stick = identityKey ? sticky.get(identityKey) : undefined;
+    const stickyCandidate = stick ? candidates.find((account) => poolKey(account) === stick.accountKey) : undefined;
+    const eligibleSticky =
+      stickyCandidate && stateFor(stickyCandidate).consecutiveFailures === 0 && !stateFor(stickyCandidate).authState
+        ? stickyCandidate
+        : undefined;
     const selected =
-      candidates.find((account) => poolKey(account) === stick?.accountKey) ||
-      (options.strategy === 'adaptive' ? selectAdaptive(candidates) : candidates[0]);
+      eligibleSticky ||
+      (options.strategy === 'adaptive' ? selectAdaptive(candidates, modelName) : candidates[0]);
     if (!selected)
       throw new GoogleAccountError(
         'No Google account is currently eligible: check authentication, quota, cooldown and concurrency limits.',
@@ -454,7 +622,7 @@ export async function acquireGoogleAccount(
       ) {
         await persistAccount?.(modelName, updated, selected);
       }
-      if (identityKey) sticky.set(identityKey, { accountKey: key, at: Date.now() });
+      if (identityKey) sticky.set(identityKey, { accountKey: key, accountId: selected.id, at: Date.now() });
       state.requests++;
       let released = false;
       return {
@@ -485,7 +653,13 @@ export async function acquireGoogleAccount(
             state.authState = result.status === 401 ? 'unauthorized' : 'forbidden';
             tokenCache.delete(accountKey(selected));
             tokenCache.delete(accountKey(updated));
+            for (const [sKey, entry] of sticky) {
+              if (entry.accountId === selected.id || entry.accountKey === key) sticky.delete(sKey);
+            }
           } else if (result.status === 408 || result.status === 429 || (result.status && result.status >= 500)) {
+            for (const [sKey, entry] of sticky) {
+              if (entry.accountId === selected.id || entry.accountKey === key) sticky.delete(sKey);
+            }
             const delay =
               Number.isFinite(result.retryAfterMs) && result.retryAfterMs >= 0
                 ? result.retryAfterMs
@@ -512,6 +686,36 @@ export async function acquireGoogleAccount(
     'No Google account could authenticate; reconnect an account or check its OAuth client configuration.',
     401,
   );
+}
+
+export function recordGoogleAccountFailure(
+  account: GoogleAccount,
+  status: number,
+  retryAfterMs?: number,
+  cooldownScope?: string,
+  reason?: GoogleCooldownReason,
+): void {
+  const state = stateFor(account);
+  state.failed++;
+  state.consecutiveFailures++;
+  state.lastStatus = status;
+  for (const [sKey, entry] of sticky) {
+    if (entry.accountId === account.id || entry.accountKey === poolKey(account)) sticky.delete(sKey);
+  }
+  if (status === 401 || status === 403) {
+    state.authState = status === 401 ? 'unauthorized' : 'forbidden';
+    tokenCache.delete(accountKey(account));
+  } else if (status === 408 || status === 429 || (status && status >= 500)) {
+    const delay = Number.isFinite(retryAfterMs) && (retryAfterMs as number) >= 0 ? (retryAfterMs as number) : 60_000;
+    const until = Date.now() + Math.min(delay, 31 * 24 * 60 * 60 * 1000);
+    const scope = cooldownScope || 'global';
+    if (until >= (state.modelCooldowns.get(scope)?.until ?? 0)) {
+      state.modelCooldowns.set(scope, {
+        until,
+        reason: reason || (status === 429 ? 'rate-limited' : 'upstream-error'),
+      });
+    }
+  }
 }
 
 export function getGooglePoolStatus() {
@@ -551,5 +755,9 @@ export function resetGoogleAccountState(id?: string): void {
   if (!id) {
     tokenCache.clear();
     sticky.clear();
+  } else {
+    for (const [key, entry] of sticky) {
+      if (entry.accountId === id || entry.accountKey === id) sticky.delete(key);
+    }
   }
 }

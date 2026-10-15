@@ -13,6 +13,7 @@ export interface GoogleLoginAccount {
     authMode?: 'custom' | 'antigravity';
     id: string;
     label?: string;
+    email?: string;
     accessToken: string;
     refreshToken?: string;
     expiresAt: number;
@@ -23,7 +24,16 @@ interface TokenResponse {
     access_token: string;
     refresh_token?: string;
     expires_in?: number;
+    id_token?: string;
 }
+export declare function parseGoogleIdToken(idToken?: string): {
+    email?: string;
+    name?: string;
+} | undefined;
+export declare function fetchGoogleUserInfo(accessToken: string, signal?: AbortSignal): Promise<{
+    email?: string;
+    name?: string;
+}>;
 export interface GoogleOAuthDependencies {
     /** Dependency injection is for local protocol tests; production always uses Google's fixed token URL. */
     exchangeToken?: (parameters: URLSearchParams, signal: AbortSignal) => Promise<TokenResponse>;

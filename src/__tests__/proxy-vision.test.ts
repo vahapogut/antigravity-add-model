@@ -84,6 +84,7 @@ async function fixture(models: CustomModel[]) {
     './modelStore': modelStore,
     './schemaValidator': schemaValidator,
     './cryptoStore': { decryptModels: (value: unknown) => value },
+    './proxy/googlePoolFailover': { attemptGooglePoolFailover: vi.fn() },
     './proxy/loopbackSecurity': loopbackSecurity,
     './proxy/listen': {
       getRequiredProxyPort: () => undefined,

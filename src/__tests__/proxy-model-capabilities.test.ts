@@ -105,6 +105,7 @@ function requestModels(
     './proxy/customRequest': { runCustomModelRequest },
     './modelStore': { readModelConfig: () => models },
     './cryptoStore': { decryptModels: (value: unknown) => value },
+    './proxy/googlePoolFailover': { attemptGooglePoolFailover: vi.fn() },
     './schemaValidator': { validateCustomModel },
     './proxy/loopbackSecurity': loopbackSecurity,
     './proxy/listen': {},

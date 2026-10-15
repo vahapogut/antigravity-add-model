@@ -66,6 +66,7 @@ interface GatewayConfig {
 interface GoogleAccountEntry {
   id: string;
   label?: string;
+  email?: string;
   refreshToken?: string;
   accessToken?: string;
   expiresAt?: number;
@@ -215,26 +216,27 @@ window.addEventListener('DOMContentLoaded', () => {
     return value.trim();
   }
   function installStyles(): void {
-    if (document.getElementById('agy-manager-style')) return;
+    if (typeof document?.createElement !== 'function' || !document?.head) return;
+    if (document.getElementById?.('agy-manager-style')) return;
     const style = element('style');
     style.id = 'agy-manager-style';
     style.textContent = `
-      #agy-custom-models-section,#agy-modal-overlay{font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#e4e4e7;box-sizing:border-box}
-      #agy-custom-models-section *,#agy-modal-overlay *{box-sizing:border-box}
-      #agy-custom-models-section [hidden],#agy-modal-overlay [hidden]{display:none!important}
-      #agy-custom-models-section{margin:24px 0;padding:20px;border:1px solid #303036;border-radius:12px;background:#18181b;min-width:0}
-      #agy-custom-models-section h2,#agy-modal-overlay h2{font-size:18px;margin:0;color:#fafafa;font-weight:600}
-      #agy-custom-models-section h3{font-size:13px;margin:0;color:#f4f4f5}
+      #agy-custom-models-section,#agy-google-account-pool-section,#agy-modal-overlay{font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#e4e4e7;box-sizing:border-box}
+      #agy-custom-models-section *,#agy-google-account-pool-section *,#agy-modal-overlay *{box-sizing:border-box}
+      #agy-custom-models-section [hidden],#agy-google-account-pool-section [hidden],#agy-modal-overlay [hidden]{display:none!important}
+      #agy-custom-models-section,#agy-google-account-pool-section{margin:24px 0;padding:20px;border:1px solid #303036;border-radius:12px;background:#18181b;min-width:0}
+      #agy-custom-models-section h2,#agy-google-account-pool-section h2,#agy-modal-overlay h2{font-size:18px;margin:0;color:#fafafa;font-weight:600}
+      #agy-custom-models-section h3,#agy-google-account-pool-section h3{font-size:13px;margin:0;color:#f4f4f5}
       .agy-toolbar,.agy-actions,.agy-group-heading,.agy-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
       .agy-toolbar{justify-content:space-between;margin-bottom:12px}.agy-actions{margin:10px 0}
       .agy-muted{color:#a1a1aa;font-size:12px;overflow-wrap:anywhere}.agy-group{margin-top:16px;border-top:1px solid #303036;padding-top:14px}
       .agy-group-heading{justify-content:space-between}.agy-row{justify-content:space-between;border:1px solid #303036;border-radius:8px;padding:12px;margin-top:8px;background:#202024}
       .agy-row-info{flex:1;min-width:150px;overflow-wrap:anywhere}.agy-row[data-enabled="false"] .agy-row-info{opacity:.55}
-      #agy-custom-models-section .agy-btn,#agy-modal-overlay .agy-btn{appearance:none;font:inherit;color:#e4e4e7;background:#27272c;border:1px solid #414149;border-radius:6px;padding:6px 10px;cursor:pointer;white-space:nowrap}
+      #agy-custom-models-section .agy-btn,#agy-google-account-pool-section .agy-btn,#agy-modal-overlay .agy-btn{appearance:none;font:inherit;color:#e4e4e7;background:#27272c;border:1px solid #414149;border-radius:6px;padding:6px 10px;cursor:pointer;white-space:nowrap}
       #agy-custom-models-section .agy-primary,#agy-modal-overlay .agy-primary{background:#e4e4e7;color:#18181b;border-color:#e4e4e7;font-weight:600}
-      #agy-custom-models-section .agy-btn:hover,#agy-modal-overlay .agy-btn:hover{filter:brightness(1.12)}
-      #agy-custom-models-section .agy-btn:disabled,#agy-modal-overlay .agy-btn:disabled{opacity:.5;cursor:wait}
-      #agy-custom-models-section :focus-visible,#agy-modal-overlay :focus-visible{outline:2px solid #a78bfa;outline-offset:3px}
+      #agy-custom-models-section .agy-btn:hover,#agy-google-account-pool-section .agy-btn:hover,#agy-modal-overlay .agy-btn:hover{filter:brightness(1.12)}
+      #agy-custom-models-section .agy-btn:disabled,#agy-google-account-pool-section .agy-btn:disabled,#agy-modal-overlay .agy-btn:disabled{opacity:.5;cursor:wait}
+      #agy-custom-models-section :focus-visible,#agy-google-account-pool-section :focus-visible,#agy-modal-overlay :focus-visible{outline:2px solid #a78bfa;outline-offset:3px}
       .agy-status{color:#86efac;font-size:12px;margin-top:8px;white-space:pre-wrap;overflow-wrap:anywhere}.agy-status:empty{display:none}.agy-error{color:#fca5a5}
       .agy-field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;min-width:0;color:#a1a1aa}
       #agy-custom-models-section input,#agy-modal-overlay input,#agy-modal-overlay select,#agy-modal-overlay textarea{font:inherit;width:100%;background:#25252a;border:1px solid #414149;border-radius:6px;color:#fafafa;padding:8px 10px;min-width:0}
@@ -244,6 +246,65 @@ window.addEventListener('DOMContentLoaded', () => {
       .agy-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}.agy-discovery{max-height:240px;overflow:auto;margin:12px 0}
       .agy-choice{display:flex;gap:10px;align-items:center;padding:7px 0;overflow-wrap:anywhere}.agy-choice span{min-width:0}
       #agy-modal-overlay details{border:1px solid #303036;border-radius:8px;margin:12px 0;padding:12px}#agy-modal-overlay summary{cursor:pointer;margin-bottom:10px;font-weight:500}
+      .agy-pool-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;background:#27272a;color:#a1a1aa;border:1px solid #3f3f46;white-space:nowrap}
+      .agy-pool-badge-active{background:#064e3b;color:#34d399;border-color:#059669}
+      .agy-pool-top-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}
+      .agy-pool-card{background:#202024;border:1px solid #303036;border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;justify-content:space-between}
+      .agy-pool-card-title{font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#a1a1aa;font-weight:700;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+      .agy-pool-pill-status{font-size:10px;font-weight:600;color:#34d399;background:rgba(16,185,129,0.14);border:1px solid rgba(16,185,129,0.35);border-radius:10px;padding:1px 7px}
+      .agy-switcher-active-box{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:6px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:2px 0 6px 0;min-width:0}
+      .agy-switcher-active-info{display:flex;flex-direction:column;gap:1px;min-width:0;overflow:hidden}
+      .agy-switcher-active-label{font-size:9px;font-weight:700;color:#71717a;letter-spacing:0.5px;text-transform:uppercase}
+      .agy-switcher-active-name{font-size:12.5px;font-weight:600;color:#fafafa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .agy-switcher-active-sub{font-size:10px;color:#a1a1aa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .agy-switcher-active-right{display:flex;align-items:center;flex-shrink:0}
+      .agy-pool-plan-badge{font-size:10px;font-weight:600;color:#34d399;background:rgba(5,150,105,0.15);border:1px solid #059669;border-radius:4px;padding:2px 6px;white-space:nowrap}
+      .agy-switcher-chips-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:auto}
+      .agy-pool-chip{font-size:10px;font-weight:500;padding:2px 6px;border-radius:4px;background:#27272a;color:#a1a1aa;border:1px solid #38383e;white-space:nowrap}
+      .agy-pool-gauges{display:flex;justify-content:space-around;align-items:center;gap:6px;margin-top:2px}
+      .agy-pool-gauge-item{display:flex;flex-direction:column;align-items:center;text-align:center;min-width:0}
+      .agy-pool-gauge-label{font-size:10px;font-weight:600;color:#e4e4e7;margin-top:3px;white-space:nowrap}
+      .agy-pool-gauge-sub{font-size:9.5px;color:#a1a1aa;margin-top:1px;white-space:nowrap}
+      .agy-fleet-section{background:#202024;border:1px solid #303036;border-radius:8px;padding:12px 14px;overflow-x:auto;max-width:100%}
+      .agy-fleet-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+      .agy-fleet-table{width:100%;min-width:560px;border-collapse:collapse;table-layout:fixed}
+      .agy-fleet-table th{font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#a1a1aa;text-align:left;padding:6px 6px;border-bottom:1px solid #303036;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+      .agy-fleet-table td{padding:8px 6px;border-bottom:1px solid #27272a;vertical-align:middle;font-size:12px;overflow:hidden;text-overflow:ellipsis}
+      .agy-fleet-table td:first-child{max-width:0;min-width:0;overflow:hidden}
+      .agy-fleet-table th:last-child,.agy-fleet-table td:last-child{text-align:right;padding-right:4px;white-space:nowrap;min-width:76px;overflow:visible}
+      .agy-fleet-table tr:last-child td{border-bottom:none}
+      .agy-fleet-row-active{background:rgba(5,150,105,0.08)}
+      .agy-fleet-table .agy-pool-badge{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle;padding:2px 6px;font-size:10.5px;font-weight:600;box-sizing:border-box}
+      .agy-account-info{display:flex;flex-direction:column;min-width:0;max-width:100%;overflow:hidden}
+      .agy-account-name{font-weight:600;color:#fafafa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;display:block}
+      .agy-account-id{font-size:10px;color:#a1a1aa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;display:block}
+      .agy-bar-container{display:flex;flex-direction:column;gap:2px;width:100%;min-width:0;max-width:100%;box-sizing:border-box}
+      .agy-bar-track{height:6px;width:100%;background:#27272a;border-radius:3px;overflow:hidden;position:relative}
+      .agy-bar-fill{height:100%;border-radius:3px;transition:width 0.4s ease}
+      .agy-bar-meta{display:flex;justify-content:space-between;align-items:center;font-size:9.5px;gap:2px}
+      .agy-bar-pct{font-weight:700;color:#e4e4e7;white-space:nowrap}
+      .agy-bar-sub{color:#a1a1aa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .agy-badge-active,.agy-btn-switch{display:inline-flex;align-items:center;justify-content:center;gap:3px;width:68px;height:24px;border-radius:6px;font-size:10.5px;font-weight:600;letter-spacing:0.2px;box-sizing:border-box;white-space:nowrap;user-select:none;line-height:1}
+      .agy-badge-active{background:rgba(16,185,129,0.14);color:#34d399;border:1px solid rgba(16,185,129,0.4);cursor:default}
+      #agy-google-account-pool-section .agy-btn-switch{background:#27272a;color:#e4e4e7;border:1px solid #3f3f46;cursor:pointer;padding:0;transition:all 0.15s ease}
+      #agy-google-account-pool-section .agy-btn-switch:hover{background:#3f3f46;border-color:#52525b;color:#ffffff;filter:none}
+      #agy-google-account-pool-section .agy-btn-switch:active{background:#18181b}
+      .agy-pool-refresh-btn{font-size:11px;padding:3px 8px;cursor:pointer}
+      .agy-pool-add-btn{font-size:11px;padding:3px 10px;cursor:pointer;background:#059669;color:#ffffff;border:1px solid #10b981;border-radius:6px;font-weight:600}
+      .agy-pool-add-btn:hover{background:#047857}
+      .agy-pool-groups-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;align-items:start}
+      .agy-pool-groups-container{display:flex;flex-direction:column;gap:10px;width:100%}
+      .agy-pool-group-col{display:flex;flex-direction:column;gap:4px;min-width:0}
+      .agy-pool-group-block{display:flex;flex-direction:column;gap:6px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.06)}
+      .agy-pool-group-block:last-child{border-bottom:none;padding-bottom:0}
+      .agy-pool-group-header{display:flex;justify-content:space-between;align-items:center;font-size:10.5px;font-weight:600;margin-bottom:2px}
+      .agy-pool-group-title{color:#e4e4e7;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .agy-pool-unavail-box{display:flex;align-items:center;justify-content:center;min-height:55px;padding:6px;background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.08);border-radius:6px;text-align:center}
+      .agy-sub-bar-container{display:flex;flex-direction:column;gap:4px;width:100%;min-width:0}
+      .agy-sub-bar{display:flex;flex-direction:column;gap:2px;width:100%;min-width:0}
+      .agy-sub-bar-meta{display:flex;justify-content:space-between;align-items:center;font-size:9.5px;gap:4px}
+      .agy-sub-bar-tag{font-size:9px;color:#a1a1aa;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;white-space:nowrap}
+      @media(max-width:700px){.agy-pool-top-grid{grid-template-columns:1fr}}
       @media(max-width:600px){.agy-grid{grid-template-columns:1fr}#agy-modal-card{padding:16px}.agy-row .agy-actions{width:100%}}
     `;
     document.head.append(style);
@@ -754,6 +815,847 @@ window.addEventListener('DOMContentLoaded', () => {
     );
     body.append(actions);
   }
+
+  const poolQuotaCache = new Map<string, { quota?: any; error?: string; timestamp: number }>();
+  let isRefreshingPoolQuotas = false;
+  let poolWidgetInterval: ReturnType<typeof setInterval> | undefined;
+
+  interface QuotaGroupSummary {
+    name: string;
+    displayName: string;
+    isGemini: boolean;
+    isThirdParty: boolean;
+    hasBuckets: boolean;
+    fiveHour: { fraction: number; resetTime?: string };
+    weekly: { fraction: number; resetTime?: string };
+    unavailable?: boolean;
+    notice?: string;
+  }
+
+  interface ParsedQuotaSummary {
+    hasBuckets: boolean;
+    groups: QuotaGroupSummary[];
+    gemini?: QuotaGroupSummary;
+    thirdParty?: QuotaGroupSummary;
+    fiveHour: { fraction: number; resetTime?: string };
+    weekly: { fraction: number; resetTime?: string };
+  }
+
+  function parseQuotaBuckets(quota?: any, isCustomAuth = false): ParsedQuotaSummary {
+    const emptyResult: ParsedQuotaSummary = {
+      hasBuckets: false,
+      groups: [],
+      fiveHour: { fraction: 1.0 },
+      weekly: { fraction: 1.0 },
+    };
+    if (isCustomAuth) return emptyResult;
+
+    function extractGroupBuckets(bList: any[], defaultFraction = 1.0) {
+      let fiveHour = bList.find((b) => /5h|five|hour/i.test(b.id || b.bucketId || b.displayName || ''));
+      let weekly = bList.find((b) => /week|7d|seven|day/i.test(b.id || b.bucketId || b.displayName || ''));
+
+      if (!fiveHour || !weekly) {
+        for (const b of bList) {
+          if (b === fiveHour || b === weekly) continue;
+          if (b.resetTime) {
+            const hours = (Date.parse(b.resetTime) - Date.now()) / 3600000;
+            if (hours > 0 && hours <= 24 && !fiveHour) fiveHour = b;
+            else if (hours > 24 && !weekly) weekly = b;
+          }
+        }
+      }
+
+      if (!fiveHour && bList[0] && bList[0] !== weekly) fiveHour = bList[0];
+      if (!weekly && bList[1] && bList[1] !== fiveHour) weekly = bList[1];
+
+      const fFraction = fiveHour?.remainingFraction ?? (bList.length === 1 ? defaultFraction : 1.0);
+      const wFraction = weekly?.remainingFraction ?? defaultFraction;
+
+      return {
+        fiveHour: { fraction: fFraction, resetTime: fiveHour?.resetTime },
+        weekly: { fraction: wFraction, resetTime: weekly?.resetTime },
+      };
+    }
+
+    const defaultFraction = typeof quota?.remainingFraction === 'number' ? quota.remainingFraction : 1.0;
+    const groups: QuotaGroupSummary[] = [];
+
+    if (Array.isArray(quota?.groups) && quota.groups.length > 0) {
+      for (const g of quota.groups) {
+        const rawName = String(g.displayName || g.name || 'Models').trim();
+        const bList = Array.isArray(g.buckets) ? g.buckets : [];
+        const isThirdParty = /claude|gpt|anthropic|openai|third[- ]?party/i.test(rawName);
+        const isGemini = /gemini/i.test(rawName) || (!isThirdParty && groups.length === 0);
+        const parsed = extractGroupBuckets(bList, defaultFraction);
+        groups.push({
+          name: rawName,
+          displayName: rawName,
+          isGemini,
+          isThirdParty,
+          hasBuckets: bList.length > 0,
+          fiveHour: parsed.fiveHour,
+          weekly: parsed.weekly,
+        });
+      }
+    } else if (Array.isArray(quota?.buckets) && quota.buckets.length > 0) {
+      const byGroup = new Map<string, any[]>();
+      for (const b of quota.buckets) {
+        const gName = b.groupName || (
+          /claude|gpt|anthropic|openai/i.test(b.id || b.bucketId || '') ? 'Claude and GPT models' : 'Gemini Models'
+        );
+        if (!byGroup.has(gName)) byGroup.set(gName, []);
+        byGroup.get(gName)!.push(b);
+      }
+
+      for (const [gName, bList] of byGroup.entries()) {
+        const isThirdParty = /claude|gpt|anthropic|openai|third[- ]?party/i.test(gName);
+        const isGemini = /gemini/i.test(gName) || (!isThirdParty && groups.length === 0);
+        const parsed = extractGroupBuckets(bList, defaultFraction);
+        groups.push({
+          name: gName,
+          displayName: gName,
+          isGemini,
+          isThirdParty,
+          hasBuckets: bList.length > 0,
+          fiveHour: parsed.fiveHour,
+          weekly: parsed.weekly,
+        });
+      }
+    }
+
+    const hasBuckets = groups.some((g) => g.hasBuckets) || (typeof quota?.remainingFraction === 'number' && quota.remainingFraction < 1.0);
+    if (!hasBuckets && !quota?.buckets && !quota?.groups) {
+      return emptyResult;
+    }
+
+    const gemini = groups.find((g) => g.isGemini) || groups[0];
+    const thirdParty = groups.find((g) => g.isThirdParty);
+
+    // Fallback virtual group for third-party models if not in the response
+    if (gemini && !thirdParty && quota?.planTier) {
+      const planLower = String(quota.planTier).toLowerCase();
+      const isFree = planLower.includes('free');
+      groups.push({
+        name: 'Third-party models',
+        displayName: 'Claude and GPT models',
+        isGemini: false,
+        isThirdParty: true,
+        hasBuckets: false,
+        unavailable: true,
+        notice: isFree ? 'Not in Free tier' : 'Unavailable on plan',
+        fiveHour: { fraction: 0 },
+        weekly: { fraction: 0 },
+      });
+    }
+
+    const primaryGroup = gemini || groups[0] || { fiveHour: { fraction: 1.0 }, weekly: { fraction: 1.0 } };
+
+    return {
+      hasBuckets: true,
+      groups,
+      gemini,
+      thirdParty,
+      fiveHour: primaryGroup.fiveHour,
+      weekly: primaryGroup.weekly,
+    };
+  }
+
+  function formatResetHorizon(resetTime?: string, fraction = 1): string {
+    if (fraction >= 1) return 'Full';
+    if (!resetTime) return 'Active';
+    const diffMs = Date.parse(resetTime) - Date.now();
+    if (diffMs <= 0) return 'Refreshed';
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 60) return `in ${mins}m`;
+    const hours = Math.floor(diffMs / 3600000);
+    const remMins = Math.floor((diffMs % 3600000) / 60000);
+    if (hours < 24) return `in ${hours}h ${remMins}m`;
+    const days = Math.floor(diffMs / 86400000);
+    const remHours = Math.floor((diffMs % 86400000) / 3600000);
+    return `in ${days}d ${remHours}h`;
+  }
+
+  function renderCircleArc(fraction: number, size = 64, strokeWidth = 5): HTMLElement {
+    const radius = (size - strokeWidth) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const clamped = Math.max(0, Math.min(100, Math.round(fraction * 100)));
+    const offset = circumference - (clamped / 100) * circumference;
+
+    let strokeColor = '#34d399';
+    if (clamped < 20) strokeColor = '#f87171';
+    else if (clamped < 50) strokeColor = '#fbbf24';
+
+    const wrapper = element('div');
+    wrapper.style.position = 'relative';
+    wrapper.style.width = `${size}px`;
+    wrapper.style.height = `${size}px`;
+
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('width', String(size));
+    svg.setAttribute('height', String(size));
+    svg.style.transform = 'rotate(-90deg)';
+
+    const bgCircle = document.createElementNS(svgNS, 'circle');
+    bgCircle.setAttribute('cx', String(size / 2));
+    bgCircle.setAttribute('cy', String(size / 2));
+    bgCircle.setAttribute('r', String(radius));
+    bgCircle.setAttribute('fill', 'none');
+    bgCircle.setAttribute('stroke', '#27272a');
+    bgCircle.setAttribute('stroke-width', String(strokeWidth));
+    svg.appendChild(bgCircle);
+
+    const progCircle = document.createElementNS(svgNS, 'circle');
+    progCircle.setAttribute('cx', String(size / 2));
+    progCircle.setAttribute('cy', String(size / 2));
+    progCircle.setAttribute('r', String(radius));
+    progCircle.setAttribute('fill', 'none');
+    progCircle.setAttribute('stroke', strokeColor);
+    progCircle.setAttribute('stroke-width', String(strokeWidth));
+    progCircle.setAttribute('stroke-dasharray', String(circumference));
+    progCircle.setAttribute('stroke-dashoffset', String(offset));
+    progCircle.setAttribute('stroke-linecap', 'round');
+    progCircle.style.transition = 'stroke-dashoffset 0.5s ease';
+    svg.appendChild(progCircle);
+
+    const textOverlay = element('div');
+    textOverlay.style.position = 'absolute';
+    textOverlay.style.inset = '0';
+    textOverlay.style.display = 'flex';
+    textOverlay.style.alignItems = 'center';
+    textOverlay.style.justifyContent = 'center';
+    textOverlay.style.flexDirection = 'column';
+
+    const pctSpan = element('span', '', `${clamped}%`);
+    pctSpan.style.fontSize = size <= 48 ? '10.5px' : (size <= 64 ? '13px' : '18px');
+    pctSpan.style.fontWeight = '700';
+    pctSpan.style.color = '#fafafa';
+    textOverlay.appendChild(pctSpan);
+
+    wrapper.append(svg, textOverlay);
+    return wrapper;
+  }
+
+  function isAccountQuotaExhausted(accountId: string, authMode?: string): boolean {
+    // Non-antigravity accounts (custom GCP OAuth / own credentials) do not have the Cloud Code tiered quota system
+    if (authMode !== 'antigravity') return false;
+    const cached = poolQuotaCache.get(accountId);
+    if (!cached) return false;
+    if (cached.error && /exhausted|quota|429|resource/i.test(cached.error)) return true;
+    if (!cached.quota) return false;
+    const parsed = parseQuotaBuckets(cached.quota, false);
+    if (parsed.hasBuckets) {
+      if (parsed.gemini && (parsed.gemini.fiveHour.fraction === 0 || parsed.gemini.weekly.fraction === 0)) {
+        return true;
+      }
+      const availableGroups = parsed.groups.filter((g) => !g.unavailable && g.hasBuckets);
+      if (availableGroups.length > 0 && availableGroups.every((g) => g.fiveHour.fraction === 0 || g.weekly.fraction === 0)) {
+        return true;
+      }
+    }
+    if (typeof cached.quota.remainingFraction === 'number' && cached.quota.remainingFraction === 0) {
+      return true;
+    }
+    return false;
+  }
+
+  function resolveActivePoolAccount(accounts: GoogleAccountEntry[]): GoogleAccountEntry | undefined {
+    const enabled = accounts.filter((a) => a.enabled !== false);
+    if (!enabled.length) return accounts[0];
+    const healthy = enabled.find((a) => !isAccountQuotaExhausted(a.id, a.authMode));
+    return healthy || enabled[0];
+  }
+
+  function extractPoolAccounts(models: CustomModelEntry[]): {
+    accounts: GoogleAccountEntry[];
+    activeAccount: GoogleAccountEntry | undefined;
+    poolStrategy: string;
+    modelName: string;
+  } {
+    const googleModels = models.filter((m) => m.provider === 'google-cloudcode' || Array.isArray(m.googleAccounts));
+    if (!googleModels.length) {
+      return { accounts: [], activeAccount: undefined, poolStrategy: 'least-loaded', modelName: '' };
+    }
+    const firstModel = googleModels[0];
+    const strategy = (firstModel.googlePool as { strategy?: string } | undefined)?.strategy || 'least-loaded';
+    const seen = new Set<string>();
+    const accounts: GoogleAccountEntry[] = [];
+    for (const model of googleModels) {
+      if (Array.isArray(model.googleAccounts)) {
+        for (const account of model.googleAccounts as GoogleAccountEntry[]) {
+          if (account && account.id && !seen.has(account.id)) {
+            seen.add(account.id);
+            accounts.push(account);
+          }
+        }
+      }
+    }
+    const activeAccount = resolveActivePoolAccount(accounts);
+    return { accounts, activeAccount, poolStrategy: strategy, modelName: firstModel.name };
+  }
+
+  async function switchPoolActiveAccount(targetAccountId: string): Promise<void> {
+    const models = await storageAPI.getCustomModels();
+    let updatedCount = 0;
+    for (const model of models) {
+      if ((model.provider === 'google-cloudcode' || Array.isArray(model.googleAccounts)) && Array.isArray(model.googleAccounts)) {
+        const idx = model.googleAccounts.findIndex((a: any) => a.id === targetAccountId);
+        if (idx > 0) {
+          const [chosen] = model.googleAccounts.splice(idx, 1);
+          model.googleAccounts.unshift(chosen);
+          requireSuccess(await storageAPI.saveCustomModel(model));
+          updatedCount++;
+        }
+      }
+    }
+    if (updatedCount > 0) {
+      await modelsChanged();
+    }
+  }
+
+  async function quickAddGoogleAccount(triggerBtn?: HTMLButtonElement): Promise<void> {
+    const originalText = triggerBtn?.textContent || '+ Add Account';
+    if (triggerBtn) {
+      triggerBtn.disabled = true;
+      triggerBtn.textContent = 'Opening browser…';
+    }
+
+    let cancelBtn: HTMLButtonElement | undefined;
+    let statusBanner: HTMLElement | undefined;
+
+    const poolSection = document.getElementById('agy-google-account-pool-section');
+    const targetMount = (!poolSection || poolSection.hidden)
+      ? document.getElementById('agy-custom-models-section')
+      : poolSection;
+
+    if (targetMount) {
+      statusBanner = element('div', 'agy-pool-login-banner');
+      statusBanner.style.background = 'rgba(56, 189, 248, 0.1)';
+      statusBanner.style.border = '1px solid rgba(56, 189, 248, 0.3)';
+      statusBanner.style.borderRadius = '8px';
+      statusBanner.style.padding = '10px 14px';
+      statusBanner.style.margin = '10px 0';
+      statusBanner.style.display = 'flex';
+      statusBanner.style.alignItems = 'center';
+      statusBanner.style.justifyContent = 'space-between';
+      statusBanner.style.fontSize = '12px';
+      statusBanner.style.color = '#38bdf8';
+
+      const msg = element('span', '', 'Waiting for Google sign-in in your browser… Complete consent to link account.');
+      cancelBtn = button('Cancel', async () => {
+        cancelBtn!.disabled = true;
+        cancelBtn!.textContent = 'Cancelling…';
+        try {
+          await ipcRenderer.invoke('storage:google-login-cancel');
+        } catch {}
+        statusBanner?.remove();
+        if (triggerBtn) {
+          triggerBtn.disabled = false;
+          triggerBtn.textContent = originalText;
+        }
+      });
+      cancelBtn.className = 'agy-btn';
+      cancelBtn.style.padding = '3px 10px';
+      cancelBtn.style.fontSize = '11px';
+
+      statusBanner.append(msg, cancelBtn);
+      targetMount.prepend(statusBanner);
+    }
+
+    try {
+      if (triggerBtn) triggerBtn.textContent = 'Waiting for consent…';
+      const result = (await ipcRenderer.invoke('storage:google-login', {
+        authMode: 'antigravity',
+      })) as { success?: boolean; account?: GoogleAccountEntry; error?: string };
+
+      if (!result || result.success === false || !result.account) {
+        if (result?.error && !result.error.includes('cancelled')) {
+          alert(`Google login failed: ${result.error}`);
+        }
+        return;
+      }
+
+      const newAccount = result.account;
+      if (triggerBtn) triggerBtn.textContent = 'Syncing account pool…';
+
+      const models = await storageAPI.getCustomModels();
+      let poolModelFound = false;
+
+      for (const model of models) {
+        if (model.provider === 'google-cloudcode' || Array.isArray(model.googleAccounts)) {
+          poolModelFound = true;
+          const accs = Array.isArray(model.googleAccounts)
+            ? (model.googleAccounts as GoogleAccountEntry[])
+            : [];
+          model.googleAccounts = accs;
+
+          const existingIdx = accs.findIndex(
+            (a) =>
+              a.id === newAccount.id ||
+              (newAccount.email && a.email && a.email.toLowerCase() === newAccount.email.toLowerCase()) ||
+              (newAccount.label && a.label && a.label.trim().toLowerCase() === newAccount.label.trim().toLowerCase())
+          );
+
+          if (existingIdx >= 0) {
+            accs[existingIdx] = {
+              ...accs[existingIdx],
+              ...newAccount,
+              id: accs[existingIdx].id || newAccount.id,
+              email: newAccount.email || accs[existingIdx].email,
+              label:
+                newAccount.label && newAccount.label.toLowerCase() !== 'google account'
+                  ? newAccount.label
+                  : (accs[existingIdx].label && accs[existingIdx].label.toLowerCase() !== 'google account'
+                      ? accs[existingIdx].label
+                      : (newAccount.label || 'Google account')),
+              enabled: true,
+            };
+          } else {
+            accs.push({
+              ...newAccount,
+              enabled: true,
+            });
+          }
+
+          requireSuccess(await storageAPI.saveCustomModel(model));
+        }
+      }
+
+      if (!poolModelFound) {
+        const defaultPoolModel: CustomModelEntry = {
+          name: 'models/google-pool',
+          displayName: 'Google Cloud Code (Account Pool)',
+          provider: 'google-cloudcode',
+          apiFormat: 'google',
+          apiUrl: 'https://daily-cloudcode-pa.googleapis.com',
+          apiKey: '',
+          externalModelName: 'gemini-3.8-flash-tiered',
+          googlePool: { strategy: 'least-loaded', maxConcurrency: 2, cooldownMs: 60000 },
+          googleAccounts: [{ ...newAccount, enabled: true }],
+          enabled: true,
+        };
+        requireSuccess(await storageAPI.saveCustomModel(defaultPoolModel));
+      }
+
+      await modelsChanged();
+    } catch (err: any) {
+      if (!err?.message?.includes('cancelled')) {
+        alert(`Could not add account: ${err?.message || err}`);
+      }
+    } finally {
+      statusBanner?.remove();
+      if (triggerBtn) {
+        triggerBtn.disabled = false;
+        triggerBtn.textContent = originalText;
+      }
+    }
+  }
+
+  async function renderGooglePoolWidget(models: CustomModelEntry[]): Promise<void> {
+    const container = document.getElementById('agy-google-account-pool-section');
+    if (!container) return;
+    const pool = extractPoolAccounts(models);
+    if (!pool.accounts.length) {
+      container.hidden = true;
+      container.replaceChildren();
+      return;
+    }
+    container.hidden = false;
+    container.replaceChildren();
+
+    const activeIds = new Set(pool.accounts.map((a) => a.id));
+    for (const cachedId of poolQuotaCache.keys()) {
+      if (!activeIds.has(cachedId)) poolQuotaCache.delete(cachedId);
+    }
+
+    const header = element('div', 'agy-toolbar');
+    const titleGroup = element('div');
+    titleGroup.style.display = 'flex';
+    titleGroup.style.alignItems = 'center';
+    titleGroup.style.gap = '10px';
+    titleGroup.style.flexWrap = 'wrap';
+
+    const heading = element('h2', '', 'Google Account Fleet & Quota Overview');
+    const badgeCount = element('span', 'agy-pool-badge', `${pool.accounts.length} Accounts`);
+    titleGroup.append(heading, badgeCount);
+
+    const actions = element('div', 'agy-actions');
+    actions.style.margin = '0';
+    actions.style.display = 'flex';
+    actions.style.alignItems = 'center';
+    actions.style.gap = '8px';
+    actions.style.flexWrap = 'wrap';
+
+    if (pool.activeAccount) {
+      const activeQuota = poolQuotaCache.get(pool.activeAccount.id)?.quota;
+      const activeEmail = activeQuota?.email || pool.activeAccount.email;
+      const activeDisplay = activeEmail || pool.activeAccount.label || pool.activeAccount.id;
+      actions.append(
+        element('span', 'agy-pool-badge agy-pool-badge-active', `Active: ${activeDisplay}`)
+      );
+    }
+
+    const addAccountFleet = button('+ Add Account', () => quickAddGoogleAccount(addAccountFleet), undefined, true);
+    addAccountFleet.className = 'agy-btn agy-btn-primary agy-pool-add-btn';
+    addAccountFleet.id = 'agy-pool-add-account-btn';
+    const refreshBtn = button('↻ Refresh Quotas', async () => {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = 'Refreshing…';
+      for (const a of pool.accounts) poolQuotaCache.delete(a.id);
+      await fetchAllQuotas();
+      void renderGooglePoolWidget(modelList);
+    });
+    refreshBtn.className = 'agy-btn agy-pool-refresh-btn';
+    actions.append(addAccountFleet, refreshBtn);
+    header.append(titleGroup, actions);
+
+    const desc = element('p', 'agy-muted', 'Real-time quota monitoring and account fleet switcher.');
+    desc.style.margin = '2px 0 10px 0';
+
+    const topGrid = element('div', 'agy-pool-top-grid');
+
+    const cardStatus = element('div', 'agy-pool-card');
+    const cardStatusTitle = element('div', 'agy-pool-card-title');
+    cardStatusTitle.append(
+      element('span', '', 'Switcher Status'),
+      element('span', 'agy-pool-pill-status', '● Active')
+    );
+
+    const activeTier = pool.activeAccount ? poolQuotaCache.get(pool.activeAccount.id)?.quota?.planTier : undefined;
+    const activeQuota = pool.activeAccount ? poolQuotaCache.get(pool.activeAccount.id)?.quota : undefined;
+    const activeEmail = activeQuota?.email || pool.activeAccount?.email;
+    const activeDisplay = activeEmail || pool.activeAccount?.label || pool.activeAccount?.id || 'None';
+    const activeDisplayId = pool.activeAccount?.id
+      ? (pool.activeAccount.id.length > 14 ? `${pool.activeAccount.id.slice(0, 8)}…${pool.activeAccount.id.slice(-4)}` : pool.activeAccount.id)
+      : 'No ID';
+
+    const activeBox = element('div', 'agy-switcher-active-box');
+    const activeBoxLeft = element('div', 'agy-switcher-active-info');
+    activeBoxLeft.append(
+      element('div', 'agy-switcher-active-label', 'ACTIVE SERVING ACCOUNT'),
+      element('div', 'agy-switcher-active-name', activeDisplay),
+      element('div', 'agy-switcher-active-sub', `${activeDisplayId} · ${pool.poolStrategy || 'adaptive'}`)
+    );
+    activeBox.append(activeBoxLeft);
+
+    if (activeTier) {
+      const activeBoxRight = element('div', 'agy-switcher-active-right');
+      const planBadge = element('span', 'agy-pool-plan-badge', activeTier);
+      activeBoxRight.append(planBadge);
+      activeBox.append(activeBoxRight);
+    }
+
+    const chipsRow = element('div', 'agy-switcher-chips-row');
+    chipsRow.append(
+      element('span', 'agy-pool-chip', `Pool Fleet: ${pool.accounts.length} Accounts`),
+      element('span', 'agy-pool-chip', 'Failover: Auto-Rotate')
+    );
+
+    cardStatus.append(cardStatusTitle, activeBox, chipsRow);
+
+    const cardQuota = element('div', 'agy-pool-card');
+    const cardQuotaHeader = element('div', 'agy-pool-card-title', 'Active Account Quotas');
+
+    const activeIsCustom = pool.activeAccount?.authMode !== 'antigravity';
+    const activeQuotaData = pool.activeAccount ? poolQuotaCache.get(pool.activeAccount.id)?.quota : undefined;
+    const activeParsed = parseQuotaBuckets(activeQuotaData, activeIsCustom);
+
+    if (!activeParsed.hasBuckets) {
+      const unmeteredMsg = element('div', 'agy-muted');
+      unmeteredMsg.style.padding = '18px 8px';
+      unmeteredMsg.style.textAlign = 'center';
+      unmeteredMsg.textContent = activeIsCustom
+        ? 'Custom GCP account active (no Cloud Code burst rate limits).'
+        : 'Quota not metered on Cloud Code rate limit buckets.';
+      cardQuota.append(cardQuotaHeader, unmeteredMsg);
+    } else {
+      const groupsRow = element('div', activeParsed.groups.length > 1 ? 'agy-pool-groups-row' : 'agy-pool-groups-container');
+      for (const group of activeParsed.groups) {
+        const groupCol = element('div', 'agy-pool-group-col');
+        const groupHeader = element('div', 'agy-pool-group-header');
+        groupHeader.append(element('span', 'agy-pool-group-title', group.displayName));
+
+        if (group.unavailable) {
+          const unavailBox = element('div', 'agy-pool-unavail-box');
+          const unavailBadge = element('span', 'agy-pool-badge', group.notice || 'Unavailable on plan');
+          unavailBadge.style.color = '#a1a1aa';
+          unavailBadge.style.borderColor = 'rgba(255,255,255,0.15)';
+          unavailBox.append(unavailBadge);
+          groupCol.append(groupHeader, unavailBox);
+        } else {
+          const gaugesRow = element('div', 'agy-pool-gauges');
+          const gaugeSize = 44;
+          const strokeW = 4;
+          const label5hText = activeParsed.groups.length > 1 ? '5-Hour' : '5-Hour Limit';
+          const labelWkText = activeParsed.groups.length > 1 ? 'Weekly' : 'Weekly Limit';
+
+          const gauge5h = element('div', 'agy-pool-gauge-item');
+          gauge5h.append(
+            renderCircleArc(group.fiveHour.fraction, gaugeSize, strokeW),
+            element('div', 'agy-pool-gauge-label', label5hText),
+            element('div', 'agy-pool-gauge-sub', formatResetHorizon(group.fiveHour.resetTime, group.fiveHour.fraction)),
+          );
+
+          const gaugeWk = element('div', 'agy-pool-gauge-item');
+          gaugeWk.append(
+            renderCircleArc(group.weekly.fraction, gaugeSize, strokeW),
+            element('div', 'agy-pool-gauge-label', labelWkText),
+            element('div', 'agy-pool-gauge-sub', formatResetHorizon(group.weekly.resetTime, group.weekly.fraction)),
+          );
+
+          gaugesRow.append(gauge5h, gaugeWk);
+          groupCol.append(groupHeader, gaugesRow);
+        }
+        groupsRow.append(groupCol);
+      }
+      cardQuota.append(cardQuotaHeader, groupsRow);
+    }
+
+    topGrid.append(cardStatus, cardQuota);
+
+    const fleetSection = element('div', 'agy-fleet-section');
+    const fleetHeader = element('div', 'agy-fleet-header');
+    fleetHeader.append(
+      element('div', 'agy-pool-card-title', 'Account Fleet')
+    );
+
+    const table = element('table', 'agy-fleet-table');
+    const colgroup = document.createElement('colgroup');
+    const colAcc = document.createElement('col'); colAcc.style.width = '34%';
+    const col5h = document.createElement('col'); col5h.style.width = '26%';
+    const colWk = document.createElement('col'); colWk.style.width = '26%';
+    const colAct = document.createElement('col'); colAct.style.width = '14%';
+    colgroup.append(colAcc, col5h, colWk, colAct);
+    table.append(colgroup);
+
+    const thead = element('thead');
+    const trHead = element('tr');
+    trHead.append(
+      element('th', '', 'Account'),
+      element('th', '', '5-Hour Quota'),
+      element('th', '', 'Weekly Quota'),
+      element('th', '', 'Action')
+    );
+    thead.append(trHead);
+    table.append(thead);
+
+    const tbody = element('tbody');
+    for (const account of pool.accounts) {
+      const isActive = pool.activeAccount?.id === account.id;
+      const tr = element('tr', isActive ? 'agy-fleet-row-active' : '');
+
+      const isCustomAuth = account.authMode !== 'antigravity';
+      const rowQuotaData = poolQuotaCache.get(account.id);
+      const email = rowQuotaData?.quota?.email || account.email;
+      const displayId = account.id && account.id.length > 14
+        ? `${account.id.slice(0, 8)}…${account.id.slice(-4)}`
+        : account.id;
+
+      const tdAcc = element('td');
+      const accInfo = element('div', 'agy-account-info');
+      const primaryText = email || account.label || displayId;
+      let secondaryText = displayId;
+      if (email) {
+        if (account.label && account.label !== email && account.label.toLowerCase() !== 'google account') {
+          secondaryText = `${account.label} · ${displayId}`;
+        }
+      } else if (account.label && account.label !== displayId) {
+        secondaryText = displayId;
+      }
+
+      const detectedPlan = rowQuotaData?.quota?.planTier;
+      if (detectedPlan) {
+        secondaryText = `${secondaryText} · ${detectedPlan}`;
+      }
+
+      const accTitle = `${email ? `${email}\n` : ''}${account.label && account.label !== email ? `Label: ${account.label}\n` : ''}ID: ${account.id}${account.project ? `\nProject: ${account.project}` : ''}${detectedPlan ? `\nPlan: ${detectedPlan}` : ''}`;
+      accInfo.title = accTitle.trim();
+
+      accInfo.append(
+        element('span', 'agy-account-name', primaryText),
+        element('span', 'agy-account-id', secondaryText)
+      );
+      tdAcc.append(accInfo);
+
+      const rowParsed = parseQuotaBuckets(rowQuotaData?.quota, isCustomAuth);
+
+      const td5h = element('td');
+      if (!rowParsed.hasBuckets) {
+        td5h.append(element('span', 'agy-muted', '— (N/A)'));
+      } else {
+        const subBars5h = element('div', 'agy-sub-bar-container');
+        for (const group of rowParsed.groups) {
+          const tag = group.isGemini ? 'Gemini' : (group.isThirdParty ? 'Claude/GPT' : group.name);
+          const subBar = element('div', 'agy-sub-bar');
+          const meta = element('div', 'agy-sub-bar-meta');
+
+          if (group.unavailable) {
+            meta.append(
+              element('span', 'agy-sub-bar-tag', tag),
+              element('span', 'agy-muted', 'Unavailable'),
+            );
+            subBar.append(meta);
+          } else {
+            const pct = Math.max(0, Math.min(100, Math.round(group.fiveHour.fraction * 100)));
+            let color = '#34d399';
+            if (pct < 20) color = '#f87171';
+            else if (pct < 50) color = '#fbbf24';
+
+            meta.append(
+              element('span', 'agy-sub-bar-tag', tag),
+              element('span', 'agy-bar-pct', `${pct}%`),
+              element('span', 'agy-bar-sub', formatResetHorizon(group.fiveHour.resetTime, group.fiveHour.fraction)),
+            );
+
+            const track = element('div', 'agy-bar-track');
+            const fill = element('div', 'agy-bar-fill');
+            fill.style.width = `${pct}%`;
+            fill.style.backgroundColor = color;
+            track.append(fill);
+            subBar.append(meta, track);
+          }
+          subBars5h.append(subBar);
+        }
+        td5h.append(subBars5h);
+      }
+
+      const tdWk = element('td');
+      if (!rowParsed.hasBuckets) {
+        tdWk.append(element('span', 'agy-pool-badge', 'PayG / GCP'));
+      } else {
+        const subBarsWk = element('div', 'agy-sub-bar-container');
+        for (const group of rowParsed.groups) {
+          const tag = group.isGemini ? 'Gemini' : (group.isThirdParty ? 'Claude/GPT' : group.name);
+          const subBar = element('div', 'agy-sub-bar');
+          const meta = element('div', 'agy-sub-bar-meta');
+
+          if (group.unavailable) {
+            meta.append(
+              element('span', 'agy-sub-bar-tag', tag),
+              element('span', 'agy-muted', 'Unavailable'),
+            );
+            subBar.append(meta);
+          } else {
+            const pct = Math.max(0, Math.min(100, Math.round(group.weekly.fraction * 100)));
+            let color = '#34d399';
+            if (pct < 20) color = '#f87171';
+            else if (pct < 50) color = '#fbbf24';
+
+            meta.append(
+              element('span', 'agy-sub-bar-tag', tag),
+              element('span', 'agy-bar-pct', `${pct}%`),
+              element('span', 'agy-bar-sub', formatResetHorizon(group.weekly.resetTime, group.weekly.fraction)),
+            );
+
+            const track = element('div', 'agy-bar-track');
+            const fill = element('div', 'agy-bar-fill');
+            fill.style.width = `${pct}%`;
+            fill.style.backgroundColor = color;
+            track.append(fill);
+            subBar.append(meta, track);
+          }
+          subBarsWk.append(subBar);
+        }
+        tdWk.append(subBarsWk);
+      }
+
+      const tdAct = element('td');
+      tdAct.style.textAlign = 'right';
+      if (isActive) {
+        tdAct.append(element('span', 'agy-badge-active', '● Active'));
+      } else {
+        const isExhausted = isAccountQuotaExhausted(account.id, account.authMode);
+        if (isExhausted) {
+          const exBadge = element('span', 'agy-pool-badge', 'Exhausted');
+          exBadge.style.color = '#f87171';
+          exBadge.style.borderColor = 'rgba(248, 113, 113, 0.4)';
+          exBadge.style.marginRight = '6px';
+          tdAct.append(exBadge);
+        }
+        const switchBtn = button('⇄ Switch', async () => {
+          switchBtn.disabled = true;
+          switchBtn.textContent = 'Switching…';
+          await switchPoolActiveAccount(account.id);
+        });
+        switchBtn.className = 'agy-btn agy-btn-switch';
+        tdAct.append(switchBtn);
+      }
+
+      tr.append(tdAcc, td5h, tdWk, tdAct);
+      tbody.append(tr);
+    }
+    table.append(tbody);
+    fleetSection.append(fleetHeader, table);
+
+    container.append(header, desc, topGrid, fleetSection);
+
+    async function fetchAllQuotas(): Promise<void> {
+      if (isRefreshingPoolQuotas) return;
+      isRefreshingPoolQuotas = true;
+      try {
+        const tasks = pool.accounts.map(async (acc) => {
+          try {
+            const result = (await ipcRenderer.invoke('storage:google-test-account', {
+              modelName: pool.modelName,
+              accountId: acc.id,
+            })) as { success?: boolean; quota?: any; error?: string; message?: string };
+            if (result && result.success !== false && result.quota) {
+              poolQuotaCache.set(acc.id, { quota: result.quota, timestamp: Date.now() });
+              if (result.quota.email && !acc.email) {
+                acc.email = result.quota.email;
+              }
+              if (result.quota.email && (!acc.label || acc.label.toLowerCase() === 'google account')) {
+                acc.label = result.quota.email || result.quota.name || acc.label;
+              }
+            } else {
+              poolQuotaCache.set(acc.id, {
+                quota: undefined,
+                error: result?.error || result?.message || 'Failed',
+                timestamp: Date.now(),
+              });
+            }
+          } catch (e: any) {
+            poolQuotaCache.set(acc.id, { quota: undefined, error: e?.message || 'Error', timestamp: Date.now() });
+          }
+        });
+        await Promise.allSettled(tasks);
+      } finally {
+        isRefreshingPoolQuotas = false;
+      }
+    }
+
+    const anyStale = pool.accounts.some((a) => {
+      const cached = poolQuotaCache.get(a.id);
+      return !cached || Date.now() - cached.timestamp > 120_000;
+    });
+
+    if (anyStale && !isRefreshingPoolQuotas) {
+      void fetchAllQuotas().then(() => {
+        if (container.isConnected) void renderGooglePoolWidget(modelList);
+      });
+    }
+
+    if (!poolWidgetInterval) {
+      poolWidgetInterval = setInterval(() => {
+        const c = document.getElementById('agy-google-account-pool-section');
+        if (!c || !c.isConnected) {
+          clearInterval(poolWidgetInterval);
+          poolWidgetInterval = undefined;
+          return;
+        }
+        const stale = pool.accounts.some((a) => {
+          const cached = poolQuotaCache.get(a.id);
+          return !cached || Date.now() - cached.timestamp > 120_000;
+        });
+        if (stale && !isRefreshingPoolQuotas) {
+          void fetchAllQuotas().then(() => {
+            if (c.isConnected) void renderGooglePoolWidget(modelList);
+          });
+        }
+      }, 30_000);
+    }
+  }
+
   async function renderCustomModelsList(): Promise<void> {
     const target = document.getElementById('agy-custom-models-content');
     if (!target) return;
@@ -762,6 +1664,7 @@ window.addEventListener('DOMContentLoaded', () => {
       const models = await storageAPI.getCustomModels();
       if (version !== renderVersion || !target.isConnected) return;
       modelList = models;
+      void renderGooglePoolWidget(models);
       target.replaceChildren();
       const groups = new Map<string, CustomModelEntry[]>();
       for (const model of models) {
@@ -1039,8 +1942,8 @@ window.addEventListener('DOMContentLoaded', () => {
       const updateGoogleVisibility = () => {
         const isGoogle = provider.value === 'google-cloudcode';
         googleConfig.hidden = !isGoogle;
-        apiKey.closest('label')!.hidden = isGoogle;
         apiFormat.closest('label')!.hidden = isGoogle;
+        apiKey.closest('label')!.hidden = isGoogle;
       };
       updateGoogleVisibility();
       body.append(googleConfig);
@@ -1846,10 +2749,16 @@ window.addEventListener('DOMContentLoaded', () => {
   function injectCustomModelsSection(): void {
     const mount = findSettingsMount();
     const existing = document.getElementById('agy-custom-models-section');
-    if (existing && mount && existing.parentElement === mount) return;
+    const existingPool = document.getElementById('agy-google-account-pool-section');
+    if (existing && existingPool && mount && existing.parentElement === mount && existingPool.parentElement === mount) return;
     existing?.remove();
+    existingPool?.remove();
     if (!mount) return;
     installStyles();
+    const poolSection = element('section');
+    poolSection.id = 'agy-google-account-pool-section';
+    poolSection.setAttribute('aria-label', 'Google Account Fleet & Quota Overview');
+    poolSection.hidden = true;
     const section = element('section');
     section.id = 'agy-custom-models-section';
     section.setAttribute('aria-label', 'Custom Models');
@@ -1881,12 +2790,21 @@ window.addEventListener('DOMContentLoaded', () => {
       actions,
     );
     section.append(status, content);
-    mount.append(section);
+    mount.append(poolSection, section);
     void renderCustomModelsList();
   }
+  function isDropdownVisible(el: HTMLElement): boolean {
+    if (!el || !el.isConnected) return false;
+    if (el.hidden) return false;
+    if (el.style.display === 'none' || el.style.visibility === 'hidden') return false;
+    if (el.getAttribute('data-state') === 'closed') return false;
+    return true;
+  }
+
   function setupInjectionObserver(): void {
     injectCustomModelsSection();
-    if (!document.body) return;
+    if (!document?.body || typeof document?.createElement !== 'function') return;
+    installStyles();
     let pending: ReturnType<typeof setTimeout> | undefined;
     const observer = new MutationObserver(() => {
       if (pending) clearTimeout(pending);
@@ -1902,6 +2820,7 @@ window.addEventListener('DOMContentLoaded', () => {
       attributes: true,
       attributeFilter: ['hidden', 'aria-hidden', 'class', 'style'],
     });
+
     window.addEventListener(
       'pagehide',
       () => {

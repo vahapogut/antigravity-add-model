@@ -2,6 +2,7 @@ import * as loopbackSecurity from '../proxy/loopbackSecurity';
 import * as subagentRoutingModule from '../proxy/subagentRouting';
 import * as subagentModels from '../proxy/subagentModels';
 import * as nativeSubagentResponse from '../proxy/nativeSubagentResponse';
+import * as googlePoolFailover from '../proxy/googlePoolFailover';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -79,6 +80,7 @@ async function fixture(
     './proxy/subagentRouting': subagentRoutingModule,
     './proxy/subagentModels': subagentModels,
     './proxy/nativeSubagentResponse': nativeSubagentResponse,
+    './proxy/googlePoolFailover': googlePoolFailover,
     './proxy/cloudCodeRouting': {
       CloudCodeRouting: class extends CloudCodeRouting {
         constructor() {

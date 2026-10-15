@@ -244,6 +244,24 @@ describe('Google account selection and quota', () => {
     });
   });
 
+  it('populates quota.email and updates generic label when quota endpoint returns user email', async () => {
+    const endpoint = await serve((_req, res) => {
+      res.end(
+        JSON.stringify({
+          userEmail: 'detected-fleet@gmail.com',
+          planTier: 'pro',
+          buckets: [{ id: 'burst', remainingFraction: 0.9 }],
+        }),
+      );
+    });
+    const acc = { ...account('fleet-email-test'), label: 'Google account' };
+    const snapshot = await fetchGoogleQuota(acc, endpoint);
+    expect(snapshot.email).toBe('detected-fleet@gmail.com');
+    expect(snapshot.planTier).toBe('Pro');
+    expect(acc.email).toBe('detected-fleet@gmail.com');
+    expect(acc.label).toBe('detected-fleet@gmail.com');
+  });
+
   it.each<NonNullable<GooglePoolOptions['strategy']>>(['round-robin', 'least-loaded', 'quota', 'adaptive'])(
     'supports 50 accounts with %s and keeps access failures separate from transient cooldowns',
     async (strategy) => {
@@ -412,6 +430,17 @@ describe('Google account selection and quota', () => {
     expect(JSON.stringify(getGooglePoolStatus())).not.toContain('access-');
   });
 
+  it('clears sticky affinity and falls back to healthy standby account when pinned account fails with 429', async () => {
+    const accounts = [account('rate-limited-acc'), account('healthy-acc')];
+    const initial = await acquireGoogleAccount('models/test', accounts, {}, 'test-conv');
+    expect(initial.account.id).toBe('rate-limited-acc');
+    initial.release({ status: 429, retryAfterMs: 60000 });
+
+    const nextTurn = await acquireGoogleAccount('models/test', accounts, {}, 'test-conv');
+    expect(nextTurn.account.id).toBe('healthy-acc');
+    nextTurn.release({ status: 200 });
+  });
+
   it('keeps capacity limits above adaptive preference and forgets stale latency measurements', async () => {
     const now = Date.now();
     const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
@@ -528,5 +557,56 @@ describe('Google account selection and quota', () => {
       succeeded: 1,
       status: 'ready',
     });
+  });
+
+  it('parses separate Gemini and Claude/GPT quota groups and routes requests according to model family', async () => {
+    const endpoint = await serve((req, res) => {
+      expect(req.url).toBe('/v1internal:retrieveUserQuotaSummary');
+      const isAccA = req.headers.authorization === 'Bearer access-multi-a';
+      res.writeHead(200, { 'Content-Type': 'application/json', Connection: 'close' });
+      res.end(
+        JSON.stringify({
+          groups: [
+            {
+              name: 'Gemini Models',
+              buckets: [
+                { bucketId: 'five_hour', remainingFraction: isAccA ? 0.32 : 0.9, resetTime: new Date(Date.now() + 1800_000).toISOString() },
+                { bucketId: 'weekly', remainingFraction: isAccA ? 0.57 : 0.95, resetTime: new Date(Date.now() + 360_000_000).toISOString() },
+              ],
+            },
+            {
+              name: 'Claude and GPT models',
+              buckets: [
+                { bucketId: 'five_hour', remainingFraction: isAccA ? 1.0 : 0.0 },
+                { bucketId: 'weekly', remainingFraction: isAccA ? 1.0 : 0.0 },
+              ],
+            },
+          ],
+        }),
+      );
+    });
+
+    const accA = account('multi-a');
+    const accB = account('multi-b');
+    const snapshotA = await fetchGoogleQuota(accA, endpoint);
+    expect(snapshotA.groups).toHaveLength(2);
+    expect(snapshotA.groups![0].name).toBe('Gemini Models');
+    expect(snapshotA.groups![1].name).toBe('Claude and GPT models');
+    expect(snapshotA.buckets).toHaveLength(4);
+
+    const snapshotB = await fetchGoogleQuota(accB, endpoint);
+    expect(snapshotB.groups).toHaveLength(2);
+
+    // AccB has 0% for Claude, but 90% for Gemini.
+    // When requesting Claude, AccB is exhausted for Claude, so AccA must be selected!
+    const claudeLease = await acquireGoogleAccount('claude-3-5-sonnet', [accA, accB]);
+    expect(claudeLease.account.id).toBe('multi-a');
+    claudeLease.release();
+
+    // When requesting Gemini with 'quota' strategy:
+    // AccB has 90% for Gemini vs AccA's 32%, so AccB must be selected for Gemini!
+    const geminiLease = await acquireGoogleAccount('gemini-2-5-flash', [accA, accB], { strategy: 'quota' });
+    expect(geminiLease.account.id).toBe('multi-b');
+    geminiLease.release();
   });
 });

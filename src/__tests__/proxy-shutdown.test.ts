@@ -32,6 +32,7 @@ const dependencies: Record<string, unknown> = {
   './proxy/subagentRouting': { subagentRouting: { clear: vi.fn() } },
   './modelStore': {},
   './cryptoStore': {},
+  './proxy/googlePoolFailover': { attemptGooglePoolFailover: vi.fn() },
   './proxy/loopbackSecurity': loopbackSecurity,
   './proxy/listen': listener,
 };

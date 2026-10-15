@@ -95,6 +95,7 @@ const subagentRouting_1 = require("./proxy/subagentRouting");
 const subagentModels_1 = require("./proxy/subagentModels");
 const loopbackSecurity_1 = require("./proxy/loopbackSecurity");
 const nativeSubagentResponse_1 = require("./proxy/nativeSubagentResponse");
+const googlePoolFailover_1 = require("./proxy/googlePoolFailover");
 let languageServerPortResolver;
 let languageServerRoutingEnabled = false;
 /** Registered by the desktop with its own live language-server port getter. */
@@ -470,6 +471,35 @@ function forwardToGoogle(req, res, reqBody, nativeSubagent, cloudCodeOrigin) {
         res.end(JSON.stringify({ error: { message } }));
     };
     const proxyReq = https.request(parsedUrl, options, (proxyRes) => {
+        const isRateLimit = isGeneration &&
+            isCloudCodeUrl &&
+            (proxyRes.statusCode === 429 || proxyRes.statusCode === 403);
+        if (isRateLimit) {
+            const errorChunks = [];
+            let totalLen = 0;
+            proxyRes.on('data', (chunk) => {
+                if (totalLen < 16384) {
+                    errorChunks.push(chunk);
+                    totalLen += chunk.length;
+                }
+            });
+            proxyRes.on('end', async () => {
+                const errorBody = Buffer.concat(errorChunks).toString('utf8');
+                const handled = await (0, googlePoolFailover_1.attemptGooglePoolFailover)(req, res, reqBody, proxyRes, errorBody, {
+                    loadCustomModels,
+                    forwardingHeaders,
+                    cloudCodeRouting,
+                    log: electron_log_1.default,
+                }, nativeSubagent, cloudCodeOrigin);
+                if (!handled) {
+                    if (res.destroyed || res.writableEnded)
+                        return;
+                    res.writeHead(proxyRes.statusCode || 429, forwardingHeaders(proxyRes.headers));
+                    res.end(Buffer.concat(errorChunks));
+                }
+            });
+            return;
+        }
         if (nativeSubagent && isGeneration) {
             nativeResponse = proxyRes;
             const streamHint = req.url.includes('streamGenerateContent') || req.url.includes('alt=sse');

@@ -5,6 +5,7 @@ export declare const GOOGLE_CLOUD_CODE_USER_AGENT = "antigravity-add-model";
 export interface GoogleAccount {
     id: string;
     label?: string;
+    email?: string;
     refreshToken?: string;
     accessToken?: string;
     expiresAt?: number;
@@ -21,15 +22,27 @@ export interface GooglePoolOptions {
     maxConcurrency?: number;
     cooldownMs?: number;
 }
+export interface GoogleQuotaBucket {
+    id: string;
+    displayName?: string;
+    groupName?: string;
+    remainingFraction?: number;
+    resetTime?: string;
+}
+export interface GoogleQuotaGroup {
+    name: string;
+    displayName?: string;
+    buckets: GoogleQuotaBucket[];
+}
 export interface GoogleQuotaSnapshot {
     accountId: string;
     checkedAt: number;
     remainingFraction?: number;
-    buckets: {
-        id: string;
-        remainingFraction?: number;
-        resetTime?: string;
-    }[];
+    planTier?: string;
+    email?: string;
+    name?: string;
+    buckets: GoogleQuotaBucket[];
+    groups?: GoogleQuotaGroup[];
 }
 export interface GoogleAccountLease {
     account: GoogleAccount;
@@ -60,6 +73,7 @@ export declare function fetchGoogleModels(account: GoogleAccount, baseURL?: stri
     displayName: string;
 }[]>;
 export declare function acquireGoogleAccount(modelName: string, accounts: GoogleAccount[], options?: GooglePoolOptions, requestIdentity?: string, cooldownScope?: string): Promise<GoogleAccountLease>;
+export declare function recordGoogleAccountFailure(account: GoogleAccount, status: number, retryAfterMs?: number, cooldownScope?: string, reason?: GoogleCooldownReason): void;
 export declare function getGooglePoolStatus(): {
     id: string;
     label: string;

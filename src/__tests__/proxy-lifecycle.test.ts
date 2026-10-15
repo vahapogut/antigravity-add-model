@@ -94,6 +94,7 @@ function fixture(fixed = true) {
     './proxy/customRequest': { stopCustomRequests: vi.fn(), getProxyMetrics: () => ({ requests: 0 }) },
     './modelStore': {},
     './cryptoStore': {},
+    './proxy/googlePoolFailover': { attemptGooglePoolFailover: vi.fn() },
     // These are the production marker parser and listener, with only the socket mocked.
     './proxy/loopbackSecurity': loopbackSecurity,
     './proxy/listen': { getRequiredProxyPort, listenProxy },

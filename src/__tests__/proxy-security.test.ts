@@ -121,6 +121,7 @@ async function fixture(options: ProxyStartOptions = {}) {
     './proxy/subagentModels': subagentModels,
     './proxy/nativeSubagentResponse': nativeSubagentResponse,
     './proxy/cloudCodeRouting': {},
+    './proxy/googlePoolFailover': { attemptGooglePoolFailover: vi.fn() },
     './proxy/loopbackSecurity': loopbackSecurity,
     './proxy/listen': {
       getRequiredProxyPort: () => undefined,
