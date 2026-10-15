@@ -219,7 +219,7 @@ function validateCustomModel(model) {
             if (!entry || typeof entry !== 'object' || typeof entry.id !== 'string' || !entry.id.trim() || ids.has(entry.id))
                 return { valid: false, error: 'Each Google account needs a unique id' };
             ids.add(entry.id);
-            for (const field of ['label', 'refreshToken', 'accessToken', 'clientId', 'clientSecret', 'project']) {
+            for (const field of ['label', 'refreshToken', 'accessToken', 'clientId', 'clientSecret', 'project', 'email']) {
                 if (entry[field] !== undefined && typeof entry[field] !== 'string')
                     return { valid: false, error: `Google account ${field} must be a string` };
             }

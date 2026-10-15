@@ -158,6 +158,14 @@ export function modelListUrl(apiUrl: string, format: string, provider?: string):
     url.searchParams.set('page_size', '100');
     return url.toString();
   }
+  if (url.origin === 'https://opencode.ai' || (provider && ['opencode', 'zen', 'opencode-go'].includes(provider))) {
+    if (pathname.includes('/zen')) {
+      url.pathname = '/zen/v1/models';
+    } else {
+      url.pathname = '/inference/v1/models';
+    }
+    return url.toString();
+  }
   if (provider === 'fireworks') {
     url.pathname = `${pathname.replace(/\/(?:inference\/)?v1$/, '')}/v1/accounts/fireworks/models`;
     url.searchParams.set('pageSize', '200');
@@ -302,6 +310,7 @@ export function createModelManager(
     previous?: GoogleAccount,
     includePreparation = false,
     requireUnchangedCredentials = includePreparation,
+    includeIdentity = false,
   ) {
     const raw = store.read().find((item) => item.name === modelName);
     if (!raw || !Array.isArray(raw.googleAccounts)) return false;
@@ -340,6 +349,8 @@ export function createModelManager(
       accessToken: account.accessToken,
       refreshToken: account.refreshToken,
       expiresAt: account.expiresAt,
+      ...(includeIdentity && account.email ? { email: account.email } : {}),
+      ...(includeIdentity && account.label ? { label: account.label } : {}),
       ...(includePreparation
         ? { project: account.project, cloudCodeEndpoint: account.cloudCodeEndpoint, authMode: account.authMode }
         : {}),
@@ -489,8 +500,19 @@ export function createModelManager(
       !(authenticationHeaders['x-auth-key'] && authenticationHeaders['x-auth-email'])
     )
       throw new Error('Enter a Cloudflare Workers AI API token or authentication headers');
+    const isOpencode =
+      ['opencode', 'zen', 'opencode-go'].includes(model.provider) ||
+      model.apiUrl.includes('opencode.ai');
     const headers: Record<string, string> = {};
-    if (model.provider === 'fireworks') {
+    if (isOpencode) {
+      if (model.apiKey && model.apiKey !== 'none') {
+        headers.Authorization = `Bearer ${model.apiKey}`;
+      } else {
+        headers.Authorization = 'Bearer public';
+      }
+      headers['User-Agent'] = 'opencode/latest/2.0.29/cli';
+      headers['x-opencode-client'] = 'cli';
+    } else if (model.provider === 'fireworks') {
       if (model.apiKey) headers.Authorization = `Bearer ${model.apiKey}`;
     } else if (format === 'anthropic') {
       headers['anthropic-version'] = '2023-06-01';
@@ -504,6 +526,9 @@ export function createModelManager(
       http.validateHeaderName(key);
       http.validateHeaderValue(key, value);
       headers[key] = value;
+    }
+    if (isOpencode) {
+      delete headers['x-opencode-request'];
     }
     const listUrl = new URL(modelListUrl(model.apiUrl, format, model.provider));
     const models = new Map<string, DiscoveredModel>();
@@ -737,6 +762,15 @@ export function createModelManager(
       else if (pending.has(account.id))
         pending.set(account.id, { account, expiresAt: dependencies.now() + 10 * 60 * 1000 });
       const quota = await dependencies.fetchGoogleQuota(account, endpoint);
+      if (quota.email && (!account.email || !account.label || account.label.toLowerCase() === 'google account')) {
+        account.email = quota.email;
+        if (!account.label || account.label.toLowerCase() === 'google account') {
+          account.label = quota.email || quota.name || account.label;
+        }
+        if (input.modelName) persistGoogleAccount(input.modelName, account, previous, false, false, true);
+        else if (pending.has(account.id))
+          pending.set(account.id, { account, expiresAt: dependencies.now() + 10 * 60 * 1000 });
+      }
       return { success: true, quota };
     },
     async testModel(input: ProbeParams) {

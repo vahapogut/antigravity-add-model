@@ -27,6 +27,14 @@ import { activeStreamContexts, modelReasoningContent, modelToolCallIds, stateTim
 import { collectToolSchemas } from './translators/utils';
 import { subagentRouting, SubagentRoutingError } from './subagentRouting';
 import { resolveConfiguredSubagentModel } from './subagentModels';
+import {
+  isOpencodeFreeModel,
+  isOpencodeProvider,
+  normalizeOpencodeEndpoint,
+  buildOpencodeHeaders,
+  prepareOpencodeFreeBody,
+  parseSSEToOpenAIResponse,
+} from './opencodeFingerprint';
 
 const circuits = new CircuitBreaker();
 const controllers = new Set<AbortController>();
@@ -330,7 +338,7 @@ export async function runCustomModelRequest(
               isStream,
               compactionEffort,
             );
-            const target =
+            let target =
               cloudCode || model.rawUrl
                 ? model.apiUrl
                 : registry.getProviderUrl(
@@ -339,6 +347,17 @@ export async function runCustomModelRequest(
                     isStream,
                     registry.getTranslator(model.provider, format),
                   );
+            const isOpencode =
+              isOpencodeProvider(model.provider) ||
+              target.includes('opencode.ai') ||
+              isOpencodeFreeModel(externalName);
+            if (isOpencode) {
+              target = normalizeOpencodeEndpoint(
+                target,
+                externalName,
+                format === 'openai' && target.endsWith('/responses'),
+              );
+            }
             url = new URL(target);
             if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Unsupported endpoint protocol');
             headers = registry.getProviderHeaders(model.provider, cloudCode ? '' : model.apiKey, format);
@@ -353,9 +372,16 @@ export async function runCustomModelRequest(
               const project = accountLease.account.project || model.googleProject;
               payload = { model: externalName, ...(project ? { project } : {}), request: payload };
             }
-            if (['opencode', 'zen', 'opencode-go'].includes(model.provider)) {
+            if (isOpencode) {
               const identity = originalBody.sessionId || originalBody.conversationId;
-              headers['x-opencode-session'] = typeof identity === 'string' ? identity : requestId;
+              const opencodeHeaders = buildOpencodeHeaders(
+                model.apiKey,
+                typeof identity === 'string' ? identity : requestId,
+              );
+              headers = { ...headers, ...opencodeHeaders };
+              if (isOpencodeFreeModel(externalName) || !model.apiKey || model.apiKey === 'none') {
+                payload = prepareOpencodeFreeBody(payload, format === 'openai' && url.pathname.endsWith('/responses'));
+              }
             }
             if (model.gateway) {
               const identity = originalBody.conversationId || originalBody.sessionId;
@@ -372,6 +398,9 @@ export async function runCustomModelRequest(
               http.validateHeaderName(key);
               http.validateHeaderValue(key, value);
               headers[key] = value;
+            }
+            if (isOpencode) {
+              delete headers['x-opencode-request'];
             }
           } catch (error) {
             throw new UpstreamError(`Invalid model configuration: ${(error as Error).message}`, 400, false, 0, false);
@@ -531,12 +560,22 @@ export async function runCustomModelRequest(
               chunks.push(bytes as Buffer);
             }
             let parsed: Record<string, any>;
+            const rawBody = Buffer.concat(chunks).toString('utf8');
             try {
-              parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+              parsed = JSON.parse(rawBody);
             } catch {
-              throw new UpstreamError('Upstream returned invalid JSON.');
+              const sseParsed = parseSSEToOpenAIResponse(rawBody, externalName);
+              if (sseParsed) {
+                parsed = sseParsed;
+              } else {
+                throw new UpstreamError('Upstream returned invalid JSON.');
+              }
             }
-            if (parsed.error) throw new UpstreamError('Upstream returned an error response.');
+            if (parsed.error) {
+              throw new UpstreamError(
+                typeof parsed.error?.message === 'string' ? parsed.error.message : 'Upstream returned an error response.',
+              );
+            }
             if (cloudCode && parsed.response) parsed = parsed.response;
             diagnostic.observe(parsed, format);
             if (

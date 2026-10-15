@@ -39,6 +39,7 @@ export const REQUIRED_BUILD_FILES = [
   'proxy/registry.js',
   'proxy/shared.js',
   'proxy/customRequest.js',
+  'proxy/opencodeFingerprint.js',
   'proxy/subagentRouting.js',
   'proxy/subagentModels.js',
   'proxy/nativeSubagentResponse.js',

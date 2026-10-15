@@ -92,8 +92,12 @@ function getProviderHeaders(provider, apiKey = '', apiFormat) {
         headers['HTTP-Referer'] = 'https://antigravity.google';
         headers['X-Title'] = 'Antigravity';
     }
-    if (['opencode', 'zen', 'opencode-go'].includes(provider))
-        headers['User-Agent'] = 'opencode';
+    if (['opencode', 'zen', 'opencode-go'].includes(provider)) {
+        headers['User-Agent'] = 'opencode/latest/2.0.29/cli';
+        if (!headers.Authorization) {
+            headers.Authorization = 'Bearer public';
+        }
+    }
     return headers;
 }
 function supportsStreaming(_provider) {

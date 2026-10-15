@@ -59,6 +59,30 @@ window.addEventListener('DOMContentLoaded', () => {
         });
         return node;
     }
+    function isOpencodeFreeName(modelName) {
+        if (!modelName)
+            return false;
+        const name = modelName.trim().toLowerCase();
+        return (name.endsWith('-free') ||
+            [
+                'big-pickle',
+                'cat-jam-free',
+                'mimo-v2.5-free',
+                'mimo-v2.6-flash-free',
+                'muse-spark-1.2-contributor-free',
+                'muse-spark-1.3-contributor-free',
+                'nemotron-3-ultra-free',
+                'nemotron-3.5-lightning-free',
+                'north-mini-code-free',
+                'hy3-free',
+                'ling-3.1-flash-free',
+                'space-bunny-free',
+                'jev-1.13-free',
+                'step-5-preview-free',
+                'longcat-2.5-preview-free',
+                'deepseek-v4-flash-free',
+            ].includes(name));
+    }
     function field(parent, title, id, value = '', type = 'text') {
         const label = element('label', 'agy-field');
         label.htmlFor = id;
@@ -170,6 +194,7 @@ window.addEventListener('DOMContentLoaded', () => {
       #agy-modal-overlay details{border:1px solid #303036;border-radius:8px;margin:12px 0;padding:12px}#agy-modal-overlay summary{cursor:pointer;margin-bottom:10px;font-weight:500}
       .agy-pool-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;background:#27272a;color:#a1a1aa;border:1px solid #3f3f46;white-space:nowrap}
       .agy-pool-badge-active{background:#064e3b;color:#34d399;border-color:#059669}
+      .agy-free-badge{color:#86efac;font-weight:600;margin-left:4px}
       .agy-pool-top-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}
       .agy-pool-card{background:#202024;border:1px solid #303036;border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;justify-content:space-between}
       .agy-pool-card-title{font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#a1a1aa;font-weight:700;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
@@ -1470,10 +1495,44 @@ window.addEventListener('DOMContentLoaded', () => {
             const updateWorkersHint = () => {
                 workersHint.hidden = !workersConnection();
             };
-            apiUrl.addEventListener('input', updateWorkersHint);
-            updateWorkersHint();
+            function isOpencode() {
+                return (['opencode', 'zen', 'opencode-go'].includes(provider.value) ||
+                    apiUrl.value.includes('opencode.ai'));
+            }
+            const opencodeAuth = selectField(body, 'Authentication mode', 'agy-opencode-auth', [
+                ['noAuth', 'No Auth (Free Models - Keyless)'],
+                ['auth', 'API Key (Paid Models)'],
+            ], existing?.apiKey && existing.apiKey !== 'none' ? 'auth' : 'noAuth');
+            const opencodeHint = element('p', 'agy-muted', 'OpenCode Free Tier: no API key required for free models (e.g. cat-jam-free, big-pickle, mimo-v2.6-flash-free). Choose Fetch provider models below to list and add them.');
+            body.append(opencodeHint);
             const apiKey = field(body, 'API key', 'agy-api-key', existing?.apiKey === 'none' ? '' : existing?.apiKey || '', 'password');
             apiKey.placeholder = preset().keyRequired ? 'Enter provider API key' : 'Optional for local servers';
+            const updateOpencodeVisibility = () => {
+                const opencode = isOpencode();
+                const authLabel = opencodeAuth.closest('label');
+                if (authLabel)
+                    authLabel.hidden = !opencode;
+                if (!opencode) {
+                    opencodeHint.hidden = true;
+                    if (provider.value !== 'google-cloudcode') {
+                        apiKey.closest('label').hidden = false;
+                    }
+                    apiKey.placeholder = preset().keyRequired ? 'Enter provider API key' : 'Optional for local servers';
+                }
+                else {
+                    const isNoAuth = opencodeAuth.value === 'noAuth';
+                    opencodeHint.hidden = !isNoAuth;
+                    apiKey.closest('label').hidden = isNoAuth;
+                    apiKey.placeholder = isNoAuth ? 'No API key needed (Public Free Tier)' : 'Enter provider API key';
+                }
+            };
+            opencodeAuth.addEventListener('change', updateOpencodeVisibility);
+            apiUrl.addEventListener('input', () => {
+                updateWorkersHint();
+                updateOpencodeVisibility();
+            });
+            updateWorkersHint();
+            updateOpencodeVisibility();
             const apiFormat = selectField(body, 'API format', 'agy-api-format', [
                 ['openai', 'OpenAI compatible'],
                 ['anthropic', 'Anthropic Messages'],
@@ -1509,7 +1568,12 @@ window.addEventListener('DOMContentLoaded', () => {
                 const isGoogle = provider.value === 'google-cloudcode';
                 googleConfig.hidden = !isGoogle;
                 apiFormat.closest('label').hidden = isGoogle;
-                apiKey.closest('label').hidden = isGoogle;
+                if (isGoogle) {
+                    apiKey.closest('label').hidden = true;
+                }
+                else {
+                    updateOpencodeVisibility();
+                }
             };
             updateGoogleVisibility();
             body.append(googleConfig);
@@ -1597,10 +1661,11 @@ window.addEventListener('DOMContentLoaded', () => {
                     if (!hasWorkersAuthentication(customHeaders))
                         throw new Error('Enter a Cloudflare Workers AI API token or authentication headers.');
                 }
+                const isNoAuth = isOpencode() && opencodeAuth.value === 'noAuth';
                 return {
                     provider: provider.value,
                     apiUrl: endpoint,
-                    apiKey: apiKey.value.trim() || 'none',
+                    apiKey: isNoAuth ? 'none' : (apiKey.value.trim() || 'none'),
                     apiFormat: apiFormat.value,
                     name: existing?.name,
                     allowUnauthorized: tls.value === 'true',
@@ -1623,7 +1688,8 @@ window.addEventListener('DOMContentLoaded', () => {
             function modelConfig(id, title, localName) {
                 if (!id.trim() || /\s/.test(id.trim()))
                     throw new Error('Enter a model ID without spaces.');
-                if (preset().keyRequired && !apiKey.value.trim() && !workersConnection())
+                const isNoAuth = isOpencode() && opencodeAuth.value === 'noAuth';
+                if (preset().keyRequired && !isNoAuth && !apiKey.value.trim() && !workersConnection())
                     throw new Error('Enter an API key for this provider.');
                 if (provider.value === 'google-cloudcode' && !readAccounts().some((account) => account.enabled !== false))
                     throw new Error('Add and enable at least one Google account.');
@@ -1644,7 +1710,7 @@ window.addEventListener('DOMContentLoaded', () => {
                     name: localName || name.value.trim() || uniqueName(`models/${provider.value}/${id}`),
                     provider: provider.value,
                     apiUrl: apiUrl.value.trim(),
-                    apiKey: apiKey.value.trim() || 'none',
+                    apiKey: isNoAuth ? 'none' : (apiKey.value.trim() || 'none'),
                     externalModelName: id.trim(),
                     displayName: title || id.trim(),
                     description: description.value.trim(),
@@ -1707,6 +1773,16 @@ window.addEventListener('DOMContentLoaded', () => {
                     selected.clear();
                     showChoices();
                 }, status));
+                const hasFree = choices.some((model) => isOpencodeFreeName(model.id));
+                if (hasFree || isOpencode()) {
+                    toolbar.append(button('Select free models', () => {
+                        for (const model of visible) {
+                            if (isOpencodeFreeName(model.id))
+                                selected.add(model.id);
+                        }
+                        showChoices();
+                    }, status));
+                }
                 discovery.append(toolbar);
                 if (!visible.length)
                     discovery.append(element('p', 'agy-muted', 'No provider models match this search.'));
@@ -1722,7 +1798,9 @@ window.addEventListener('DOMContentLoaded', () => {
                             selected.delete(model.id);
                         count.textContent = `${visible.length} of ${choices.length} models · ${selected.size} selected`;
                     });
-                    label.append(checkbox, element('span', '', model.displayName && model.displayName !== model.id ? `${model.displayName} · ${model.id}` : model.id));
+                    const isFree = isOpencodeFreeName(model.id);
+                    const badge = isFree ? ' [FREE]' : '';
+                    label.append(checkbox, element('span', isFree ? 'agy-free-badge' : '', (model.displayName && model.displayName !== model.id ? `${model.displayName} · ${model.id}` : model.id) + badge));
                     discovery.append(label);
                 }
             }
@@ -1789,6 +1867,7 @@ window.addEventListener('DOMContentLoaded', () => {
                 apiKey.value = '';
                 apiKey.placeholder = preset().keyRequired ? 'Enter provider API key' : 'Optional for local servers';
                 updateWorkersHint();
+                updateOpencodeVisibility();
                 choices = [];
                 selected.clear();
                 discoverySearch.value = '';

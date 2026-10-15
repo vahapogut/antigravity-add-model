@@ -1347,6 +1347,29 @@ describe('custom model settings in the preserved vendor preload', () => {
     expect(widget.textContent).toContain('Exhausted');
   });
 
+  it('supports OpenCode provider in noAuth mode, hides apiKey field and saves with apiKey=none', async () => {
+    const f = await fixture();
+    await f.click('Add model');
+
+    const providerSelect = f.input('agy-provider', 'opencode');
+    providerSelect.dispatchEvent(new f.dom.window.Event('change'));
+
+    const authSelect = f.document.getElementById('agy-opencode-auth') as HTMLSelectElement;
+    expect(authSelect).toBeTruthy();
+    expect(authSelect.value).toBe('noAuth');
+
+    const apiKeyInput = f.document.getElementById('agy-api-key') as HTMLInputElement;
+    expect(apiKeyInput.parentElement?.hidden).toBe(true);
+
+    f.input('agy-model-id', 'cat-jam-free');
+    await f.click('Save model');
+
+    const saved = f.getModels().find((m) => m.externalModelName === 'cat-jam-free');
+    expect(saved).toBeDefined();
+    expect(saved?.apiKey).toBe('none');
+    expect(saved?.provider).toBe('opencode');
+  });
+
   it('injects search bar into the official model selection dropdown and filters items', async () => {
     const f = await fixture();
 

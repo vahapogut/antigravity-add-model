@@ -53,6 +53,7 @@ const shared_1 = require("./shared");
 const utils_1 = require("./translators/utils");
 const subagentRouting_1 = require("./subagentRouting");
 const subagentModels_1 = require("./subagentModels");
+const opencodeFingerprint_1 = require("./opencodeFingerprint");
 const circuits = new circuitBreaker_1.CircuitBreaker();
 const controllers = new Set();
 const counts = {
@@ -332,9 +333,15 @@ async function runCustomModelRequest(res, primary, originalBody, isStream, allMo
                         const body = (0, requestOptions_1.trimContext)(originalBody, model.contextWindow, outputBudget);
                         const effectiveModel = outputBudget ? { ...model, maxOutputTokens: outputBudget } : model;
                         payload = (0, requestOptions_1.applyRequestOptions)(registry.translateRequest(model.provider, body, externalName, format, stateKey), effectiveModel, format, isStream, compactionEffort);
-                        const target = cloudCode || model.rawUrl
+                        let target = cloudCode || model.rawUrl
                             ? model.apiUrl
                             : registry.getProviderUrl(model.apiUrl, externalName, isStream, registry.getTranslator(model.provider, format));
+                        const isOpencode = (0, opencodeFingerprint_1.isOpencodeProvider)(model.provider) ||
+                            target.includes('opencode.ai') ||
+                            (0, opencodeFingerprint_1.isOpencodeFreeModel)(externalName);
+                        if (isOpencode) {
+                            target = (0, opencodeFingerprint_1.normalizeOpencodeEndpoint)(target, externalName, format === 'openai' && target.endsWith('/responses'));
+                        }
                         url = new URL(target);
                         if (!['http:', 'https:'].includes(url.protocol))
                             throw new Error('Unsupported endpoint protocol');
@@ -350,9 +357,13 @@ async function runCustomModelRequest(res, primary, originalBody, isStream, allMo
                             const project = accountLease.account.project || model.googleProject;
                             payload = { model: externalName, ...(project ? { project } : {}), request: payload };
                         }
-                        if (['opencode', 'zen', 'opencode-go'].includes(model.provider)) {
+                        if (isOpencode) {
                             const identity = originalBody.sessionId || originalBody.conversationId;
-                            headers['x-opencode-session'] = typeof identity === 'string' ? identity : requestId;
+                            const opencodeHeaders = (0, opencodeFingerprint_1.buildOpencodeHeaders)(model.apiKey, typeof identity === 'string' ? identity : requestId);
+                            headers = { ...headers, ...opencodeHeaders };
+                            if ((0, opencodeFingerprint_1.isOpencodeFreeModel)(externalName) || !model.apiKey || model.apiKey === 'none') {
+                                payload = (0, opencodeFingerprint_1.prepareOpencodeFreeBody)(payload, format === 'openai' && url.pathname.endsWith('/responses'));
+                            }
                         }
                         if (model.gateway) {
                             const identity = originalBody.conversationId || originalBody.sessionId;
@@ -369,6 +380,9 @@ async function runCustomModelRequest(res, primary, originalBody, isStream, allMo
                             http.validateHeaderName(key);
                             http.validateHeaderValue(key, value);
                             headers[key] = value;
+                        }
+                        if (isOpencode) {
+                            delete headers['x-opencode-request'];
                         }
                     }
                     catch (error) {
@@ -513,14 +527,22 @@ async function runCustomModelRequest(res, primary, originalBody, isStream, allMo
                             chunks.push(bytes);
                         }
                         let parsed;
+                        const rawBody = Buffer.concat(chunks).toString('utf8');
                         try {
-                            parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+                            parsed = JSON.parse(rawBody);
                         }
                         catch {
-                            throw new UpstreamError('Upstream returned invalid JSON.');
+                            const sseParsed = (0, opencodeFingerprint_1.parseSSEToOpenAIResponse)(rawBody, externalName);
+                            if (sseParsed) {
+                                parsed = sseParsed;
+                            }
+                            else {
+                                throw new UpstreamError('Upstream returned invalid JSON.');
+                            }
                         }
-                        if (parsed.error)
-                            throw new UpstreamError('Upstream returned an error response.');
+                        if (parsed.error) {
+                            throw new UpstreamError(typeof parsed.error?.message === 'string' ? parsed.error.message : 'Upstream returned an error response.');
+                        }
                         if (cloudCode && parsed.response)
                             parsed = parsed.response;
                         diagnostic.observe(parsed, format);
