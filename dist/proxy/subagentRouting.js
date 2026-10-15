@@ -12,6 +12,7 @@ class SubagentRoutingError extends Error {
 exports.SubagentRoutingError = SubagentRoutingError;
 const TIERS = new Set(['inherit', 'flash_lite', 'flash', 'pro']);
 const MARKER = /\[antigravity-subagent-route:([0-9a-f-]{36})\]/g;
+const SNAPSHOT_PROMPT = /("initialPrompt"\s*:\s*)("(?:[^"\\\u0000-\u001f]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*")/g;
 const DESCRIPTION = 'Model for this subagent: inherit (default), flash_lite, flash, or pro, or the exact saved name of an enabled custom model configured in Antigravity. Display labels and unconfigured model names are not accepted.';
 function object(value) {
     return value && typeof value === 'object' && !Array.isArray(value) ? value : undefined;
@@ -29,6 +30,11 @@ function digest(value) {
 }
 function tokens(text) {
     return [...text.matchAll(MARKER)].map((match) => match[1]);
+}
+function stripSnapshotMarkers(text) {
+    // Native checkpoint snapshots quote prior prompts as JSON strings. Remove
+    // routing markers only from those values before inspecting active markers.
+    return text.replace(SNAPSHOT_PROMPT, (_match, prefix, value) => prefix + value.replace(MARKER, ''));
 }
 function stripMarker(text, token) {
     const marker = `[antigravity-subagent-route:${token}]`;
@@ -175,6 +181,7 @@ class SubagentRoutingBridge {
             for (const part of content.parts || []) {
                 if (typeof part.text !== 'string' || part.functionCall || part.functionResponse)
                     continue;
+                part.text = stripSnapshotMarkers(part.text);
                 const issued = tokens(part.text);
                 for (const token of issued) {
                     this.requireMarker(token);
