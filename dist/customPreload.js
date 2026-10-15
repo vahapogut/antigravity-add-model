@@ -214,6 +214,10 @@ window.addEventListener('DOMContentLoaded', () => {
       .agy-pool-refresh-btn{font-size:11px;padding:3px 8px;cursor:pointer}
       .agy-pool-add-btn{font-size:11px;padding:3px 10px;cursor:pointer;background:#059669;color:#ffffff;border:1px solid #10b981;border-radius:6px;font-weight:600}
       .agy-pool-add-btn:hover{background:#047857}
+      .agy-model-search-box{padding:4px 6px 6px 6px;margin:2px 0;border-bottom:1px solid rgba(255,255,255,0.08);background:transparent}
+      .agy-model-search-input{width:100%;box-sizing:border-box;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:5px;color:#e4e4e7;font:12px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:4px 8px;outline:none;transition:border-color 0.15s ease}
+      .agy-model-search-input:focus{border-color:rgba(255,255,255,0.28);background:rgba(255,255,255,0.08);outline:none;box-shadow:none}
+      .agy-model-search-input::placeholder{color:#71717a}
       .agy-pool-groups-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;align-items:start}
       .agy-pool-groups-container{display:flex;flex-direction:column;gap:10px;width:100%}
       .agy-pool-group-col{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -2068,13 +2072,220 @@ window.addEventListener('DOMContentLoaded', () => {
             return false;
         return true;
     }
+    let activeModelMenu = null;
+    function findModelPickerDropdown() {
+        const candidates = Array.from(document.querySelectorAll('[role="menu"], [role="listbox"], [data-radix-menu-content]'));
+        for (const el of candidates) {
+            if (!el || el.id === 'agy-modal-overlay' || el.closest('#agy-modal-overlay') || el.closest('#agy-custom-models-section'))
+                continue;
+            if (!isDropdownVisible(el))
+                continue;
+            // Strictly reject submenus (such as View Usage sub-flyout or effort sub-flyout)
+            if (el.hasAttribute('data-radix-menu-sub-content') ||
+                el.hasAttribute('data-radix-dropdown-menu-sub-content') ||
+                el.matches?.('[data-radix-menu-sub-content], [data-radix-dropdown-menu-sub-content]'))
+                continue;
+            if (el.parentElement?.closest('[role="menu"], [data-radix-menu-content]'))
+                continue;
+            // Reject submenus linked to trigger menuitems (like View Usage or effort trigger)
+            const labelledBy = el.getAttribute('aria-labelledby');
+            if (labelledBy) {
+                const trigger = document.getElementById(labelledBy);
+                if (trigger) {
+                    if (trigger.getAttribute('role') === 'menuitem' || trigger.closest('[role="menu"], [data-radix-menu-content]')) {
+                        continue;
+                    }
+                    if (/usage/i.test(trigger.textContent || '')) {
+                        continue;
+                    }
+                }
+            }
+            if (el.id) {
+                const trigger = document.querySelector(`[aria-controls="${el.id}"]`);
+                if (trigger) {
+                    if (trigger.getAttribute('role') === 'menuitem' || trigger.closest('[role="menu"], [data-radix-menu-content]')) {
+                        continue;
+                    }
+                    if (/usage/i.test(trigger.textContent || '')) {
+                        continue;
+                    }
+                }
+            }
+            const rect = el.getBoundingClientRect?.() || { width: el.offsetWidth || 0, height: el.offsetHeight || 0 };
+            if (rect.width > 0 && (rect.width < 140 || rect.width > 480))
+                continue;
+            if (rect.height > 0 && rect.height < 60)
+                continue;
+            // Reject usage & quota panels/submenus
+            const rawText = el.textContent || '';
+            if (/\b(?:resets?\s+in|quota|requests?\s+remaining|token\s+usage|spend|billing)\b/i.test(rawText)) {
+                continue;
+            }
+            const leaves = Array.from(el.querySelectorAll('*')).filter((c) => c.children.length === 0);
+            const textLeaves = leaves.map((c) => c.textContent?.trim() || '').filter(Boolean);
+            if (textLeaves.length === 0)
+                continue;
+            // The top header must strictly be 'Model'
+            const modelIndex = textLeaves.findIndex((t) => t === 'Model');
+            if (modelIndex === -1 || modelIndex > 1)
+                continue;
+            // Must contain 'View Usage' action row separated from the Model header by model entries
+            const viewUsageIndex = textLeaves.findIndex((t) => /^View\s+Usage$/i.test(t));
+            if (viewUsageIndex === -1 || viewUsageIndex <= modelIndex + 1)
+                continue;
+            return el;
+        }
+        return null;
+    }
+    function attachModelPickerSearch(menu) {
+        if (menu.dataset.agySearchInjected === 'true')
+            return;
+        if (menu.querySelector('.agy-model-search-box'))
+            return;
+        // Safety guard: Never attach to any submenu or usage view
+        if (menu.hasAttribute('data-radix-menu-sub-content') ||
+            menu.hasAttribute('data-radix-dropdown-menu-sub-content') ||
+            menu.matches?.('[data-radix-menu-sub-content], [data-radix-dropdown-menu-sub-content]') ||
+            menu.parentElement?.closest('[role="menu"], [data-radix-menu-content]'))
+            return;
+        const labelledBy = menu.getAttribute('aria-labelledby');
+        if (labelledBy) {
+            const trigger = document.getElementById(labelledBy);
+            if (trigger && (trigger.getAttribute('role') === 'menuitem' || /usage/i.test(trigger.textContent || ''))) {
+                return;
+            }
+        }
+        menu.dataset.agySearchInjected = 'true';
+        installStyles();
+        const searchBox = element('div', 'agy-model-search-box');
+        const searchInput = element('input', 'agy-model-search-input');
+        searchInput.type = 'text';
+        searchInput.placeholder = 'Search models…';
+        searchInput.setAttribute('aria-label', 'Search models');
+        const noResults = element('div', 'agy-model-no-results', 'No models found');
+        noResults.style.display = 'none';
+        searchBox.append(searchInput);
+        const stopBubbling = (e) => e.stopPropagation();
+        searchBox.addEventListener('pointerdown', stopBubbling);
+        searchBox.addEventListener('mousedown', stopBubbling);
+        searchBox.addEventListener('click', stopBubbling);
+        const headerNode = Array.from(menu.querySelectorAll('*')).find((node) => node.children.length === 0 && node.textContent?.trim() === 'Model');
+        if (headerNode) {
+            let insertAfter = headerNode;
+            while (insertAfter.parentElement &&
+                insertAfter.parentElement !== menu &&
+                insertAfter.parentElement.children.length === 1) {
+                insertAfter = insertAfter.parentElement;
+            }
+            insertAfter.after(searchBox);
+        }
+        else {
+            menu.prepend(searchBox);
+        }
+        searchBox.after(noResults);
+        function getItems() {
+            let rows = Array.from(menu.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [role="option"], button'));
+            if (rows.length === 0) {
+                const scroll = menu.querySelector('.overflow-y-auto, [style*="overflow"]') || menu;
+                rows = Array.from(scroll.children);
+            }
+            return rows.filter((row) => {
+                if (row === searchBox || row.contains(searchBox) || searchBox.contains(row))
+                    return false;
+                if (row === noResults || row.contains(noResults))
+                    return false;
+                const txt = (row.textContent || '').trim();
+                if (!txt || txt === 'Model')
+                    return false;
+                if (/^View\s+Usage/i.test(txt))
+                    return false;
+                return true;
+            });
+        }
+        function filter() {
+            const query = searchInput.value.trim().toLowerCase();
+            const items = getItems();
+            let matchCount = 0;
+            for (const item of items) {
+                const itemText = (item.textContent || '').replace(/\s+/g, ' ').toLowerCase();
+                const matches = !query || itemText.includes(query);
+                if (matches) {
+                    item.style.removeProperty('display');
+                    matchCount++;
+                }
+                else {
+                    item.style.setProperty('display', 'none', 'important');
+                }
+            }
+            if (query && matchCount === 0) {
+                noResults.textContent = `No models matching "${searchInput.value.trim()}"`;
+                noResults.style.display = 'block';
+            }
+            else {
+                noResults.style.display = 'none';
+            }
+        }
+        searchInput.addEventListener('input', filter);
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                e.stopPropagation();
+                const visible = getItems().filter((item) => item.style.display !== 'none');
+                if (visible.length > 0) {
+                    visible[0].focus();
+                    visible[0].dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+                }
+                return;
+            }
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                const visible = getItems().filter((item) => item.style.display !== 'none');
+                if (visible.length > 0) {
+                    const target = visible.find((el) => el.matches(':focus, :focus-within, [data-highlighted], .active')) || visible[0];
+                    target.click();
+                }
+                return;
+            }
+            if (e.key === 'Escape') {
+                if (searchInput.value) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    searchInput.value = '';
+                    filter();
+                }
+                return;
+            }
+            e.stopPropagation();
+        });
+        setTimeout(() => {
+            searchInput.focus();
+        }, 20);
+    }
+    function checkAndAttachModelSearch() {
+        if (activeModelMenu && activeModelMenu.isConnected && isDropdownVisible(activeModelMenu)) {
+            return;
+        }
+        activeModelMenu = findModelPickerDropdown();
+        const existingBoxes = Array.from(document.querySelectorAll('.agy-model-search-box'));
+        for (const box of existingBoxes) {
+            if (!activeModelMenu || !activeModelMenu.contains(box)) {
+                box.remove();
+            }
+        }
+        if (activeModelMenu) {
+            attachModelPickerSearch(activeModelMenu);
+        }
+    }
     function setupInjectionObserver() {
         injectCustomModelsSection();
         if (!document?.body || typeof document?.createElement !== 'function')
             return;
         installStyles();
+        checkAndAttachModelSearch();
         let pending;
         const observer = new MutationObserver(() => {
+            checkAndAttachModelSearch();
             if (pending)
                 clearTimeout(pending);
             pending = setTimeout(() => {
@@ -2087,8 +2298,18 @@ window.addEventListener('DOMContentLoaded', () => {
             subtree: true,
             characterData: true,
             attributes: true,
-            attributeFilter: ['hidden', 'aria-hidden', 'class', 'style'],
+            attributeFilter: ['hidden', 'aria-hidden', 'class', 'style', 'data-state'],
         });
+        if (typeof document?.addEventListener === 'function') {
+            document.addEventListener('click', () => {
+                requestAnimationFrame(checkAndAttachModelSearch);
+            }, true);
+            document.addEventListener('keyup', (e) => {
+                if (['Enter', 'Space', ' '].includes(e.key)) {
+                    requestAnimationFrame(checkAndAttachModelSearch);
+                }
+            }, true);
+        }
         window.addEventListener('pagehide', () => {
             observer.disconnect();
             if (pending)

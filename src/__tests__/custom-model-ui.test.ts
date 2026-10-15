@@ -1346,4 +1346,87 @@ describe('custom model settings in the preserved vendor preload', () => {
     expect(activeBoxName?.textContent).toContain('healthy@gmail.com');
     expect(widget.textContent).toContain('Exhausted');
   });
+
+  it('injects search bar into the official model selection dropdown and filters items', async () => {
+    const f = await fixture();
+
+    // Create a mock model picker dropdown element matching Antigravity's layout
+    const dropdown = f.document.createElement('div');
+    dropdown.setAttribute('role', 'menu');
+    dropdown.setAttribute('data-state', 'open');
+    dropdown.innerHTML = `
+      <div class="menu-header">Model</div>
+      <div role="menuitem" class="item-flash">Gemini 3.8 Flash</div>
+      <div role="menuitem" class="item-sonnet">Claude Sonnet 4.6 (Thinking)</div>
+      <div role="menuitem" class="item-gpt">GPT-4o (Standard)</div>
+      <div role="menuitem" class="item-llama">Llama 3.3 70B (Open)</div>
+      <div role="menuitem" class="item-usage">View Usage</div>
+    `;
+
+    f.document.body.appendChild(dropdown);
+
+    // Wait for mutation observer / attachment
+    await vi.waitFor(() => {
+      const searchInput = dropdown.querySelector<HTMLInputElement>('.agy-model-search-input');
+      expect(searchInput).toBeTruthy();
+    });
+
+    const searchInput = dropdown.querySelector<HTMLInputElement>('.agy-model-search-input')!;
+    const flashItem = dropdown.querySelector<HTMLElement>('.item-flash')!;
+    const sonnetItem = dropdown.querySelector<HTMLElement>('.item-sonnet')!;
+    const gptItem = dropdown.querySelector<HTMLElement>('.item-gpt')!;
+    const llamaItem = dropdown.querySelector<HTMLElement>('.item-llama')!;
+    const usageItem = dropdown.querySelector<HTMLElement>('.item-usage')!;
+    const noResults = dropdown.querySelector<HTMLElement>('.agy-model-no-results')!;
+
+    // Initially all are visible
+    expect(flashItem.style.display).not.toBe('none');
+    expect(sonnetItem.style.display).not.toBe('none');
+    expect(gptItem.style.display).not.toBe('none');
+    expect(llamaItem.style.display).not.toBe('none');
+    expect(usageItem.style.display).not.toBe('none');
+
+    // Type "gpt"
+    searchInput.value = 'gpt';
+    searchInput.dispatchEvent(new f.dom.window.Event('input'));
+
+    expect(gptItem.style.display).not.toBe('none');
+    expect(flashItem.style.display).toBe('none');
+    expect(sonnetItem.style.display).toBe('none');
+    expect(llamaItem.style.display).toBe('none');
+    expect(usageItem.style.display).not.toBe('none'); // View usage stays visible
+    expect(noResults.style.display).toBe('none');
+
+    // Type something with no matches
+    searchInput.value = 'nonexistent-model-xyz';
+    searchInput.dispatchEvent(new f.dom.window.Event('input'));
+
+    expect(flashItem.style.display).toBe('none');
+    expect(gptItem.style.display).toBe('none');
+    expect(noResults.style.display).not.toBe('none');
+    expect(noResults.textContent).toContain('nonexistent-model-xyz');
+
+    // Clear search using Escape
+    const escEvent = new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true });
+    searchInput.dispatchEvent(escEvent);
+
+    expect(searchInput.value).toBe('');
+    expect(flashItem.style.display).not.toBe('none');
+    expect(gptItem.style.display).not.toBe('none');
+    expect(noResults.style.display).toBe('none');
+
+    // Filter to "llama" and press Enter to select
+    searchInput.value = 'llama';
+    searchInput.dispatchEvent(new f.dom.window.Event('input'));
+
+    let llamaClicked = false;
+    llamaItem.addEventListener('click', () => {
+      llamaClicked = true;
+    });
+
+    const enterEvent = new f.dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+    searchInput.dispatchEvent(enterEvent);
+
+    expect(llamaClicked).toBe(true);
+  });
 });
