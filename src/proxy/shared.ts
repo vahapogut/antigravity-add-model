@@ -1,7 +1,6 @@
-/**
- * Shared state module for proxy orchestration.
- * Extracted from proxy.js to decouple translators from main orchestration.
- */
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as os from 'node:os';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -102,3 +101,68 @@ export function stopCleanupInterval(): void {
 
 // Auto-start for backward compatibility (will be replaced by proxy.ts lifecycle)
 startCleanupInterval();
+
+let latestOfficialQuota: Record<string, unknown> | undefined;
+let latestOfficialQuotaEmail: string | undefined;
+let latestOfficialQuotaAt = 0;
+
+function getOfficialQuotaPath(): string {
+  const home = process.env.USERPROFILE || process.env.HOME || (typeof os !== 'undefined' ? os.homedir() : '');
+  return path.join(home, '.gemini', 'antigravity', '.official_quota.json');
+}
+
+export function recordOfficialQuota(data: Record<string, unknown>, email?: string): void {
+  if (data && typeof data === 'object') {
+    latestOfficialQuota = data;
+    const extractedEmail =
+      email ||
+      (typeof data.userEmail === 'string'
+        ? data.userEmail
+        : typeof (data.user as Record<string, unknown> | undefined)?.email === 'string'
+          ? ((data.user as Record<string, unknown>).email as string)
+          : undefined);
+    if (extractedEmail) latestOfficialQuotaEmail = extractedEmail.trim().toLowerCase();
+    latestOfficialQuotaAt = Date.now();
+    try {
+      const p = getOfficialQuotaPath();
+      fs.mkdirSync(path.dirname(p), { recursive: true });
+      fs.writeFileSync(
+        p,
+        JSON.stringify({
+          updatedAt: latestOfficialQuotaAt,
+          email: latestOfficialQuotaEmail,
+          data: latestOfficialQuota,
+        }),
+        'utf8',
+      );
+    } catch {}
+  }
+}
+
+export function getOfficialQuota(filterEmail?: string): Record<string, unknown> | undefined {
+  const normalizedFilter = filterEmail?.trim().toLowerCase();
+  const ONE_DAY = 24 * 60 * 60 * 1000;
+  if (latestOfficialQuota && Date.now() - latestOfficialQuotaAt < ONE_DAY) {
+    if (!normalizedFilter || (latestOfficialQuotaEmail && latestOfficialQuotaEmail === normalizedFilter)) {
+      return latestOfficialQuota;
+    }
+  }
+  try {
+    const p = getOfficialQuotaPath();
+    if (fs.existsSync(p)) {
+      const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
+      if (parsed && typeof parsed === 'object' && parsed.data) {
+        if (Date.now() - (parsed.updatedAt || 0) < ONE_DAY) {
+          const fileEmail = (parsed.email || '').trim().toLowerCase();
+          if (!normalizedFilter || (fileEmail && fileEmail === normalizedFilter)) {
+            latestOfficialQuota = parsed.data;
+            latestOfficialQuotaEmail = fileEmail || undefined;
+            latestOfficialQuotaAt = parsed.updatedAt || Date.now();
+            return parsed.data;
+          }
+        }
+      }
+    }
+  } catch {}
+  return undefined;
+}

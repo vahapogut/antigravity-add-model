@@ -44,6 +44,7 @@
     "workers-ai:setup": "node scripts/workers-ai.mjs",
     "patch:check": "node scripts/deploy.mjs --check",
     "patch:restore": "node scripts/deploy.mjs --restore",
+    "deploy": "node scripts/deploy.mjs",
     "test:integration": "node scripts/integration-smoke.mjs"
   },
   "dependencies": {

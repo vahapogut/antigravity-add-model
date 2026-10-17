@@ -1,7 +1,3 @@
-/**
- * Shared state module for proxy orchestration.
- * Extracted from proxy.js to decouple translators from main orchestration.
- */
 export interface StreamContext {
     accumulatedText: string;
     accumulatedReasoning: string;
@@ -36,4 +32,6 @@ export declare const stateTimestamps: StateTimestamps;
 export declare function touchStateTimestamp(map: Map<string, number>, key: string): void;
 export declare function startCleanupInterval(): void;
 export declare function stopCleanupInterval(): void;
+export declare function recordOfficialQuota(data: Record<string, unknown>, email?: string): void;
+export declare function getOfficialQuota(filterEmail?: string): Record<string, unknown> | undefined;
 //# sourceMappingURL=shared.d.ts.map

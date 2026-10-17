@@ -33,8 +33,9 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GoogleAccountError = exports.GOOGLE_CLOUD_CODE_USER_AGENT = void 0;
+exports.getOfficialQuota = exports.recordOfficialQuota = exports.GoogleAccountError = exports.GOOGLE_CLOUD_CODE_USER_AGENT = void 0;
 exports.configureGoogleAccountPersistence = configureGoogleAccountPersistence;
+exports.quotaFamily = quotaFamily;
 exports.googleAccountEndpoint = googleAccountEndpoint;
 exports.refreshGoogleAccount = refreshGoogleAccount;
 exports.fetchGoogleQuota = fetchGoogleQuota;
@@ -111,12 +112,16 @@ function quotaIsFresh(quota, now = Date.now()) {
         now - quota.checkedAt < MEASUREMENT_TTL_MS &&
         !quota.buckets.some((bucket) => bucket.resetTime && Date.parse(bucket.resetTime) <= now));
 }
+var shared_1 = require("./proxy/shared");
+Object.defineProperty(exports, "recordOfficialQuota", { enumerable: true, get: function () { return shared_1.recordOfficialQuota; } });
+Object.defineProperty(exports, "getOfficialQuota", { enumerable: true, get: function () { return shared_1.getOfficialQuota; } });
+const shared_2 = require("./proxy/shared");
 function quotaFamily(name) {
-    return /claude|gpt|anthropic|openai|third[- ]?party/i.test(name)
-        ? 'third-party'
-        : /gemini|google/i.test(name)
-            ? 'gemini'
-            : undefined;
+    if (/claude|gpt|anthropic|openai|third[- ]?party/i.test(name))
+        return 'third-party';
+    if (/gemini|google|flash|pro/i.test(name))
+        return 'gemini';
+    return undefined;
 }
 function quotaBuckets(quota, upstreamModel) {
     const wanted = upstreamModel ? quotaFamily(upstreamModel) : undefined;
@@ -293,21 +298,192 @@ async function fetchGoogleQuota(account, baseURL, options = {}) {
     endpoint.pathname = '/v1internal:retrieveUserQuotaSummary';
     endpoint.search = '';
     const current = await refreshGoogleAccount(account);
-    const { status, data } = await postJson(endpoint, {
+    const authHeaders = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${current.accessToken}`,
         'User-Agent': exports.GOOGLE_CLOUD_CODE_USER_AGENT,
-    }, JSON.stringify(account.project ? { project: account.project } : {}));
+    };
+    // 1. Initial query: project-scoped (defaulting to aicode-consumers for official Google services)
+    const effectiveProject = account.project || (endpoint.hostname.endsWith('.googleapis.com') ? 'aicode-consumers' : undefined);
+    const initialBody = effectiveProject ? JSON.stringify({ project: effectiveProject }) : '{}';
+    let { status, data } = await postJson(endpoint, authHeaders, initialBody);
+    // If initial query failed and endpoint is an official service, fall back to the alternate official endpoint
+    if ((status < 200 || status >= 300) && endpoint.hostname.endsWith('.googleapis.com')) {
+        const alternateHost = endpoint.hostname === 'daily-cloudcode-pa.googleapis.com'
+            ? 'cloudcode-pa.googleapis.com'
+            : 'daily-cloudcode-pa.googleapis.com';
+        try {
+            const altEndpoint = new URL(endpoint.toString());
+            altEndpoint.hostname = alternateHost;
+            const fallbackRes = await postJson(altEndpoint, authHeaders, initialBody);
+            if (fallbackRes.status >= 200 && fallbackRes.status < 300) {
+                endpoint.hostname = alternateHost;
+                status = fallbackRes.status;
+                data = fallbackRes.data;
+            }
+        }
+        catch { }
+    }
     if (status < 200 || status >= 300)
         throw new GoogleAccountError((0, googleAccessErrors_1.describeGoogleAccessError)(status, 'quota').message, status);
+    // 2. Complementary query: if third-party (Claude/GPT) groups exist without Gemini, fetch Gemini
+    let userScoped;
+    const isThirdPartyGroup = Array.isArray(data.groups) &&
+        data.groups.some((g) => {
+            if (!g || typeof g !== 'object')
+                return false;
+            const name = String(g.displayName || g.name || '');
+            return /claude|gpt|anthropic|openai|third[- ]?party/i.test(name);
+        });
+    const hasGemini = (Array.isArray(data.groups) &&
+        data.groups.some((g) => {
+            if (!g || typeof g !== 'object')
+                return false;
+            const name = String(g.displayName || g.name || '');
+            return /gemini/i.test(name);
+        })) ||
+        (Array.isArray(data.buckets) &&
+            data.buckets.some((b) => {
+                if (!b || typeof b !== 'object')
+                    return false;
+                const text = String(b.displayName ||
+                    b.id ||
+                    b.bucketId ||
+                    '');
+                return /gemini/i.test(text);
+            }));
+    if (account.project && isThirdPartyGroup && !hasGemini) {
+        try {
+            userScoped = await postJson(endpoint, authHeaders, '{}');
+        }
+        catch { }
+        const userScopedHasGemini = Array.isArray(userScoped?.data?.groups) &&
+            userScoped.data.groups.some((g) => {
+                if (!g || typeof g !== 'object')
+                    return false;
+                const name = String(g.displayName || g.name || '');
+                return /gemini/i.test(name);
+            });
+        if ((!userScopedHasGemini || !userScoped || userScoped.status < 200 || userScoped.status >= 300) && endpoint.hostname !== 'cloudcode-pa.googleapis.com') {
+            const prodEndpoint = new URL('https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary');
+            try {
+                const prodRes = await postJson(prodEndpoint, authHeaders, JSON.stringify({ project: effectiveProject || 'aicode-consumers' }));
+                if (prodRes.status >= 200 && prodRes.status < 300)
+                    userScoped = prodRes;
+            }
+            catch { }
+        }
+    }
+    // 3. Merge responses from this account's own Google queries and official intercepted session
+    const official = (0, shared_2.getOfficialQuota)(account.email);
+    let officialForThisAccount;
+    if (official) {
+        const offUser = official.user;
+        const offEmail = String(offUser?.email || official.userEmail || official.email || '').toLowerCase().trim();
+        const acctEmail = (account.email || '').toLowerCase().trim();
+        if (acctEmail && offEmail && acctEmail === offEmail) {
+            officialForThisAccount = official;
+        }
+    }
+    const sourceDatasets = [data, userScoped?.data, officialForThisAccount].filter(Boolean);
+    const mergedGroups = [];
+    const mergedBuckets = [];
+    const seenGroupNames = new Set();
+    for (const ds of sourceDatasets) {
+        if (Array.isArray(ds.groups)) {
+            for (const g of ds.groups) {
+                if (!g || typeof g !== 'object')
+                    continue;
+                const gRec = g;
+                const gName = String(gRec.displayName || gRec.name || gRec.title || '').trim();
+                const lowerName = gName.toLowerCase();
+                if (!lowerName) {
+                    mergedGroups.push({ ...gRec, buckets: Array.isArray(gRec.buckets) ? [...gRec.buckets] : [] });
+                    continue;
+                }
+                if (!seenGroupNames.has(lowerName)) {
+                    seenGroupNames.add(lowerName);
+                    mergedGroups.push({ ...gRec, buckets: Array.isArray(gRec.buckets) ? [...gRec.buckets] : [] });
+                }
+                else {
+                    const existingGroup = mergedGroups.find((eg) => {
+                        const egName = String(eg.displayName || eg.name || eg.title || '').trim().toLowerCase();
+                        return egName === lowerName;
+                    });
+                    if (existingGroup && Array.isArray(gRec.buckets)) {
+                        if (!Array.isArray(existingGroup.buckets))
+                            existingGroup.buckets = [];
+                        const existingBuckets = existingGroup.buckets;
+                        const seenIds = new Set(existingBuckets.map((b) => String(b.bucketId || b.id || b.displayName || '').toLowerCase().trim()));
+                        for (const nb of gRec.buckets) {
+                            if (!nb || typeof nb !== 'object')
+                                continue;
+                            const nbRec = nb;
+                            const nbId = String(nbRec.bucketId || nbRec.id || nbRec.displayName || '').toLowerCase().trim();
+                            const existingBucket = existingBuckets.find((b) => String(b.bucketId || b.id || b.displayName || '').toLowerCase().trim() === nbId);
+                            if (existingBucket) {
+                                if (ds === officialForThisAccount) {
+                                    if (typeof nbRec.remainingFraction === 'number')
+                                        existingBucket.remainingFraction = nbRec.remainingFraction;
+                                    if (typeof nbRec.resetTime === 'string')
+                                        existingBucket.resetTime = nbRec.resetTime;
+                                }
+                            }
+                            else if (nbId && !seenIds.has(nbId)) {
+                                seenIds.add(nbId);
+                                existingBuckets.push(nbRec);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (Array.isArray(ds.buckets)) {
+            const seenBucketKeys = new Set(mergedBuckets.map((b) => `${b.bucketId || b.id || ''}::${b.displayName || ''}`));
+            for (const b of ds.buckets) {
+                if (b && typeof b === 'object') {
+                    const bRec = b;
+                    const bKey = `${bRec.bucketId || bRec.id || ''}::${bRec.displayName || ''}`;
+                    const existingBucket = mergedBuckets.find((eb) => `${eb.bucketId || eb.id || ''}::${eb.displayName || ''}` === bKey);
+                    if (existingBucket) {
+                        if (ds === officialForThisAccount) {
+                            if (typeof bRec.remainingFraction === 'number')
+                                existingBucket.remainingFraction = bRec.remainingFraction;
+                            if (typeof bRec.resetTime === 'string')
+                                existingBucket.resetTime = bRec.resetTime;
+                        }
+                    }
+                    else if (!seenBucketKeys.has(bKey)) {
+                        seenBucketKeys.add(bKey);
+                        mergedBuckets.push(bRec);
+                    }
+                }
+            }
+        }
+    }
+    // If userScoped had top-level buckets and no groups, ensure they appear as Gemini Models
+    if (!seenGroupNames.has('gemini models') && Array.isArray(userScoped?.data?.buckets) && userScoped.data.buckets.length > 0) {
+        mergedGroups.unshift({
+            name: 'Gemini Models',
+            displayName: 'Gemini Models',
+            buckets: userScoped.data.buckets.map((b) => ({ ...b, groupName: 'Gemini Models' })),
+        });
+        seenGroupNames.add('gemini models');
+    }
+    const responseData = {
+        ...(userScoped?.data || {}),
+        ...data,
+        groups: mergedGroups,
+        ...(mergedBuckets.length ? { buckets: mergedBuckets } : {}),
+    };
     const buckets = [];
     const groups = [];
     const rawGroups = [
-        ...(Array.isArray(data.groups) ? data.groups : []),
-        ...(Array.isArray(data.buckets) ? [{ buckets: data.buckets }] : []),
+        ...(Array.isArray(responseData.groups) ? responseData.groups : []),
+        ...(Array.isArray(responseData.buckets) ? [{ buckets: responseData.buckets }] : []),
     ];
     const groupedBuckets = new Map();
-    const topLevelGroup = Array.isArray(data.buckets) ? rawGroups[rawGroups.length - 1] : undefined;
+    const topLevelGroup = Array.isArray(responseData.buckets) ? rawGroups[rawGroups.length - 1] : undefined;
     const sameBucket = (left, right) => {
         const normalize = (value) => value?.trim().toLowerCase() || '';
         const leftFamily = quotaFamily(`${left.groupName || ''} ${left.id} ${left.displayName || ''}`);
@@ -391,14 +567,14 @@ async function fetchGoogleQuota(account, baseURL, options = {}) {
         }
     }
     const remaining = buckets.flatMap((bucket) => bucket.remainingFraction === undefined ? [] : [bucket.remainingFraction]);
-    const paidTier = data.paidTier && typeof data.paidTier === 'object' ? data.paidTier : undefined;
-    const quotaUser = data.user && typeof data.user === 'object' ? data.user : undefined;
-    const rawTier = typeof data?.subscriptionTier === 'string'
-        ? data.subscriptionTier
-        : typeof data?.userTier === 'string'
-            ? data.userTier
-            : typeof data?.planTier === 'string'
-                ? data.planTier
+    const paidTier = responseData.paidTier && typeof responseData.paidTier === 'object' ? responseData.paidTier : undefined;
+    const quotaUser = responseData.user && typeof responseData.user === 'object' ? responseData.user : undefined;
+    const rawTier = typeof responseData?.subscriptionTier === 'string'
+        ? responseData.subscriptionTier
+        : typeof responseData?.userTier === 'string'
+            ? responseData.userTier
+            : typeof responseData?.planTier === 'string'
+                ? responseData.planTier
                 : typeof paidTier?.tier === 'string'
                     ? paidTier.tier
                     : undefined;
@@ -416,11 +592,18 @@ async function fetchGoogleQuota(account, baseURL, options = {}) {
         else
             planTier = rawTier.charAt(0).toUpperCase() + rawTier.slice(1);
     }
+    else if (buckets.length > 0) {
+        const has5h = buckets.some((b) => {
+            const text = `${b.id} ${b.displayName || ''}`.toLowerCase();
+            return text.includes('5h') || text.includes('five') || /5[-_ ]?hour/.test(text);
+        });
+        planTier = has5h ? 'Pro' : 'Free';
+    }
     let email = account.email ||
-        (typeof data.userEmail === 'string'
-            ? data.userEmail
-            : typeof data.email === 'string'
-                ? data.email
+        (typeof responseData.userEmail === 'string'
+            ? responseData.userEmail
+            : typeof responseData.email === 'string'
+                ? responseData.email
                 : typeof quotaUser?.email === 'string'
                     ? quotaUser.email
                     : undefined);

@@ -40,6 +40,14 @@ function classifyGoogleRateLimit(body, retryAfter, now = Date.now()) {
         // Only examine structured error descriptions, never entire echoed request payloads.
         const descriptions = typeof error?.message === 'string' ? [error.message.slice(0, 2048)] : [];
         const hints = [];
+        if (typeof error?.message === 'string') {
+            const resetMatch = error.message.match(/resets\s*in\s*([0-9smhd]+)/i);
+            if (resetMatch) {
+                const delay = duration(resetMatch[1]);
+                if (delay !== undefined)
+                    hints.push(delay);
+            }
+        }
         for (const detail of details) {
             if (!detail || typeof detail !== 'object')
                 continue;
@@ -68,7 +76,7 @@ function classifyGoogleRateLimit(body, retryAfter, now = Date.now()) {
         const description = descriptions.join(' ').toLowerCase();
         // RESOURCE_EXHAUSTED alone also describes short rate limits, so does not imply a long quota window.
         if (!/per[_ ]minute|\brpm\b|rate[_ ]limit/.test(description) &&
-            /quota[_ ]exhausted|daily[_ ]limit|weekly[_ ]limit|insufficient[_ ]credits?/.test(description))
+            /quota[_ ]exhausted|daily[_ ]limit|weekly[_ ]limit|insufficient[_ ]credits?|individual\s*quota|quota\s*(?:reached|exceeded)/.test(description))
             reason = 'quota-exhausted';
         if (retryAfterMs === undefined && hints.length)
             retryAfterMs = Math.max(...hints);

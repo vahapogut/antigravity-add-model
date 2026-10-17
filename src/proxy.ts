@@ -125,6 +125,7 @@ import {
   stateTimestamps,
   startCleanupInterval,
   stopCleanupInterval,
+  recordOfficialQuota,
 } from './proxy/shared';
 
 // Model configuration & capability detection
@@ -556,7 +557,7 @@ function forwardToGoogle(
 
   const isGeneration = req.url!.includes('generateContent') || req.url!.includes('streamGenerateContent');
   const shouldBufferAndModify = isCloudCodeUrl && !isGeneration;
-  const failoverEnabled = isCloudCodeUrl && isGeneration && !!resolveGoogleFailoverPool(loadCustomModels(), reqBody);
+  const failoverEnabled = isGeneration && !!resolveGoogleFailoverPool(loadCustomModels(), reqBody, req.url);
 
   if (shouldBufferAndModify) {
     delete headers['accept-encoding'];
@@ -580,7 +581,7 @@ function forwardToGoogle(
     res.end(JSON.stringify({ error: { message } }));
   };
   const proxyReq = https.request(parsedUrl, options, (proxyRes) => {
-    if (failoverEnabled && (proxyRes.statusCode === 429 || proxyRes.statusCode === 403)) {
+    if (failoverEnabled && (proxyRes.statusCode === 429 || proxyRes.statusCode === 403 || proxyRes.statusCode === 400)) {
       const chunks: Buffer[] = [];
       let bytes = 0;
       let interrupted = false;
@@ -655,6 +656,31 @@ function forwardToGoogle(
             cloudCodeRouting.observe(req.headers, proxyRes.statusCode || 500, JSON.parse(text));
           } catch {
             /* Invalid responses must not change the account's upstream routing. */
+          }
+        }
+
+        if (parsedUrl.pathname === '/v1internal:retrieveUserQuotaSummary' && proxyRes.statusCode === 200) {
+          try {
+            const authHeader = req.headers.authorization || req.headers['authorization'];
+            const token = typeof authHeader === 'string' ? authHeader.replace(/^Bearer\s+/i, '').trim() : '';
+            let matchedEmail: string | undefined;
+            if (token) {
+              try {
+                const models = loadCustomModels();
+                for (const m of models) {
+                  if (Array.isArray(m.googleAccounts)) {
+                    const matched = m.googleAccounts.find((a) => a.accessToken && a.accessToken.trim() === token);
+                    if (matched?.email) {
+                      matchedEmail = matched.email.trim().toLowerCase();
+                      break;
+                    }
+                  }
+                }
+              } catch {}
+            }
+            recordOfficialQuota(JSON.parse(text), matchedEmail);
+          } catch {
+            /* ignore parse failure */
           }
         }
 

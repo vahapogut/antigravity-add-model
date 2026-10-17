@@ -450,7 +450,7 @@ function forwardToGoogle(req, res, reqBody, nativeSubagent, cloudCodeOrigin) {
     headers['content-length'] = String(reqBody.length);
     const isGeneration = req.url.includes('generateContent') || req.url.includes('streamGenerateContent');
     const shouldBufferAndModify = isCloudCodeUrl && !isGeneration;
-    const failoverEnabled = isCloudCodeUrl && isGeneration && !!(0, googlePoolFailover_1.resolveGoogleFailoverPool)(loadCustomModels(), reqBody);
+    const failoverEnabled = isGeneration && !!(0, googlePoolFailover_1.resolveGoogleFailoverPool)(loadCustomModels(), reqBody, req.url);
     if (shouldBufferAndModify) {
         delete headers['accept-encoding'];
     }
@@ -474,7 +474,7 @@ function forwardToGoogle(req, res, reqBody, nativeSubagent, cloudCodeOrigin) {
         res.end(JSON.stringify({ error: { message } }));
     };
     const proxyReq = https.request(parsedUrl, options, (proxyRes) => {
-        if (failoverEnabled && (proxyRes.statusCode === 429 || proxyRes.statusCode === 403)) {
+        if (failoverEnabled && (proxyRes.statusCode === 429 || proxyRes.statusCode === 403 || proxyRes.statusCode === 400)) {
             const chunks = [];
             let bytes = 0;
             let interrupted = false;
@@ -552,6 +552,32 @@ function forwardToGoogle(req, res, reqBody, nativeSubagent, cloudCodeOrigin) {
                     }
                     catch {
                         /* Invalid responses must not change the account's upstream routing. */
+                    }
+                }
+                if (parsedUrl.pathname === '/v1internal:retrieveUserQuotaSummary' && proxyRes.statusCode === 200) {
+                    try {
+                        const authHeader = req.headers.authorization || req.headers['authorization'];
+                        const token = typeof authHeader === 'string' ? authHeader.replace(/^Bearer\s+/i, '').trim() : '';
+                        let matchedEmail;
+                        if (token) {
+                            try {
+                                const models = loadCustomModels();
+                                for (const m of models) {
+                                    if (Array.isArray(m.googleAccounts)) {
+                                        const matched = m.googleAccounts.find((a) => a.accessToken && a.accessToken.trim() === token);
+                                        if (matched?.email) {
+                                            matchedEmail = matched.email.trim().toLowerCase();
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            catch { }
+                        }
+                        (0, shared_1.recordOfficialQuota)(JSON.parse(text), matchedEmail);
+                    }
+                    catch {
+                        /* ignore parse failure */
                     }
                 }
                 const proxyHost = req.headers.host || 'localhost';

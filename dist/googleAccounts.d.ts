@@ -66,6 +66,8 @@ export declare class GoogleAccountError extends Error {
 }
 declare let persistAccount: ((modelName: string, account: GoogleAccount, previousAccount: GoogleAccount) => Promise<void> | void) | undefined;
 export declare function configureGoogleAccountPersistence(callback?: typeof persistAccount): void;
+export { recordOfficialQuota, getOfficialQuota } from './proxy/shared';
+export declare function quotaFamily(name: string): 'third-party' | 'gemini' | undefined;
 /** Preserve local test/custom endpoints, and use the prepared tier for official Google requests. */
 export declare function googleAccountEndpoint(account: GoogleAccount, configured?: string): string;
 /** Refresh requests are coalesced and cached. Endpoint override is restricted to localhost fixtures. */
@@ -110,5 +112,4 @@ export declare function getGooglePoolStatus(): {
 }[];
 /** Clear volatile account state after explicit account edits or sign-in. */
 export declare function resetGoogleAccountState(id?: string): void;
-export {};
 //# sourceMappingURL=googleAccounts.d.ts.map

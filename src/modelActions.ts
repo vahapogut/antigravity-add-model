@@ -4,6 +4,14 @@ import { getDiagnostics, clearDiagnostics, getRecentModelNames } from './diagnos
 import * as path from 'node:path';
 import { allocateModelIdentities } from './modelIdentity';
 import { nativeCatalogCapabilities, nativeModelExperiments, type CustomModelConfig } from './proxy/modelUtils';
+import { getOfficialQuota } from './proxy/shared';
+import {
+  getChatContextUsage,
+  resolveModelContextLimit,
+  cleanModelSlug,
+  fetchContextLimitFromApi,
+  updateCustomModelContextWindow,
+} from './chatContext';
 
 export function createModelActions(
   manager: ReturnType<typeof createModelManager>,
@@ -78,5 +86,42 @@ export function createModelActions(
     'storage:google-remove-account': manager.googleRemoveAccount,
     'storage:get-diagnostics': getDiagnostics,
     'storage:clear-diagnostics': clearDiagnostics,
+    'storage:get-official-quota': (email?: unknown) => getOfficialQuota(typeof email === 'string' ? email : undefined),
+    'storage:get-chat-context-usage': async (payload?: unknown) => {
+      let convId: string | undefined;
+      let title: string | undefined;
+      let modelName: string | undefined;
+      let fallbackToLatest = false;
+
+      if (typeof payload === 'string') {
+        convId = payload;
+      } else if (payload && typeof payload === 'object') {
+        const p = payload as { conversationId?: string; convId?: string; title?: string; modelName?: string; fallbackToLatest?: boolean };
+        convId = p.conversationId || p.convId;
+        title = p.title;
+        modelName = p.modelName;
+        fallbackToLatest = p.fallbackToLatest === true;
+      }
+
+      const usage = getChatContextUsage(convId, undefined, { title, fallbackToLatest });
+      const customModels = manager.store.list();
+      let maxTokens = modelName ? resolveModelContextLimit(modelName, customModels) : undefined;
+
+      if (!maxTokens && modelName) {
+        try {
+          const fetched = await fetchContextLimitFromApi(cleanModelSlug(modelName));
+          if (fetched) {
+            maxTokens = fetched;
+            updateCustomModelContextWindow(modelName, fetched);
+          }
+        } catch {
+        }
+      }
+
+      return {
+        ...usage,
+        maxTokens,
+      };
+    },
   };
 }

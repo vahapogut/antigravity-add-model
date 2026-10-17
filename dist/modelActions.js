@@ -38,6 +38,8 @@ const diagnostics_1 = require("./diagnostics");
 const path = __importStar(require("node:path"));
 const modelIdentity_1 = require("./modelIdentity");
 const modelUtils_1 = require("./proxy/modelUtils");
+const shared_1 = require("./proxy/shared");
+const chatContext_1 = require("./chatContext");
 function createModelActions(manager) {
     return {
         'storage:get-custom-models': () => {
@@ -110,6 +112,41 @@ function createModelActions(manager) {
         'storage:google-remove-account': manager.googleRemoveAccount,
         'storage:get-diagnostics': diagnostics_1.getDiagnostics,
         'storage:clear-diagnostics': diagnostics_1.clearDiagnostics,
+        'storage:get-official-quota': (email) => (0, shared_1.getOfficialQuota)(typeof email === 'string' ? email : undefined),
+        'storage:get-chat-context-usage': async (payload) => {
+            let convId;
+            let title;
+            let modelName;
+            let fallbackToLatest = false;
+            if (typeof payload === 'string') {
+                convId = payload;
+            }
+            else if (payload && typeof payload === 'object') {
+                const p = payload;
+                convId = p.conversationId || p.convId;
+                title = p.title;
+                modelName = p.modelName;
+                fallbackToLatest = p.fallbackToLatest === true;
+            }
+            const usage = (0, chatContext_1.getChatContextUsage)(convId, undefined, { title, fallbackToLatest });
+            const customModels = manager.store.list();
+            let maxTokens = modelName ? (0, chatContext_1.resolveModelContextLimit)(modelName, customModels) : undefined;
+            if (!maxTokens && modelName) {
+                try {
+                    const fetched = await (0, chatContext_1.fetchContextLimitFromApi)((0, chatContext_1.cleanModelSlug)(modelName));
+                    if (fetched) {
+                        maxTokens = fetched;
+                        (0, chatContext_1.updateCustomModelContextWindow)(modelName, fetched);
+                    }
+                }
+                catch {
+                }
+            }
+            return {
+                ...usage,
+                maxTokens,
+            };
+        },
     };
 }
 //# sourceMappingURL=modelActions.js.map

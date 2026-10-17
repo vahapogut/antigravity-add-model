@@ -104,7 +104,7 @@ export declare function createModelManager(directory: string, codec: SecretCodec
     };
     googleSelectAccount(input: {
         modelName: string;
-        accountId: string;
+        accountId?: string;
     }): {
         success: boolean;
         count: number;
