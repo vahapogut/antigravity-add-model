@@ -144,6 +144,45 @@ function applyCompactionEffort(
 // the model and dimensions; base64 byte counts are not text token counts.
 const ESTIMATED_IMAGE_TOKENS = 1024;
 
+type AttachmentField = 'inlineData' | 'fileData';
+
+function isImageAttachment(field: AttachmentField, attachment: { mimeType?: unknown; fileUri?: unknown }): boolean {
+  return (
+    (typeof attachment.mimeType === 'string' && /^image\//i.test(attachment.mimeType.trim())) ||
+    (field === 'fileData' && typeof attachment.fileUri === 'string' && /^data:image\//i.test(attachment.fileUri))
+  );
+}
+
+/**
+ * Blank every image payload on a copy of the part and report how many were found.
+ * Tool media is nested in `functionResponse.parts`, so this must recurse; otherwise
+ * a base64 screenshot inside a tool result would be billed as raw text.
+ */
+function estimatePart(part: Record<string, unknown>): { part: Record<string, unknown>; images: number } {
+  let images = 0;
+  let estimatedPart = part;
+  for (const field of ['inlineData', 'fileData'] as const) {
+    const attachment = part[field] as { mimeType?: unknown; data?: unknown; fileUri?: unknown } | undefined;
+    if (!attachment || typeof attachment !== 'object') continue;
+    if (!isImageAttachment(field, attachment)) continue;
+    images += 1;
+    estimatedPart = {
+      ...estimatedPart,
+      [field]: { ...attachment, [field === 'inlineData' ? 'data' : 'fileUri']: '' },
+    };
+  }
+  const response = estimatedPart.functionResponse as { parts?: unknown } | undefined;
+  if (response && typeof response === 'object' && Array.isArray(response.parts)) {
+    const nested = response.parts.map((nestedPart) => {
+      const estimate = estimatePart((nestedPart || {}) as Record<string, unknown>);
+      images += estimate.images;
+      return estimate.part;
+    });
+    estimatedPart = { ...estimatedPart, functionResponse: { ...response, parts: nested } };
+  }
+  return { part: estimatedPart, images };
+}
+
 function estimateContextTokens(body: GeminiBody): number {
   let imageTokens = 0;
   const estimatedBody = {
@@ -151,23 +190,9 @@ function estimateContextTokens(body: GeminiBody): number {
     contents: body.contents?.map((content) => ({
       ...content,
       parts: content.parts?.map((part) => {
-        let estimatedPart = part;
-        for (const field of ['inlineData', 'fileData'] as const) {
-          const attachment = part[field] as { mimeType?: unknown; data?: unknown; fileUri?: unknown } | undefined;
-          if (!attachment || typeof attachment !== 'object') continue;
-          const isImage =
-            (typeof attachment.mimeType === 'string' && /^image\//i.test(attachment.mimeType.trim())) ||
-            (field === 'fileData' &&
-              typeof attachment.fileUri === 'string' &&
-              /^data:image\//i.test(attachment.fileUri));
-          if (!isImage) continue;
-          imageTokens += ESTIMATED_IMAGE_TOKENS;
-          estimatedPart = {
-            ...estimatedPart,
-            [field]: { ...attachment, [field === 'inlineData' ? 'data' : 'fileUri']: '' },
-          };
-        }
-        return estimatedPart;
+        const estimate = estimatePart(part as Record<string, unknown>);
+        imageTokens += estimate.images * ESTIMATED_IMAGE_TOKENS;
+        return estimate.part;
       }),
     })),
   };

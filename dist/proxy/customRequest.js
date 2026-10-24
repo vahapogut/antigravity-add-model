@@ -51,6 +51,8 @@ const circuitBreaker_1 = require("./circuitBreaker");
 const requestOptions_1 = require("./requestOptions");
 const shared_1 = require("./shared");
 const utils_1 = require("./translators/utils");
+const images_1 = require("./translators/images");
+const modelUtils_1 = require("./modelUtils");
 const subagentRouting_1 = require("./subagentRouting");
 const subagentModels_1 = require("./subagentModels");
 const googlePoolFailover_1 = require("./googlePoolFailover");
@@ -355,7 +357,16 @@ async function runCustomModelRequest(res, primary, originalBody, isStream, allMo
                         // The IDE can omit thought parts when replaying completed tool calls.
                         // Recover only this conversation/provider's matching turn before budgeting.
                         const history = format === 'openai' ? reasoningReplay_1.reasoningReplayCache.restore(originalBody, model) : originalBody;
-                        const body = (0, requestOptions_1.trimContext)(history, model.contextWindow, outputBudget);
+                        // A text-only provider fails the whole request when it receives an image,
+                        // so strip tool-result media the model cannot use before trimming and
+                        // translating. Google's native format already carried nested tool media,
+                        // so it keeps its bytes to stay identical to the pre-fix behaviour.
+                        // Replayed thought parts sit on model turns and the guard only rewrites
+                        // user tool results, so the order here does not affect recovery.
+                        const guardedBody = format === 'google'
+                            ? history
+                            : (0, images_1.omitUnsupportedToolImages)(history, (0, modelUtils_1.detectModelCapabilities)(model).supportsImages);
+                        const body = (0, requestOptions_1.trimContext)(guardedBody, model.contextWindow, outputBudget);
                         const effectiveModel = outputBudget ? { ...model, maxOutputTokens: outputBudget } : model;
                         payload = (0, requestOptions_1.applyRequestOptions)(registry.translateRequest(model.provider, body, externalName, format, stateKey), effectiveModel, format, isStream, compactionEffort);
                         const target = cloudCode || model.rawUrl

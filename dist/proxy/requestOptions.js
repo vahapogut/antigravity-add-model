@@ -127,6 +127,41 @@ function applyCompactionEffort(result, model, format, effort) {
 // A budgeting estimate, not a provider tokenizer. Image token costs depend on
 // the model and dimensions; base64 byte counts are not text token counts.
 const ESTIMATED_IMAGE_TOKENS = 1024;
+function isImageAttachment(field, attachment) {
+    return ((typeof attachment.mimeType === 'string' && /^image\//i.test(attachment.mimeType.trim())) ||
+        (field === 'fileData' && typeof attachment.fileUri === 'string' && /^data:image\//i.test(attachment.fileUri)));
+}
+/**
+ * Blank every image payload on a copy of the part and report how many were found.
+ * Tool media is nested in `functionResponse.parts`, so this must recurse; otherwise
+ * a base64 screenshot inside a tool result would be billed as raw text.
+ */
+function estimatePart(part) {
+    let images = 0;
+    let estimatedPart = part;
+    for (const field of ['inlineData', 'fileData']) {
+        const attachment = part[field];
+        if (!attachment || typeof attachment !== 'object')
+            continue;
+        if (!isImageAttachment(field, attachment))
+            continue;
+        images += 1;
+        estimatedPart = {
+            ...estimatedPart,
+            [field]: { ...attachment, [field === 'inlineData' ? 'data' : 'fileUri']: '' },
+        };
+    }
+    const response = estimatedPart.functionResponse;
+    if (response && typeof response === 'object' && Array.isArray(response.parts)) {
+        const nested = response.parts.map((nestedPart) => {
+            const estimate = estimatePart((nestedPart || {}));
+            images += estimate.images;
+            return estimate.part;
+        });
+        estimatedPart = { ...estimatedPart, functionResponse: { ...response, parts: nested } };
+    }
+    return { part: estimatedPart, images };
+}
 function estimateContextTokens(body) {
     let imageTokens = 0;
     const estimatedBody = {
@@ -134,24 +169,9 @@ function estimateContextTokens(body) {
         contents: body.contents?.map((content) => ({
             ...content,
             parts: content.parts?.map((part) => {
-                let estimatedPart = part;
-                for (const field of ['inlineData', 'fileData']) {
-                    const attachment = part[field];
-                    if (!attachment || typeof attachment !== 'object')
-                        continue;
-                    const isImage = (typeof attachment.mimeType === 'string' && /^image\//i.test(attachment.mimeType.trim())) ||
-                        (field === 'fileData' &&
-                            typeof attachment.fileUri === 'string' &&
-                            /^data:image\//i.test(attachment.fileUri));
-                    if (!isImage)
-                        continue;
-                    imageTokens += ESTIMATED_IMAGE_TOKENS;
-                    estimatedPart = {
-                        ...estimatedPart,
-                        [field]: { ...attachment, [field === 'inlineData' ? 'data' : 'fileUri']: '' },
-                    };
-                }
-                return estimatedPart;
+                const estimate = estimatePart(part);
+                imageTokens += estimate.images * ESTIMATED_IMAGE_TOKENS;
+                return estimate.part;
             }),
         })),
     };

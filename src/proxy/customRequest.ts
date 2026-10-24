@@ -25,6 +25,8 @@ import {
 } from './requestOptions';
 import { activeStreamContexts, modelReasoningContent, modelToolCallIds, stateTimestamps } from './shared';
 import { collectToolSchemas } from './translators/utils';
+import { omitUnsupportedToolImages } from './translators/images';
+import { detectModelCapabilities } from './modelUtils';
 import { subagentRouting, SubagentRoutingError } from './subagentRouting';
 import { resolveConfiguredSubagentModel } from './subagentModels';
 import { isGoogleQuotaFailure } from './googlePoolFailover';
@@ -342,7 +344,17 @@ export async function runCustomModelRequest(
             // The IDE can omit thought parts when replaying completed tool calls.
             // Recover only this conversation/provider's matching turn before budgeting.
             const history = format === 'openai' ? reasoningReplayCache.restore(originalBody, model) : originalBody;
-            const body = trimContext(history, model.contextWindow, outputBudget);
+            // A text-only provider fails the whole request when it receives an image,
+            // so strip tool-result media the model cannot use before trimming and
+            // translating. Google's native format already carried nested tool media,
+            // so it keeps its bytes to stay identical to the pre-fix behaviour.
+            // Replayed thought parts sit on model turns and the guard only rewrites
+            // user tool results, so the order here does not affect recovery.
+            const guardedBody =
+              format === 'google'
+                ? history
+                : omitUnsupportedToolImages(history, detectModelCapabilities(model).supportsImages);
+            const body = trimContext(guardedBody, model.contextWindow, outputBudget);
             const effectiveModel = outputBudget ? { ...model, maxOutputTokens: outputBudget } : model;
             payload = applyRequestOptions(
               registry.translateRequest(model.provider, body, externalName, format, stateKey) as Record<

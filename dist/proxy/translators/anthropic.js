@@ -133,6 +133,10 @@ function mapGeminiToAnthropic(geminiBody, modelName, stateKey = modelName) {
                         if (!p.thought)
                             pendingToolResponseContent.push(...mapContentParts([p]));
                         if (p.functionResponse) {
+                            // Tool media arrives as nested parts, not as top-level image parts.
+                            const nestedContent = mapContentParts((0, images_1.nestedFunctionResponseParts)(p));
+                            if (nestedContent.length)
+                                pendingToolResponseContent.push(...nestedContent);
                             const funcName = p.functionResponse.name || '';
                             const modelTCIds = shared_1.modelToolCallIds.get(stateKey) || {};
                             const ids = historyCallIds.get(funcName) || [];

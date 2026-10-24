@@ -47,6 +47,8 @@ interface GeminiFunctionResponse {
     name: string;
     response: unknown;
     id?: string;
+    /** Media produced by the tool; the language server nests images here. */
+    parts?: GeminiPart[];
 }
 interface GeminiRequestBody {
     systemInstruction?: {

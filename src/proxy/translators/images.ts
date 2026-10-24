@@ -33,6 +33,84 @@ export function assertUserImageParts(parts: GeminiImagePart[], role: string): vo
   }
 }
 
+/**
+ * A function response may itself carry parts. The language server reports media
+ * produced by a tool execution as `functionResponse.parts[].inlineData`, because
+ * the response payload is a JSON Struct and cannot hold image bytes itself.
+ */
+export interface GeminiNestedFunctionResponse {
+  parts?: GeminiImagePart[];
+}
+
+/**
+ * Text-only providers reject an image with a hard failure (OpenRouter returns
+ * "No endpoints found that support image input"), which fails the whole request
+ * rather than just the image. Forwarding images out of tool results is new, so a
+ * model that was working before the fix must not start failing because a tool
+ * happened to read a PNG. For a model not advertised as vision capable, replace
+ * the tool's image with a readable placeholder and keep the response text.
+ *
+ * Only nested `functionResponse.parts` media is touched. Top-level user images
+ * already had their own path and keep their existing behaviour, so a vision model
+ * that matches no name pattern and carries no explicit flag is never affected.
+ */
+const OMITTED = '[Image omitted: this model does not support image input.]';
+
+function isImageAttachment(field: 'inlineData' | 'fileData', attachment: Record<string, unknown> | undefined): boolean {
+  if (!attachment || typeof attachment !== 'object') return false;
+  return (
+    (typeof attachment.mimeType === 'string' && /^image\//i.test(attachment.mimeType.trim())) ||
+    (field === 'fileData' && typeof attachment.fileUri === 'string' && /^data:image\//i.test(attachment.fileUri))
+  );
+}
+
+function hasImageAttachment(part: Record<string, unknown>): boolean {
+  return (
+    isImageAttachment('inlineData', part.inlineData as never) || isImageAttachment('fileData', part.fileData as never)
+  );
+}
+
+function withoutImageAttachment(part: Record<string, unknown>): Record<string, unknown> {
+  const copy: Record<string, unknown> = { ...part };
+  for (const field of ['inlineData', 'fileData'] as const) {
+    if (isImageAttachment(field, copy[field] as never)) delete copy[field];
+  }
+  return copy;
+}
+
+export function omitUnsupportedToolImages<T extends { contents?: unknown[] }>(body: T, supportsImages: boolean): T {
+  if (supportsImages) return body;
+  const contents = body.contents;
+  if (!Array.isArray(contents)) return body;
+  let changed = false;
+  const mapped = contents.map((content) => {
+    const item = content as { parts?: unknown[] };
+    if (!Array.isArray(item.parts)) return content;
+    let touched = false;
+    const parts = item.parts.map((rawPart) => {
+      const part = (rawPart || {}) as Record<string, unknown>;
+      const response = part.functionResponse as { parts?: unknown[] } | undefined;
+      if (!response || typeof response !== 'object' || !Array.isArray(response.parts)) return rawPart;
+      const nestedParts = response.parts.map((nested) => (nested || {}) as Record<string, unknown>);
+      if (!nestedParts.some(hasImageAttachment)) return rawPart;
+      touched = true;
+      return { ...part, functionResponse: { ...response, parts: nestedParts.map(withoutImageAttachment) } };
+    });
+    if (!touched) return content;
+    changed = true;
+    // One placeholder per tool response, after the part that carried the image.
+    return { ...item, parts: [...parts, { text: OMITTED }] };
+  });
+  return changed ? ({ ...body, contents: mapped } as T) : body;
+}
+
+export function nestedFunctionResponseParts(part: {
+  functionResponse?: GeminiNestedFunctionResponse;
+}): GeminiImagePart[] {
+  const nested = part.functionResponse?.parts;
+  return Array.isArray(nested) ? nested : [];
+}
+
 function imageMimeType(value: unknown): ImageMimeType {
   const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
   if (

@@ -5,7 +5,13 @@
 import { readFileSync } from 'fs';
 
 import log from 'electron-log';
-import { assertUserImageParts, getImageSource, ImageSource, localFilePath } from './images';
+import {
+  assertUserImageParts,
+  getImageSource,
+  ImageSource,
+  localFilePath,
+  nestedFunctionResponseParts,
+} from './images';
 import {
   normalizeToolSchema,
   translateToolCallToNative,
@@ -72,6 +78,8 @@ interface GeminiFunctionResponse {
   name: string;
   response: unknown;
   id?: string;
+  /** Media produced by the tool; the language server nests images here. */
+  parts?: GeminiPart[];
 }
 
 interface GeminiRequestBody {
@@ -268,6 +276,9 @@ export function mapGeminiToAnthropic(
           for (const p of item.parts) {
             if (!p.thought) pendingToolResponseContent.push(...mapContentParts([p]));
             if (p.functionResponse) {
+              // Tool media arrives as nested parts, not as top-level image parts.
+              const nestedContent = mapContentParts(nestedFunctionResponseParts(p));
+              if (nestedContent.length) pendingToolResponseContent.push(...nestedContent);
               const funcName = p.functionResponse.name || '';
               const modelTCIds = modelToolCallIds.get(stateKey) || {};
               const ids = historyCallIds.get(funcName) || [];
