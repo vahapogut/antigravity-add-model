@@ -414,6 +414,9 @@ function normalizeSchemaNode(value: unknown): void {
 export function normalizeToolSchema(schema: object): Record<string, unknown> {
   const normalized = JSON.parse(JSON.stringify(schema)) as Record<string, unknown>;
   normalizeSchemaNode(normalized);
+  if ((normalized.type === 'object' || !normalized.type) && (!normalized.properties || typeof normalized.properties !== 'object')) {
+    normalized.properties = {};
+  }
   return normalized;
 }
 
