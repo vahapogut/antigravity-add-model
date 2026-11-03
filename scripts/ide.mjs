@@ -16,6 +16,14 @@ const MAX_SETTINGS = 4 * 1024 * 1024;
 // launcher, although the bundled extension does not contribute it as a setting.
 // Keep this exception limited to the official release actually inspected.
 const CORE_ENDPOINT_RELEASE = 'ecfbad74d93962fc8ca485d93ab9b4f3d4cb6cf8';
+// IDE 2.6.0 still reads jetski.cloudCodeUrl in the Electron client, but its
+// language-server hub no longer receives --cloud_code_endpoint. The hub does
+// honor AGY_LLM_GATEWAY_URL for model discovery. This release was inspected
+// on Windows; keep the exception limited to that commit and launcher shape.
+const HUB_ENDPOINT_RELEASE = '9e3a5da5d6731effd57d47d88bbe5df14ac6ccdd';
+const HUB_ENV_ANCHOR = 'AGY_ENABLE_HUB:"1",ANTIGRAVITY_VSCODE_HOST:"1",ANTIGRAVITY_AUTH_SUCCESS_APP:n.env.uriScheme||"vscode"};';
+const HUB_GATEWAY_MARKER = 'agyGatewayUrl';
+const HUB_ENV_INJECTION = 'if(!c.AGY_LLM_GATEWAY_URL){var agyGatewayUrl=n.workspace.getConfiguration().get("jetski.cloudCodeUrl");if(typeof agyGatewayUrl==="string"&&/^http:\\/\\/127\\.0\\.0\\.1:\\d+$/.test(agyGatewayUrl))c.AGY_LLM_GATEWAY_URL=agyGatewayUrl}';
 const exec = promisify(execFile);
 function fail(code, message) { throw Object.assign(new Error(`${code}: ${message}`), { code }); }
 function exists(filename) {
@@ -172,6 +180,75 @@ function coreEndpointSupport(app, pkg, product) {
     /const ([\w$]+)=await [\w$]+\.getCloudCodeUrl\(\);[\w$]+\.push\("--cloud_code_endpoint",\1\)/.test(launcher) &&
     launcher.includes('.push("--subclient_type","ide")');
 }
+function readBounded(filename) {
+  noLinks(filename);
+  if (!exists(filename)) return null;
+  const stat = fs.statSync(filename);
+  if (!stat.isFile() || stat.size > 64 * 1024 * 1024) return null;
+  return fs.readFileSync(filename);
+}
+function hubLauncherPath(app) {
+  return path.join(app, 'extensions/agy/vscode/extension.js');
+}
+function hubEndpointSupport(app, pkg, product) {
+  if (pkg.version !== '1.107.0' || product.ideVersion !== '2.6.0' || product.commit !== HUB_ENDPOINT_RELEASE ||
+      product.nameShort !== 'Antigravity IDE' || product.applicationName !== 'antigravity-ide') return false;
+  const manifest = path.join(app, 'extensions/agy/package.json');
+  if (!exists(manifest)) return false;
+  const extension = jsonFile(manifest);
+  if (extension.name !== 'google-antigravity' || extension.publisher !== 'google' ||
+      extension.main !== './dist/extension.js') return false;
+  const core = readBounded(path.join(app, 'out/main.js'));
+  const launcher = readBounded(hubLauncherPath(app));
+  if (!core || !launcher) return false;
+  const coreText = core.toString('utf8');
+  const launcherText = launcher.toString('utf8');
+  return coreText.includes('cloudCodeUrlOverride:this._configurationService.getValue("jetski.cloudCodeUrl")') &&
+    coreText.includes('this.makePostRequest("v1internal:fetchAvailableModels",') &&
+    launcherText.includes('["--hub"') &&
+    launcherText.includes('"--app_data_dir=antigravity"') &&
+    launcherText.includes('`--csrf_token=${this.csrfToken}`') &&
+    launcherText.includes('AGY_ENABLE_HUB:"1"') &&
+    (launcherText.includes(HUB_ENV_ANCHOR) || launcherText.includes(HUB_GATEWAY_MARKER));
+}
+function syncHubLauncher(info, names) {
+  if (info.declaredBy !== 'core:antigravity-ide-2.6.0') return {};
+  const filename = hubLauncherPath(info.app);
+  const current = readBounded(filename);
+  if (!current) fail('UNSUPPORTED_IDE', 'IDE 2.6.0 language-server launcher was not found.');
+  const source = current.toString('utf8');
+  const backupName = path.join(names.directory, 'launcher.original.js');
+    if (source.includes(HUB_GATEWAY_MARKER)) {
+    if (!exists(backupName)) fail('BACKUP_INVALID', 'IDE 2.6.0 launcher backup is missing.');
+    const backup = readBounded(backupName);
+    if (!backup || !backup.toString('utf8').includes(HUB_ENV_ANCHOR) || backup.toString('utf8').includes(HUB_GATEWAY_MARKER)) {
+      fail('BACKUP_INVALID', 'IDE 2.6.0 launcher backup is missing or changed.');
+    }
+    return { launcher: { path: filename, originalHash: hash(backup), patchedHash: hash(current) }, launcherChanged: false };
+  }
+  if (!source.includes(HUB_ENV_ANCHOR) || source.split(HUB_ENV_ANCHOR).length !== 2) {
+    fail('UNSUPPORTED_IDE', 'IDE 2.6.0 launcher does not contain the verified hub environment hook.');
+  }
+  const patched = Buffer.from(source.replace(HUB_ENV_ANCHOR, HUB_ENV_ANCHOR + HUB_ENV_INJECTION));
+  noLinks(backupName);
+  atomic(backupName, current);
+  try {
+    atomic(filename, patched);
+  } catch (error) {
+    if (exists(backupName)) fs.unlinkSync(backupName);
+    throw error;
+  }
+  return { launcher: { path: filename, originalHash: hash(current), patchedHash: hash(patched) }, launcherChanged: true };
+}
+function restoreHubLauncher(state, names) {
+  if (!state?.launcher) return false;
+  const backupName = path.join(names.directory, 'launcher.original.js');
+  const backup = readBounded(backupName);
+  const current = readBounded(state.launcher.path);
+  if (!backup || !current || hash(backup) !== state.launcher.originalHash || hash(current) !== state.launcher.patchedHash) return false;
+  atomic(state.launcher.path, backup);
+  return true;
+}
 export function inspectIde(options = {}) {
   const platform = options.platform || process.platform;
   const env = options.env || process.env;
@@ -207,6 +284,7 @@ export function inspectIde(options = {}) {
       }
     }
     if (!declaredBy && coreEndpointSupport(app, pkg, product)) declaredBy = 'core:antigravity-ide-2.5.5';
+    if (!declaredBy && hubEndpointSupport(app, pkg, product)) declaredBy = 'core:antigravity-ide-2.6.0';
     if (!declaredBy) fail('UNSUPPORTED_IDE', `This installation does not declare ${SETTING} or match a verified core endpoint implementation; no files changed.`);
     const userRoot = platform === 'win32' ? path.join(env.APPDATA || path.join(home, 'AppData/Roaming'), product.nameShort)
       : platform === 'darwin' ? path.join(home, 'Library/Application Support', product.nameShort)
@@ -288,8 +366,9 @@ export function configureIde(options = {}) {
       const original = state.backup;
       const unchangedOriginal = (state.originalExists ? now.bytes && hash(now.bytes) === state.originalHash : now.bytes === null);
       if (state.status === 'prepared' && unchangedOriginal) {
+        const launcherRestored = restoreHubLauncher(state, names);
         atomic(names.state, stateBytes({ ...state, status: 'restored' }));
-        return { ...summary, applied: false, status: 'restored' };
+        return { ...summary, applied: false, status: 'restored', launcherRestored };
       }
       if (now.endpoint !== state.endpoint) fail('RESTORE_REFUSED', `${SETTING} was changed outside this adapter; preserve your current settings and resolve the conflict first.`);
       const exact = now.bytes && hash(now.bytes) === state.patchedHash;
@@ -300,13 +379,14 @@ export function configureIde(options = {}) {
       if (exact && !state.originalExists) fs.unlinkSync(info.settings);
       else atomic(info.settings, restored);
       atomic(names.state, stateBytes({ ...state, status: 'restored' }));
-      return { ...summary, applied: false, status: 'restored', preservedOtherEdits: !exact };
+      return { ...summary, applied: false, status: 'restored', preservedOtherEdits: !exact, launcherRestored: restoreHubLauncher(state, names) };
     }
     if (state && state.status !== 'restored') {
       if (state.endpoint !== endpoint) fail('SETTINGS_CONFLICT', 'Restore the existing IDE adapter before choosing another proxy port.');
       if (now.endpoint === endpoint) {
-        if (state.status === 'prepared') atomic(names.state, stateBytes({ ...state, status: 'active' }));
-        return { ...summary, applied: true, status: 'unchanged' };
+        const { launcherChanged: _changed, ...launcher } = syncHubLauncher(info, names);
+        if (state.status === 'prepared' || launcher.launcher) atomic(names.state, stateBytes({ ...state, ...launcher, status: 'active' }));
+        return { ...summary, applied: true, status: 'unchanged', launcherPatched: Boolean(launcher.launcher) };
       }
       const original = state.originalExists ? now.bytes && hash(now.bytes) === state.originalHash : now.bytes === null;
       if (state.status !== 'prepared' || !original) fail('SETTINGS_CONFLICT', 'The managed IDE setting was changed outside this adapter. Restore or resolve it before applying again.');
@@ -317,12 +397,20 @@ export function configureIde(options = {}) {
       originalExists: now.bytes !== null, originalHash: hash(original), patchedHash: hash(patched),
       endpoint, port: Number(new URL(endpoint).port), version: info.version };
     checkUnchanged(info, now.bytes);
-    atomic(names.backup, original);
-    atomic(names.state, stateBytes(manifest));
-    checkUnchanged(info, now.bytes);
-    atomic(info.settings, patched);
-    atomic(names.state, stateBytes({ ...manifest, status: 'active' }));
-    return { ...summary, applied: true, status: 'configured' };
+    const launcher = syncHubLauncher(info, names);
+    const { launcherChanged, ...savedLauncher } = launcher;
+    Object.assign(manifest, savedLauncher);
+    try {
+      atomic(names.backup, original);
+      atomic(names.state, stateBytes(manifest));
+      checkUnchanged(info, now.bytes);
+      atomic(info.settings, patched);
+      atomic(names.state, stateBytes({ ...manifest, status: 'active' }));
+    } catch (error) {
+      if (launcherChanged) restoreHubLauncher(manifest, names);
+      throw error;
+    }
+    return { ...summary, applied: true, status: 'configured', launcherPatched: Boolean(launcher.launcher) };
   } finally { fs.closeSync(lock); fs.unlinkSync(names.lock); }
 }
 
@@ -360,7 +448,12 @@ export async function launchIde(options = {}, hooks = {}) {
   const launch = hooks.launch || (async () => {
     // This is the interactive IDE, not the background service: SW_HIDE leaves
     // Electron's first restored window invisible on Windows.
-    const child = spawn(executable, launchArgs, { detached: true, stdio: 'ignore', windowsHide: false });
+    const child = spawn(executable, launchArgs, {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: false,
+      env: info.declaredBy === 'core:antigravity-ide-2.6.0' ? { ...process.env, AGY_LLM_GATEWAY_URL: state.endpoint } : undefined,
+    });
     await new Promise((resolve, reject) => { child.once('spawn', resolve); child.once('error', reject); });
     child.unref();
   });
