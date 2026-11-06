@@ -1,7 +1,7 @@
 /** Independent sandbox-safe preload; deployment appends this module beside the settings preload. */
 import { ipcRenderer } from 'electron';
 
-window.addEventListener('DOMContentLoaded', () => {
+function initContextUsagePreload(): void {
   const uuid = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
   const composerSelector = '[data-testid="agent-input-box"], .no-focus-agent-input, ' +
     '[role="combobox"][contenteditable="true"][aria-label="Message input"], ' +
@@ -9,7 +9,8 @@ window.addEventListener('DOMContentLoaded', () => {
     '[role="combobox"][contenteditable="true"][aria-label="消息输入"]';
   const triggerSelector = '[data-testid="model-selector-trigger"], button[aria-label*="Select model" i], ' +
     'button[aria-label*="Choose model" i], button[aria-label*="Switch model" i], ' +
-    'button[aria-label*="选择模型"], button[aria-label*="切换模型"]';
+    'button[aria-label*="选择模型"], button[aria-label*="切换模型"], ' +
+    'button[aria-label*="模型选择器"], button[aria-label*="切换模型选择器"]';
   type Usage = {
     conversationId: string;
     source: 'estimated' | 'unavailable';
@@ -303,4 +304,12 @@ window.addEventListener('DOMContentLoaded', () => {
     style.remove();
   }, { once: true });
   refresh();
-});
+}
+
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', initContextUsagePreload);
+  } else {
+    initContextUsagePreload();
+  }
+}

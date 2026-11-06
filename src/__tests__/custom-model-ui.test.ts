@@ -1167,6 +1167,15 @@ describe('custom model settings in the preserved vendor preload', () => {
     expect(f.document.querySelector('#model-settings > #agy-custom-models-section')).toBeTruthy();
   });
 
+  it('mounts in Chinese localized Settings dialog with 驱动模型与用量 heading and 设置 - 驱动模型 label', async () => {
+    const f = await fixture(
+      '<div role="dialog" aria-label="设置 - 驱动模型"><main class="overflow-y-auto"><div id="model-settings"><h2><span>驱动模型与用量</span></h2></div></main></div>',
+      [model],
+      'http://127.0.0.1:54321/c/conversation?settingsOpen=true',
+    );
+    expect(f.document.querySelector('#model-settings > #agy-custom-models-section')).toBeTruthy();
+  });
+
   it('removes an existing panel moved into the conversation and remounts it in Settings', async () => {
     const f = await fixture(
       '<section id="settings"><h2>Models &amp; Usage</h2></section><main data-testid="conversation-view"></main>',
@@ -1568,6 +1577,15 @@ describe('Google fleet and native picker search', () => {
     menu.setAttribute('role', 'menu');
     menu.setAttribute('data-state', 'open');
     menu.innerHTML = '<div>模型</div><button role="menuitem" data-model="gemini">Gemini</button><button role="menuitem" data-model="claude">Claude</button><button role="menuitem">查看使用情况</button>';
+    f.document.body.append(menu);
+    await vi.waitFor(() => expect(menu.querySelector('.agy-model-search-input')).toBeTruthy());
+  });
+  it('filters picker rows in Chinese localized menu with 驱动模型 and 查看用量', async () => {
+    const f = await fixture();
+    const menu = f.document.createElement('div');
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('data-state', 'open');
+    menu.innerHTML = '<div>驱动模型</div><button role="menuitem" data-model="gemini">Gemini</button><button role="menuitem" data-model="claude">Claude</button><button role="menuitem">查看用量</button>';
     f.document.body.append(menu);
     await vi.waitFor(() => expect(menu.querySelector('.agy-model-search-input')).toBeTruthy());
   });
