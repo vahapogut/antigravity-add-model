@@ -532,7 +532,8 @@ window.addEventListener('DOMContentLoaded', () => {
         return (Array.from(root.querySelectorAll('button')).find((node) => !node.closest('#agy-custom-models-section') &&
             isSettingsContent(node.parentElement || node) &&
             (node.textContent?.trim() === 'Refresh' ||
-                /refresh quota/i.test(`${node.getAttribute('aria-label') || ''} ${node.title || ''}`))) || null);
+                node.textContent?.trim() === '刷新' ||
+                /refresh quota|刷新配额/i.test(`${node.getAttribute('aria-label') || ''} ${node.title || ''}`))) || null);
     }
     async function modelsChanged() {
         const restore = captureScrollPosition(document.getElementById('agy-custom-models-section') || document.body);
@@ -1686,14 +1687,14 @@ window.addEventListener('DOMContentLoaded', () => {
     function findSettingsMount() {
         // Desktop settings are a modal over /c/...; older layouts use a settings route.
         // A chat span saying "MCP" is not evidence that the settings page is open.
-        const settingsRoot = Array.from(document.querySelectorAll('[role="dialog"][aria-label="Settings"],.settings-modal-container,[data-testid="settings-view"],[data-testid="settings-panel"]')).find(isSettingsContent);
+        const settingsRoot = Array.from(document.querySelectorAll('[role="dialog"][aria-label="Settings"],[role="dialog"][aria-label="设置"],[role="dialog"][aria-label="偏好设置"],.settings-modal-container,[data-testid="settings-view"],[data-testid="settings-panel"]')).find(isSettingsContent);
         const settingsRoute = /^\/settings(?:\/|$)/i.test(window.location.pathname) || /^#\/?settings(?:\/|\?|$)/i.test(window.location.hash);
         const root = settingsRoot || (settingsRoute ? document.body : null);
         if (!root)
             return null;
         const headings = Array.from(root.querySelectorAll('h1,h2,h3,h4,[role="heading"],div,span'));
         const heading = headings.find((node) => node.children.length === 0 &&
-            /^(Models\s*(?:&|and)\s*Usage|Model Settings|MCP Servers|MCP)$/i.test(node.textContent?.trim() || '') &&
+            /^(Models\s*(?:&|and)\s*Usage|Model Settings|MCP Servers|MCP|模型与使用情况|模型和使用情况|模型设置|MCP 服务器|MCP 服务)$/i.test(node.textContent?.trim() || '') &&
             isSettingsContent(node));
         if (heading) {
             const section = heading.closest('section');
@@ -1716,7 +1717,7 @@ window.addEventListener('DOMContentLoaded', () => {
         if (legacy &&
             root.contains(legacy) &&
             isSettingsContent(legacy) &&
-            /MCP|Model Context Protocol/i.test(legacy.textContent || ''))
+            /MCP|Model Context Protocol|模型上下文协议/i.test(legacy.textContent || ''))
             return legacy;
         return null;
     }
@@ -1790,7 +1791,8 @@ window.addEventListener('DOMContentLoaded', () => {
                 return false;
             const leaves = Array.from(candidate.querySelectorAll('*')).filter((node) => !node.children.length);
             const labels = leaves.map((node) => node.textContent?.trim() || '').filter(Boolean);
-            return labels.slice(0, 2).includes('Model') && labels.some((label) => /^View\s+Usage$/i.test(label));
+            return ((labels.slice(0, 2).includes('Model') || labels.slice(0, 2).includes('模型')) &&
+                labels.some((label) => /^(View\s+Usage|查看使用情况|查看配额)$/i.test(label)));
         });
         if (!menu)
             return;
@@ -1803,13 +1805,13 @@ window.addEventListener('DOMContentLoaded', () => {
         const empty = element('div', 'agy-model-no-results', 'No matching models');
         empty.hidden = true;
         box.append(input);
-        const header = Array.from(menu.querySelectorAll('*')).find((node) => !node.children.length && node.textContent?.trim() === 'Model');
+        const header = Array.from(menu.querySelectorAll('*')).find((node) => !node.children.length && (node.textContent?.trim() === 'Model' || node.textContent?.trim() === '模型'));
         (header || menu).insertAdjacentElement(header ? 'afterend' : 'afterbegin', box);
         box.after(empty);
         const displays = new Map();
         const items = () => Array.from(menu.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [role="option"], button'))
             .filter((node) => !node.parentElement?.closest('[role="menuitem"], [role="menuitemradio"], [role="option"]') &&
-            !node.closest('.agy-model-search-box') && !/^View\s+Usage/i.test(node.textContent?.trim() || ''));
+            !node.closest('.agy-model-search-box') && !/^(View\s+Usage|查看使用情况|查看配额)/i.test(node.textContent?.trim() || ''));
         const restore = (node) => {
             const old = displays.get(node);
             if (!old)

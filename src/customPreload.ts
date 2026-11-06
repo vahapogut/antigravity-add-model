@@ -731,7 +731,8 @@ window.addEventListener('DOMContentLoaded', () => {
           !node.closest('#agy-custom-models-section') &&
           isSettingsContent(node.parentElement || node) &&
           (node.textContent?.trim() === 'Refresh' ||
-            /refresh quota/i.test(`${node.getAttribute('aria-label') || ''} ${node.title || ''}`)),
+            node.textContent?.trim() === '刷新' ||
+            /refresh quota|刷新配额/i.test(`${node.getAttribute('aria-label') || ''} ${node.title || ''}`)),
       ) || null
     );
   }
@@ -2271,7 +2272,7 @@ window.addEventListener('DOMContentLoaded', () => {
     // A chat span saying "MCP" is not evidence that the settings page is open.
     const settingsRoot = Array.from(
       document.querySelectorAll<HTMLElement>(
-        '[role="dialog"][aria-label="Settings"],.settings-modal-container,[data-testid="settings-view"],[data-testid="settings-panel"]',
+        '[role="dialog"][aria-label="Settings"],[role="dialog"][aria-label="设置"],[role="dialog"][aria-label="偏好设置"],.settings-modal-container,[data-testid="settings-view"],[data-testid="settings-panel"]',
       ),
     ).find(isSettingsContent);
     const settingsRoute =
@@ -2282,7 +2283,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const heading = headings.find(
       (node) =>
         node.children.length === 0 &&
-        /^(Models\s*(?:&|and)\s*Usage|Model Settings|MCP Servers|MCP)$/i.test(node.textContent?.trim() || '') &&
+        /^(Models\s*(?:&|and)\s*Usage|Model Settings|MCP Servers|MCP|模型与使用情况|模型和使用情况|模型设置|MCP 服务器|MCP 服务)$/i.test(node.textContent?.trim() || '') &&
         isSettingsContent(node),
     );
     if (heading) {
@@ -2304,7 +2305,7 @@ window.addEventListener('DOMContentLoaded', () => {
       legacy &&
       root.contains(legacy) &&
       isSettingsContent(legacy) &&
-      /MCP|Model Context Protocol/i.test(legacy.textContent || '')
+      /MCP|Model Context Protocol|模型上下文协议/i.test(legacy.textContent || '')
     )
       return legacy;
     return null;
@@ -2379,7 +2380,10 @@ window.addEventListener('DOMContentLoaded', () => {
       if (trigger?.closest('[role="menuitem"], [role="menuitemradio"]')) return false;
       const leaves = Array.from(candidate.querySelectorAll<HTMLElement>('*')).filter((node) => !node.children.length);
       const labels = leaves.map((node) => node.textContent?.trim() || '').filter(Boolean);
-      return labels.slice(0, 2).includes('Model') && labels.some((label) => /^View\s+Usage$/i.test(label));
+      return (
+        (labels.slice(0, 2).includes('Model') || labels.slice(0, 2).includes('模型')) &&
+        labels.some((label) => /^(View\s+Usage|查看使用情况|查看配额)$/i.test(label))
+      );
     });
     if (!menu) return;
     installStyles();
@@ -2391,13 +2395,15 @@ window.addEventListener('DOMContentLoaded', () => {
     const empty = element('div', 'agy-model-no-results', 'No matching models');
     empty.hidden = true;
     box.append(input);
-    const header = Array.from(menu.querySelectorAll<HTMLElement>('*')).find((node) => !node.children.length && node.textContent?.trim() === 'Model');
+    const header = Array.from(menu.querySelectorAll<HTMLElement>('*')).find(
+      (node) => !node.children.length && (node.textContent?.trim() === 'Model' || node.textContent?.trim() === '模型'),
+    );
     (header || menu).insertAdjacentElement(header ? 'afterend' : 'afterbegin', box);
     box.after(empty);
     const displays = new Map<HTMLElement, { value: string; priority: string }>();
     const items = () => Array.from(menu.querySelectorAll<HTMLElement>('[role="menuitem"], [role="menuitemradio"], [role="option"], button'))
       .filter((node) => !node.parentElement?.closest('[role="menuitem"], [role="menuitemradio"], [role="option"]') &&
-        !node.closest('.agy-model-search-box') && !/^View\s+Usage/i.test(node.textContent?.trim() || ''));
+        !node.closest('.agy-model-search-box') && !/^(View\s+Usage|查看使用情况|查看配额)/i.test(node.textContent?.trim() || ''));
     const restore = (node: HTMLElement) => {
       const old = displays.get(node);
       if (!old) return;

@@ -1158,6 +1158,15 @@ describe('custom model settings in the preserved vendor preload', () => {
     expect(f.document.querySelector('[data-testid="conversation-view"] #agy-custom-models-section')).toBeNull();
   });
 
+  it('mounts in Chinese localized Settings dialog with 模型与使用情况 heading', async () => {
+    const f = await fixture(
+      '<div role="dialog" aria-label="设置"><main class="overflow-y-auto"><div id="model-settings"><h2><span>模型与使用情况</span></h2></div></main></div>',
+      [model],
+      'http://127.0.0.1:54321/c/conversation?settingsOpen=true',
+    );
+    expect(f.document.querySelector('#model-settings > #agy-custom-models-section')).toBeTruthy();
+  });
+
   it('removes an existing panel moved into the conversation and remounts it in Settings', async () => {
     const f = await fixture(
       '<section id="settings"><h2>Models &amp; Usage</h2></section><main data-testid="conversation-view"></main>',
@@ -1552,6 +1561,15 @@ describe('Google fleet and native picker search', () => {
     expect([...menu.querySelectorAll('button')].find(node=>node.textContent==='Retired model')?.style.display).toBe('none');
     menu.setAttribute('data-state','open');
     await vi.waitFor(() => expect(menu.querySelector<HTMLInputElement>('.agy-model-search-input')?.value).toBe(''));
+  });
+  it('filters picker rows in Chinese localized menu with 模型 and 查看使用情况', async () => {
+    const f = await fixture();
+    const menu = f.document.createElement('div');
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('data-state', 'open');
+    menu.innerHTML = '<div>模型</div><button role="menuitem" data-model="gemini">Gemini</button><button role="menuitem" data-model="claude">Claude</button><button role="menuitem">查看使用情况</button>';
+    f.document.body.append(menu);
+    await vi.waitFor(() => expect(menu.querySelector('.agy-model-search-input')).toBeTruthy());
   });
   it('does not inject search into a usage submenu', async () => {
     const f=await fixture();

@@ -5,9 +5,12 @@ const electron_1 = require("electron");
 window.addEventListener('DOMContentLoaded', () => {
     const uuid = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
     const composerSelector = '[data-testid="agent-input-box"], .no-focus-agent-input, ' +
-        '[role="combobox"][contenteditable="true"][aria-label="Message input"]';
+        '[role="combobox"][contenteditable="true"][aria-label="Message input"], ' +
+        '[role="combobox"][contenteditable="true"][aria-label="输入消息"], ' +
+        '[role="combobox"][contenteditable="true"][aria-label="消息输入"]';
     const triggerSelector = '[data-testid="model-selector-trigger"], button[aria-label*="Select model" i], ' +
-        'button[aria-label*="Choose model" i], button[aria-label*="Switch model" i]';
+        'button[aria-label*="Choose model" i], button[aria-label*="Switch model" i], ' +
+        'button[aria-label*="选择模型"], button[aria-label*="切换模型"]';
     const states = new Map();
     const toolbarParents = new Set();
     const style = document.createElement('style');
@@ -94,7 +97,7 @@ window.addEventListener('DOMContentLoaded', () => {
                 if (button.hasAttribute('data-agy-context-ring') || !visible(button))
                     return false;
                 const name = text(button);
-                if (!name || name.length > 120 || /attach|add context|mention|send|submit/i.test(button.getAttribute('aria-label') || ''))
+                if (!name || name.length > 120 || /attach|add context|mention|send|submit|附件|添加上下文|提及|发送|提交/i.test(button.getAttribute('aria-label') || ''))
                     return false;
                 return customNames.includes(name.toLowerCase()) ||
                     (/\b(gemini|claude|sonnet|opus|haiku|gpt|deepseek|qwen|llama|mistral)\b/i.test(name) &&
