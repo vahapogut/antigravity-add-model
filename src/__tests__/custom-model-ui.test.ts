@@ -1596,4 +1596,34 @@ describe('Google fleet and native picker search', () => {
     f.document.body.append(submenu); await new Promise(done=>setTimeout(done,250));
     expect(submenu.querySelector('.agy-model-search-input')).toBeNull();
   });
+  it('renders Custom Models UI in Chinese when language is set to zh', async () => {
+    const f = await fixture(
+      '<div role="dialog" aria-label="设置 - 驱动模型" class="settings-modal-container"><nav><button>驱动模型</button></nav><h2>驱动模型与用量</h2></div>',
+    );
+
+    await vi.waitFor(() => expect(f.document.getElementById('agy-custom-models-section')).toBeTruthy());
+    const section = f.document.getElementById('agy-custom-models-section')!;
+    expect(section.getAttribute('aria-label')).toBe('自定义模型');
+    expect(section.querySelector('h2')!.textContent).toBe('自定义模型');
+    expect(section.textContent).toContain('提供商连接、本地模型与远程网关。');
+    expect(section.querySelector('#agy-add-model')!.textContent).toBe('添加模型');
+
+    const actions = section.querySelector('.agy-actions')!;
+    const actionButtons = Array.from(actions.querySelectorAll<HTMLButtonElement>('button')).map((b) => b.textContent);
+    expect(actionButtons).toContain('发现本地模型');
+    expect(actionButtons).toContain('导入');
+    expect(actionButtons).toContain('导出');
+    expect(actionButtons).toContain('远程网关');
+    expect(actionButtons).toContain('诊断');
+
+    await vi.waitFor(() => expect(f.document.querySelector('[data-model-name="models/primary"]')).toBeTruthy());
+    const row = f.document.querySelector<HTMLElement>('[data-model-name="models/primary"]')!;
+    const rowButtons = Array.from(row.querySelectorAll<HTMLButtonElement>('button')).map((b) => b.textContent);
+    expect(rowButtons).toContain('禁用');
+    expect(rowButtons).toContain('测试');
+    expect(rowButtons).toContain('生成测试');
+    expect(rowButtons).toContain('编辑');
+    expect(rowButtons).toContain('复制');
+    expect(rowButtons).toContain('删除');
+  });
 });

@@ -2,6 +2,25 @@
 import { ipcRenderer } from 'electron';
 
 function initContextUsagePreload(): void {
+  function isChinese(): boolean {
+    try {
+      const stored = localStorage.getItem('agy_custom_models_lang');
+      if (stored === 'zh') return true;
+      if (stored === 'en') return false;
+      if (typeof navigator !== 'undefined') {
+        if (/^zh\b/i.test(navigator.language)) return true;
+        if (navigator.languages?.some((l) => /^zh\b/i.test(l))) return true;
+      }
+      if (typeof document !== 'undefined') {
+        if (/zh/i.test(document.documentElement.lang)) return true;
+      }
+    } catch {}
+    return false;
+  }
+  function t(en: string, zh: string): string {
+    return isChinese() ? zh : en;
+  }
+
   const uuid = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
   const composerSelector = '[data-testid="agent-input-box"], .no-focus-agent-input, ' +
     '[role="combobox"][contenteditable="true"][aria-label="Message input"], ' +
@@ -138,12 +157,29 @@ function initContextUsagePreload(): void {
     const estimated = usage?.source === 'estimated' && typeof usage.currentTokens === 'number' && Number.isFinite(usage.currentTokens);
     const count = estimated ? usage!.currentTokens! : 0;
     let description = estimated
-      ? `Visible transcript estimate: ~${count.toLocaleString('en-US')} tokens`
-      : 'Context usage unavailable';
-    if (limit) description += ` / ${limit.toLocaleString('en-US')} context limit (${usage?.limitSource === 'configured' ? 'configured' : 'public catalog'})`;
-    description += '. Hidden prompts, tool definitions and images are not included; actual usage can be higher.';
-    if (!target.conversationId) description += ' The open conversation could not be identified.';
-    if (!limit) description += ' Click to look up the model limit in the public catalog.';
+      ? (isChinese()
+          ? `当前可见会话估算：~${count.toLocaleString('zh-CN')} tokens`
+          : `Visible transcript estimate: ~${count.toLocaleString('en-US')} tokens`)
+      : t('Context usage unavailable', '上下文用量不可用');
+    if (limit) {
+      description += isChinese()
+        ? ` / ${limit.toLocaleString('zh-CN')} 上下文上限 (${usage?.limitSource === 'configured' ? '已配置' : '公开目录'})`
+        : ` / ${limit.toLocaleString('en-US')} context limit (${usage?.limitSource === 'configured' ? 'configured' : 'public catalog'})`;
+    }
+    description += t(
+      '. Hidden prompts, tool definitions and images are not included; actual usage can be higher.',
+      '。不包含隐藏提示词、工具定义与图片；实际消耗可能更高。',
+    );
+    if (!target.conversationId)
+      description += t(
+        ' The open conversation could not be identified.',
+        ' 无法识别当前打开的会话。',
+      );
+    if (!limit)
+      description += t(
+        ' Click to look up the model limit in the public catalog.',
+        ' 点击在公开模型目录中查询模型上限。',
+      );
     if (ring.title !== description) {
       ring.title = description;
       ring.setAttribute('aria-label', description);

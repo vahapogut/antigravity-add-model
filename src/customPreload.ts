@@ -105,6 +105,278 @@ const storageAPI = {
 };
 
 function initCustomPreload(): void {
+  function isChinese(): boolean {
+    try {
+      const stored = localStorage.getItem('agy_custom_models_lang');
+      if (stored === 'zh') return true;
+      if (stored === 'en') return false;
+      if (typeof navigator !== 'undefined') {
+        if (/^zh\b/i.test(navigator.language)) return true;
+        if (navigator.languages?.some((l) => /^zh\b/i.test(l))) return true;
+      }
+      if (typeof document !== 'undefined') {
+        if (/zh/i.test(document.documentElement.lang)) return true;
+        if (
+          document.querySelector(
+            '[role="dialog"][aria-label*="设置"], [role="dialog"][aria-label*="偏好设置"], [role="dialog"][aria-label*="驱动模型"]',
+          ) ||
+          document.querySelector('.settings-modal-container')?.textContent?.includes('驱动模型') ||
+          document.querySelector('nav')?.textContent?.includes('通用常规') ||
+          document.body?.textContent?.includes('驱动模型与用量')
+        ) {
+          return true;
+        }
+      }
+    } catch {}
+    return false;
+  }
+
+  const zhDict: Record<string, string> = {
+    // Toolbar & main panel
+    'Custom Models': '自定义模型',
+    'Provider connections, local models and remote gateways.': '提供商连接、本地模型与远程网关。',
+    'Add model': '添加模型',
+    'Discover local': '发现本地模型',
+    'Import': '导入',
+    'Export': '导出',
+    'Remote gateway': '远程网关',
+    'Diagnostics': '诊断',
+    'Search models': '搜索模型',
+    'Search by name, model ID or provider': '按名称、模型 ID 或提供商搜索',
+    'Search models…': '搜索模型…',
+    'No matching models': '未找到匹配的模型',
+    'English': 'English',
+    '中文': '中文',
+
+    // Group & Model row
+    'Discover models': '发现模型',
+    'Disable group': '禁用分组',
+    'Enable group': '启用分组',
+    'enabled': '已启用',
+    'Enable': '启用',
+    'Disable': '禁用',
+    'Test': '测试',
+    'Test generation': '生成测试',
+    'Edit': '编辑',
+    'Duplicate': '复制',
+    'Effort variants': '思考变体',
+    'Delete': '删除',
+    'Testing…': '正在测试…',
+    'Testing...': '正在测试...',
+    'Valid connection': '连接正常',
+    'Connection successful.': '连接成功。',
+    'Connection failed': '连接失败',
+    'Default endpoint': '默认端点',
+    'Direct endpoint': '直连端点',
+    'Effort': '思考强度',
+    'Context': '上下文',
+    'Max output': '最大输出',
+    'Vision': '视觉',
+    'Encrypted': '已加密',
+    'Insecure TLS': '非安全 TLS',
+    'Fallback': '回退',
+    'No models match this search.': '未找到匹配当前搜索的模型。',
+    'Not currently available in the native model picker. Direct API access remains available.': '暂无法在原生模型选择器中使用。直连 API 访问不受影响。',
+
+    // Modals
+    'Close': '关闭',
+    'Cancel': '取消',
+    'Save': '保存',
+    'Delete model': '删除模型',
+    'Add custom model': '添加自定义模型',
+    'Edit custom model': '编辑自定义模型',
+    'Edit model': '编辑模型',
+    'Duplicate model': '复制模型',
+    'Discover provider models': '发现提供商模型',
+    'Create reasoning variants': '创建思考强度变体',
+    'Test model generation': '测试模型生成',
+    'Local model servers': '本地模型服务',
+    'Proxy diagnostics': '代理诊断信息',
+    'Import models': '导入模型',
+    'Export models': '导出模型',
+    'Save model': '保存模型',
+    'Save changes': '保存更改',
+    'Create duplicate': '创建副本',
+    'Test connection': '测试连接',
+    'Test generation (may incur charges)': '测试生成 (可能产生费用)',
+    'Fetch provider models': '获取提供商模型',
+    'Add selected models': '添加所选模型',
+    'Add selected': '添加所选',
+    'Select all': '全选',
+    'Clear selection': '清空选择',
+    'Select filtered': '全选筛选结果',
+    'This removes the saved model configuration from this app.': '此操作将从应用中移除已保存的模型配置。',
+
+    // Fields
+    'Provider': '提供商',
+    'Provider preset': '提供商预设',
+    'API URL': 'API 地址',
+    'API key': 'API 密钥',
+    'OpenCode authentication': 'OpenCode 身份验证',
+    'API format': 'API 格式',
+    'Provider model ID': '提供商模型 ID',
+    'Model ID': '模型 ID',
+    'Display name': '显示名称',
+    'Configuration name (unique)': '配置名称 (唯一)',
+    'Config name': '配置名称',
+    'Description': '描述',
+    'Default Cloud Code project (optional)': '默认 Cloud Code 项目 (可选)',
+    'Cloud project (optional)': 'Cloud 项目 (可选)',
+    'Account selection': '账号选择策略',
+    'Maximum requests per account': '单账号最大并发请求数',
+    'Account cooldown (milliseconds)': '账号冷却时间 (毫秒)',
+    'Native Google request fallback': '原生 Google 请求回退',
+    'Advanced settings': '高级设置',
+    'Reasoning effort': '思考强度',
+    'Thinking budget (tokens)': '思考预算 (Token)',
+    'Compaction reasoning effort': '压缩思考强度',
+    'Maximum output tokens': '最大输出 Token 数',
+    'Context window (tokens)': '上下文窗口 (Token 数)',
+    'IDE compaction threshold (%)': 'IDE 压缩触发阈值 (%)',
+    'Request timeout (milliseconds)': '请求超时时间 (毫秒)',
+    'Maximum retries (0–5)': '最大重试次数 (0–5)',
+    'Image input': '图片/视觉输入',
+    'Endpoint path': '端点路径',
+    'TLS certificates': 'TLS 证书验证',
+    'Model state': '模型状态',
+    'Fallback model configuration names (comma separated)': '回退模型配置名称 (逗号分隔)',
+    'Custom headers (JSON)': '自定义请求头 (JSON)',
+    'Additional request fields (JSON)': '附加请求字段 (JSON)',
+    'Circuit breaker': '熔断保护',
+    'Failures before cooldown': '触发冷却的连续失败次数',
+    'Cooldown (milliseconds)': '冷却时长 (毫秒)',
+    'Search provider models': '搜索提供商模型',
+    'Filter by model name or ID': '按模型名称或 ID 过滤',
+
+    // Select options
+    'OpenAI compatible': '兼容 OpenAI',
+    'Anthropic Messages': 'Anthropic Messages',
+    'Google Gemini': 'Google Gemini',
+    'Round robin': '轮询 (Round-robin)',
+    'Least loaded': '最少负载 (Least-loaded)',
+    'Remaining quota': '剩余配额 (Remaining quota)',
+    'Adaptive health and load': '自适应健康与负载 (Adaptive)',
+    'Auto detect': '自动检测',
+    'Supported': '支持',
+    'Unsupported': '不支持',
+    'Normalize for provider': '按提供商规范化',
+    'Use exactly as entered': '完全按输入使用',
+    'Verify certificates': '验证证书 (安全)',
+    'Allow self-signed certificates': '允许自签名证书 (非安全)',
+    'Enabled': '已启用',
+    'Disabled': '已禁用',
+    'Default': '默认',
+    'Off': '关闭',
+    'Use this pool for matching native models': '对匹配的原生模型使用此账号池',
+    'Provider default': '提供商默认',
+    'Use normal model settings': '使用普通模型设置',
+    'None': '无',
+    'Bearer token': 'Bearer 令牌',
+    'Keyless request': '免 Key 请求',
+    'Antigravity account': 'Antigravity 账号',
+    'My Desktop OAuth client': '我的 Desktop OAuth 客户端',
+
+    // Placeholders & hints
+    'Enter provider API key': '输入提供商 API 密钥',
+    'Optional for local servers': '本地服务可选',
+    'Generated from provider and model ID when left blank': '留空时将根据提供商和模型 ID 自动生成',
+    'IDE default': 'IDE 默认',
+
+    // Reasoning variants modal
+    'Create three variants': '创建思考强度变体',
+
+    // Test generation modal
+    'Test prompt': '测试提示词',
+    'Say hello in 5 words.': '请用5个字打个招呼。',
+    'Run generation test': '运行生成测试',
+    'Response': '响应结果',
+
+    // Diagnostics modal
+    'Filter by model or provider': '按模型或提供商过滤',
+    'Refresh diagnostics': '刷新诊断',
+    'Export diagnostics': '导出诊断报告',
+    'Clear diagnostic history': '清空诊断历史',
+
+    // Gateway modal
+    'Gateway URL': '网关地址',
+    'Gateway token': '网关令牌',
+    'Dashboard URL (optional)': '控制台地址 (可选)',
+    'Save connection': '保存连接',
+    'Test gateway': '测试网关',
+    'Import model aliases': '导入模型别名',
+    'Open dashboard': '打开控制台',
+    'Remove': '移除',
+
+    // Import / Export
+    'Copy JSON': '复制 JSON',
+    'Import configuration': '导入配置',
+    'Or choose a JSON file': '或者选择 JSON 文件',
+    'Credential JSON file': '凭据 JSON 文件',
+
+    // Local discovery
+    'Configure': '配置',
+
+    // Google Fleet & Accounts
+    'Google accounts': 'Google 账号',
+    'Google account fleet': 'Google 账号集群',
+    'accounts': '个账号',
+    '+ Add Account': '+ 添加账号',
+    'Add account': '添加账号',
+    'Import accounts': '导入账号',
+    'Edit account': '编辑账号',
+    'Add account credentials': '添加账号凭据',
+    'Cancel account edit': '取消账号编辑',
+    'Edit label': '编辑标签',
+    'Remove from fleet': '从集群中移除',
+    'Disable account': '禁用账号',
+    'Enable account': '启用账号',
+    'Automatic': '自动',
+    'Use preferred': '优先使用',
+    'Preferred': '首选',
+    'Partially enabled': '部分启用',
+    'Reconnect': '重新连接',
+    'Refresh quotas': '刷新配额',
+    'Refreshing quotas…': '正在刷新配额…',
+    'Some pools enabled': '部分模型池已启用',
+    'Loading quota…': '正在加载配额…',
+    'Quota unavailable — Google returned no buckets.': '配额不可用 — Google 未返回配额桶。',
+    'Daily requests': '每日请求数',
+    'Minute requests': '每分钟请求数',
+    'Tokens': 'Token 用量',
+    'Weekly limit': '每周限制',
+    'Five-hour limit': '5小时限制',
+    'Daily limit': '每日限制',
+    'Reported quota': '已上报配额',
+    'Remaining quota unknown': '剩余配额未知',
+    'No Google accounts configured.': '未配置 Google 账号。',
+    'Sign in with Google': '使用 Google 登录',
+    'Sign-in method': '登录方式',
+    'Account label': '账号标签',
+    'Desktop OAuth client ID': 'Desktop OAuth 客户端 ID',
+    'OAuth client secret (if required)': 'OAuth 客户端密钥 (如需要)',
+    'Apply account': '应用账号',
+    'Prepare account': '准备账号',
+    'Test account': '测试账号',
+    'Cancel Google login': '取消 Google 登录',
+    'Import account credentials': '导入账号凭据',
+    'Account ID': '账号 ID',
+    'Refresh token': 'Refresh Token',
+    'Access token (optional with refresh token)': 'Access Token (配合 Refresh Token 可选)',
+    'Access token expiry (Unix milliseconds)': 'Access Token 过期时间 (Unix 毫秒)',
+    'Save account label': '保存账号标签',
+    'Remove Google account': '移除 Google 账号',
+    'Remove account from fleet': '从集群中移除账号',
+    'Remove from all pools': '从所有模型池中移除',
+    'Remove account': '移除账号',
+    'Pool for new Google account': '新 Google 账号所属模型池',
+  };
+
+  function t(en: string, zh?: string): string {
+    if (!isChinese()) return en;
+    if (zh) return zh;
+    return zhDict[en] || en;
+  }
+
   let modelList: CustomModelEntry[] = [];
   let renderVersion = 0;
   let searchTerm = '';
@@ -135,7 +407,7 @@ function initCustomPreload(): void {
     status?: HTMLElement,
     primary = false,
   ): HTMLButtonElement {
-    const node = element('button', `agy-btn${primary ? ' agy-primary' : ''}`, label);
+    const node = element('button', `agy-btn${primary ? ' agy-primary' : ''}`, t(label));
     node.type = 'button';
     node.addEventListener('click', async () => {
       // Fleet saves read and replace complete model records. Other settings
@@ -156,7 +428,7 @@ function initCustomPreload(): void {
   function field(parent: HTMLElement, title: string, id: string, value = '', type = 'text'): HTMLInputElement {
     const label = element('label', 'agy-field');
     label.htmlFor = id;
-    label.append(element('span', '', title));
+    label.append(element('span', '', t(title)));
     const input = element('input');
     input.id = id;
     input.type = type;
@@ -175,11 +447,11 @@ function initCustomPreload(): void {
   ): HTMLSelectElement {
     const label = element('label', 'agy-field');
     label.htmlFor = id;
-    label.append(element('span', '', title));
+    label.append(element('span', '', t(title)));
     const select = element('select');
     select.id = id;
     for (const [key, caption] of options) {
-      const option = element('option', '', caption);
+      const option = element('option', '', t(caption));
       option.value = key;
       select.append(option);
     }
@@ -280,7 +552,7 @@ function initCustomPreload(): void {
     card.setAttribute('aria-modal', 'true');
     card.setAttribute('aria-labelledby', 'agy-modal-title');
     const header = element('div', 'agy-toolbar');
-    const heading = element('h2', '', title);
+    const heading = element('h2', '', t(title));
     heading.id = 'agy-modal-title';
     const close = () => {
       if (!overlay.isConnected) return;
@@ -795,7 +1067,7 @@ function initCustomPreload(): void {
             const remainingRows = Array.from(document.querySelectorAll<HTMLElement>('#agy-custom-models-content [data-model-name]'));
             const adjacentRow = adjacentNames.map((name) => remainingRows.find((row) => row.dataset.modelName === name)).find(Boolean);
             const nextFocus = Array.from(adjacentRow?.querySelectorAll<HTMLButtonElement>('button') || [])
-              .find((button) => button.textContent === 'Delete') || document.getElementById('agy-add-model');
+              .find((button) => button.textContent === 'Delete' || button.textContent === '删除') || document.getElementById('agy-add-model');
             nextFocus?.focus({ preventScroll: true });
           }
         },
@@ -951,6 +1223,13 @@ function initCustomPreload(): void {
   function relativeQuotaReset(value: string): string {
     const diff = Date.parse(value) - Date.now();
     if (!Number.isFinite(diff)) return '';
+    if (isChinese()) {
+      if (diff <= 0) return '已到重置时间 · 请刷新配额';
+      const minutes = Math.ceil(diff / 60_000);
+      if (minutes >= 1440) return `${Math.floor(minutes / 1440)}天 ${Math.floor((minutes % 1440) / 60)}小时后重置`;
+      if (minutes >= 60) return `${Math.floor(minutes / 60)}小时 ${minutes % 60}分钟后重置`;
+      return `${minutes}分钟后重置`;
+    }
     if (diff <= 0) return 'Reset due · refresh quota';
     const minutes = Math.ceil(diff / 60_000);
     if (minutes >= 1440) return `Resets in ${Math.floor(minutes / 1440)}d ${Math.floor((minutes % 1440) / 60)}h`;
@@ -992,8 +1271,8 @@ function initCustomPreload(): void {
         block.dataset.exhausted = String(known && fraction <= 0);
         const title = bucket.displayName || ({ weekly: 'Weekly limit', five_hour: 'Five-hour limit', daily: 'Daily limit' } as Record<string, string>)[bucket.id] || bucket.id;
         const heading = element('div', 'agy-quota-heading');
-        heading.append(element('span', 'agy-muted', title),
-          element('span', 'agy-quota-value', known ? `${Math.round(Math.max(0, Math.min(1, fraction)) * 100)}% remaining` : 'Remaining quota unknown'));
+        heading.append(element('span', 'agy-muted', t(title)),
+          element('span', 'agy-quota-value', known ? (isChinese() ? `剩余 ${Math.round(Math.max(0, Math.min(1, fraction)) * 100)}%` : `${Math.round(Math.max(0, Math.min(1, fraction)) * 100)}% remaining`) : t('Remaining quota unknown', '剩余配额未知')));
         block.append(heading);
         if (known) {
           const progress = element('progress');
@@ -1060,7 +1339,7 @@ function initCustomPreload(): void {
     const keys = new Set(fleetMembers(modelList).map(({ account, owner }) => quotaKey(owner, account)));
     for (const key of quotaCache.keys()) if (!keys.has(key)) quotaCache.delete(key);
     const header = element('div', 'agy-toolbar');
-    const collapse = button(`${fleetCollapsed ? '▸' : '▾'} Google account fleet · ${rows.length} account${rows.length === 1 ? '' : 's'}`, () => {
+    const collapse = button(isChinese() ? `${fleetCollapsed ? '▸' : '▾'} Google 账号集群 · ${rows.length} 个账号` : `${fleetCollapsed ? '▸' : '▾'} Google account fleet · ${rows.length} account${rows.length === 1 ? '' : 's'}`, () => {
       fleetCollapsed = !fleetCollapsed;
       try { localStorage.setItem('agy_google_fleet_collapsed', String(fleetCollapsed)); } catch {}
       renderGoogleFleet();
@@ -1126,7 +1405,7 @@ function initCustomPreload(): void {
       const cardHeader = element('div', 'agy-fleet-card-header');
       const identity = element('div');
       identity.append(element('div', 'agy-fleet-label', accountIdentity),
-        element('div', 'agy-muted', `${members.length} model pool${members.length === 1 ? '' : 's'}`));
+        element('div', 'agy-muted', isChinese() ? `${members.length} 个模型池` : `${members.length} model pool${members.length === 1 ? '' : 's'}`));
       const labels = [...new Set(members.map(({ account }) => account.label?.trim()).filter((label): label is string => !!label && label !== accountIdentity))];
       if (labels.length) identity.append(element('div', 'agy-muted', labels.join(' · ')));
       const activeCount = members.filter(({ account }) => account.enabled !== false).length;
@@ -1233,7 +1512,7 @@ function initCustomPreload(): void {
           element(
             'h3',
             '',
-            `${first.provider} · ${models.filter((model) => model.enabled !== false).length}/${models.length} enabled`,
+            `${first.provider} · ${models.filter((model) => model.enabled !== false).length}/${models.length} ${t('enabled', '已启用')}`,
           ),
           element('div', 'agy-muted', first.apiUrl),
         );
@@ -2328,21 +2607,27 @@ function initCustomPreload(): void {
     installStyles();
     const section = element('section');
     section.id = 'agy-custom-models-section';
-    section.setAttribute('aria-label', 'Custom Models');
+    section.setAttribute('aria-label', t('Custom Models', '自定义模型'));
     const header = element('div', 'agy-toolbar');
-    const addModel = button('Add model', () => openModelModal(), undefined, true);
+    const addModel = button(t('Add model', '添加模型'), () => openModelModal(), undefined, true);
     addModel.id = 'agy-add-model';
-    header.append(element('h2', '', 'Custom Models'), addModel);
+    header.append(element('h2', '', t('Custom Models', '自定义模型')), addModel);
     const actions = element('div', 'agy-actions');
     actions.append(
-      button('Discover local', discoverLocal),
-      button('Import', () => openImportExport('import')),
-      button('Export', () => openImportExport('export')),
-      button('Remote gateway', openGateway),
-      button('Diagnostics', openDiagnostics),
+      button(t('Discover local', '发现本地模型'), discoverLocal),
+      button(t('Import', '导入'), () => openImportExport('import')),
+      button(t('Export', '导出'), () => openImportExport('export')),
+      button(t('Remote gateway', '远程网关'), openGateway),
+      button(t('Diagnostics', '诊断'), openDiagnostics),
+      button(isChinese() ? 'English' : '中文', () => {
+        try {
+          localStorage.setItem('agy_custom_models_lang', isChinese() ? 'en' : 'zh');
+        } catch {}
+        injectCustomModelsSection();
+      }),
     );
-    const search = field(section, 'Search models', 'agy-model-search', searchTerm, 'search');
-    search.placeholder = 'Search by name, model ID or provider';
+    const search = field(section, t('Search models', '搜索模型'), 'agy-model-search', searchTerm, 'search');
+    search.placeholder = t('Search by name, model ID or provider', '按名称、模型 ID 或提供商搜索');
     search.addEventListener('input', () => {
       searchTerm = search.value.trim().toLowerCase();
       void renderCustomModelsList();
@@ -2351,13 +2636,13 @@ function initCustomPreload(): void {
     content.id = 'agy-custom-models-content';
     const fleet = element('div', 'agy-fleet');
     fleet.id = 'agy-google-account-pool-section';
-    fleet.setAttribute('aria-label', 'Google account fleet and quotas');
+    fleet.setAttribute('aria-label', t('Google account fleet and quotas', 'Google 账号集群与配额'));
     fleet.hidden = true;
     const status = statusNode();
     status.id = 'agy-main-status';
     section.prepend(
       header,
-      element('p', 'agy-muted', 'Provider connections, local models and remote gateways.'),
+      element('p', 'agy-muted', t('Provider connections, local models and remote gateways.', '提供商连接、本地模型与远程网关。')),
       actions,
     );
     section.append(status, fleet, content);
@@ -2399,9 +2684,9 @@ function initCustomPreload(): void {
     const box = element('div', 'agy-model-search-box');
     const input = element('input', 'agy-model-search-input');
     input.type = 'search';
-    input.placeholder = 'Search models…';
-    input.setAttribute('aria-label', 'Search models');
-    const empty = element('div', 'agy-model-no-results', 'No matching models');
+    input.placeholder = t('Search models…', '搜索模型…');
+    input.setAttribute('aria-label', t('Search models', '搜索模型'));
+    const empty = element('div', 'agy-model-no-results', t('No matching models', '未找到匹配的模型'));
     empty.hidden = true;
     box.append(input);
     const header = Array.from(menu.querySelectorAll<HTMLElement>('*')).find(
