@@ -9,13 +9,12 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import * as asar from '@electron/asar';
 import { planRuntimePatch } from './runtime-patch.mjs';
+import { planLanguageServerBinary } from './language-server-binary-patch.mjs';
 
 const PROJECT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const STATE_DIR = '.antigravity-model-patch';
 const ISSUE = 'https://github.com/vahapogut/antigravity-add-model/issues/2';
 const HASH = /^[a-f0-9]{64}$/;
-const ORIGINAL_URL = Buffer.from('https://daily-cloudcode-pa.googleapis.com');
-const PATCHED_URL = Buffer.from('http://localhost:50999/v1internal/xxxxxxx');
 export const REQUIRED_BUILD_FILES = [
   'desktop.js',
   'customPreload.js',
@@ -273,35 +272,7 @@ function readState(resources) {
 }
 function binaryPlan(resources, requested) {
   const binary = locations(resources).binary;
-  if (!exists(binary)) {
-    if (requested) fail('BINARY_NOT_FOUND', '--patch-language-server requires resources/bin/language_server.exe.');
-    return { mode: 'unknown', bytes: null };
-  }
-  const bytes = fs.readFileSync(binary);
-  const originalFound = bytes.includes(ORIGINAL_URL);
-  const patchedFound = bytes.includes(PATCHED_URL);
-  if (requested) {
-    if (
-      bytes[0] !== 0x4d ||
-      bytes[1] !== 0x5a ||
-      ORIGINAL_URL.length !== PATCHED_URL.length ||
-      (!originalFound && !patchedFound)
-    ) {
-      fail(
-        'BINARY_NOT_SUPPORTED',
-        'Expected a Windows PE language server with the recognized Cloud Code endpoint. No binary was changed.',
-      );
-    }
-    if (originalFound) {
-      let offset = 0;
-      while ((offset = bytes.indexOf(ORIGINAL_URL, offset)) !== -1) {
-        PATCHED_URL.copy(bytes, offset);
-        offset += PATCHED_URL.length;
-      }
-      return { mode: 'fixed', bytes };
-    }
-  }
-  return { mode: patchedFound ? 'fixed' : originalFound ? 'dynamic' : 'unknown', bytes: null };
+  return planLanguageServerBinary(exists(binary) ? fs.readFileSync(binary) : null, requested);
 }
 export function preflight(options = {}) {
   const resources = resolveResources(options.resources, options.platform, options.env);

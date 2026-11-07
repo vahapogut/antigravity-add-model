@@ -14,7 +14,7 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "build": "npx tsc",
+    "build": "npx tsc && node scripts/build-language-server-binary-patch.mjs",
     "dev": "npx tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -50,4 +50,4 @@ jobs:
         run: npm run gateway:test
       - run: npm run test:integration
       - name: Compiled files must match source
-        run: git diff --exit-code -- dist
+        run: git diff --exit-code -- dist scripts/language-server-binary-patch.mjs
