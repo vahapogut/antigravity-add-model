@@ -17,6 +17,7 @@ import { beginDiagnosticRequest } from '../diagnostics';
 import * as registry from './registry';
 import { CircuitBreaker } from './circuitBreaker';
 import {
+  appendModelSystemPrompt,
   applyRequestOptions,
   GeminiBody,
   isAntigravityCompactionRequest,
@@ -344,7 +345,10 @@ export async function runCustomModelRequest(
             // The IDE can omit thought parts when replaying completed tool calls.
             // Recover only this conversation/provider's matching turn before budgeting.
             const history = format === 'openai' ? reasoningReplayCache.restore(originalBody, model) : originalBody;
-            const body = trimContext(history, model.contextWindow, outputBudget);
+            // Each attempt uses its own model's prompt, so a fallback never inherits the
+            // primary's. Added before trimming so the context budget counts it.
+            const prompted = appendModelSystemPrompt(history, model.systemPrompt);
+            const body = trimContext(prompted, model.contextWindow, outputBudget);
             const effectiveModel = outputBudget ? { ...model, maxOutputTokens: outputBudget } : model;
             payload = applyRequestOptions(
               registry.translateRequest(model.provider, body, externalName, format, stateKey) as Record<

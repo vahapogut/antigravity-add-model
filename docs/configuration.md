@@ -130,6 +130,7 @@ are supported in configuration but do not have a separate editor control.
 | `circuitBreaker` | `enabled`, `failureThreshold`, `cooldownMs`; default threshold `3`, cooldown `30000` ms. |
 | `customHeaders` | Object of string header values. Reserved transport headers and line breaks are rejected. |
 | `extraBody` | Additional JSON request fields; cannot replace model/messages/contents/system/tools/stream routing fields. Ordinary exported configuration, not secret storage. |
+| `systemPrompt` | Text of up to 20000 characters added after Antigravity's own system instruction for this model, for example `Always answer in Turkish.` Antigravity's instruction is never replaced, because it carries the agent and tool rules. Each fallback model uses its own prompt. Counts toward the context window. |
 | `rawUrl` | Use the exact request URL instead of protocol path normalization. |
 | `supportsVision`, `supportsThinking` | Advertised capability overrides. Thinking capability is JSON/import; these flags do not add upstream capabilities. |
 | `allowUnauthorized` | Disable certificate verification for this model only; leave false for normal endpoints. |
