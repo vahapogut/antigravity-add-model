@@ -538,10 +538,11 @@ attempts are excluded from token totals. Elapsed time covers the whole request.
 Prompt text, response text, request URLs and credentials are not retained.
 
 **Test generation (uses quota)** in the model editor sends the fixed prompt
-`Reply with OK.` with a 32-token output budget, a 30-second limit, no tools,
+`Reply with OK.` with a 1024-token output budget, a 30-second limit, no tools,
 retries or fallback models. It exercises the same request translation as normal
-chat and reports whether generated text was received. Some reasoning models need
-a larger minimum output budget and can fail this small test despite being usable.
+chat and reports whether generated text was received. The budget leaves room for
+reasoning models that think before answering; other models stop after replying.
+A reply that contains only reasoning and no answer text still counts as a failure.
 **Test connection** still checks the provider's catalog/authentication without
 requesting generation.
 

@@ -2079,7 +2079,7 @@ window.addEventListener('DOMContentLoaded', () => {
       element(
         'p',
         'agy-muted',
-        'Sends one “Reply with OK.” request with a 32-token output limit using this model’s saved settings. Your provider may charge for the request. No conversation content is sent.',
+        'Sends one “Reply with OK.” request with a 1024-token output limit using this model’s saved settings. Your provider may charge for the request. No conversation content is sent.',
       ),
     );
     body.append(
