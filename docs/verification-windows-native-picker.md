@@ -94,6 +94,8 @@ npm run doctor -- --resources "C:\path\to\Antigravity\resources"
 
 Use the actual path rather than the example above. On the verified installation, the runtime was recognized as version 2.0.6, the model file contained 3 enabled models with no invalid entries, and the proxy health check passed. The optional gateway check was informational because the gateway was not being used.
 
+Since #32, `doctor` also adds a **native model picker** check for a recognized Windows Language Server. It warns when the binary still targets the remote catalogue and reports `ok` once the fixed local endpoint is configured.
+
 A healthy proxy response alone does **not** prove that the native picker is using it. Confirm the Language Server URL and the proxy interception log as described above.
 
 ## Troubleshooting
@@ -112,10 +114,11 @@ The installer's backup/restore safeguards should be retained until the patched a
 ## Related implementation and tests
 
 - `scripts/deploy.mjs` — explicit `--patch-language-server` preflight and transactional deployment.
-- `src/__tests__/deployment.test.ts` — verifies the endpoint replacement, fixed-port marker, restore behavior, and refusal of unknown/absent binaries.
+- `scripts/language-server-binary-patch.mjs` — the endpoint classification and equal-length replacement used by the installer (#34).
+- `src/__tests__/language-server-binary-patch.test.ts` and `src/__tests__/deployment.test.ts` — verify the endpoint replacement, fixed-port marker, restore behavior, and refusal of unknown/absent binaries.
 - `src/proxy.ts` — intercepts `/v1internal:fetchAvailableModels`.
+- `scripts/doctor.mjs` — the read-only native model picker check from [PR #32](https://github.com/vahapogut/antigravity-add-model/pull/32).
 - [Optional Windows language-server endpoint patch](compatibility.md#optional-windows-language-server-endpoint-patch).
-- [PR #32: diagnose Windows native picker catalogue bypass](https://github.com/vahapogut/antigravity-add-model/pull/32) — adds a read-only diagnostic for installations still using the dynamic endpoint path.
 
 ## Privacy and limits
 
