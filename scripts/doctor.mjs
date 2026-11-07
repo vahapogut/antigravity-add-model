@@ -9,6 +9,26 @@ import { preflight, REQUIRED_BUILD_FILES } from './deploy.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
+
+/** Explain whether the native model picker can reach the local model catalogue. */
+export function languageServerEndpointCheck(mode) {
+  if (mode === 'dynamic') {
+    return {
+      name: 'native model picker',
+      status: 'warning',
+      message:
+        'The recognized Windows language-server binary still targets the remote Cloud Code endpoint. Native model-list requests may bypass the local proxy. If custom models are missing from the native picker, close Antigravity and run `node scripts/deploy.mjs --patch-language-server`; this recognized endpoint patch requires local proxy port 50999.',
+    };
+  }
+  if (mode === 'fixed') {
+    return {
+      name: 'native model picker',
+      status: 'ok',
+      message: 'The language-server endpoint is configured to use the local proxy on port 50999.',
+    };
+  }
+  return null;
+}
 export async function diagnose(options = {}) {
   const checks = [];
   const add = (name, status, message) => checks.push({ name, status, message });
@@ -50,6 +70,8 @@ export async function diagnose(options = {}) {
     try {
       const info = preflight({ resources: options.resources, dist });
       add('installation', 'ok', `Runtime recognized (${info.version || 'version detected'}); patch preflight passed without changes`);
+      const endpointCheck = languageServerEndpointCheck(info.plan?.mode);
+      if (endpointCheck) checks.push(endpointCheck);
     } catch (error) { add('installation', 'error', error.message); }
   }
   return { healthy: !checks.some(check => check.status === 'error'), checks };
