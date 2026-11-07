@@ -78,6 +78,22 @@ describe('mapGeminiToOpenAI', () => {
     },
   );
 
+  it.each(['parameters', 'parametersJsonSchema'] as const)(
+    'sends an empty properties object for a zero-argument tool declared in %s (issue #35)',
+    (schemaField) => {
+      const schema = { type: 'object' };
+      const result = mapGeminiToOpenAI(
+        {
+          contents: [],
+          tools: [{ functionDeclarations: [{ name: 'list_plugin_accounts', [schemaField]: schema }] }],
+        },
+        'lm-studio-model',
+      );
+      expect(result.tools![0].function.parameters).toEqual({ type: 'object', properties: {} });
+      expect(schema).toEqual({ type: 'object' });
+    },
+  );
+
   it('preserves parametersJsonSchema properties, references, and additional-property constraints', () => {
     const parametersJsonSchema = {
       type: 'object',
