@@ -5,8 +5,11 @@ have different runtimes. Use these commands for the IDE; use `deploy.mjs` for th
 standalone app. The IDE adapter changes the verified `jetski.cloudCodeUrl` user
 setting and starts an independent local proxy. It does not replace vendor code.
 
-The current verified release is **Antigravity IDE 2.5.5**, based on **VS Code
-1.107.0**. `ide:check` reports these separately as `ideVersion` and `version`.
+The verified releases are **Antigravity IDE 2.5.5** and **2.6.0**, both based on
+**VS Code 1.107.0**. `ide:check` reports these separately as `ideVersion` and
+`version`. IDE 2.6.0 keeps the `jetski.cloudCodeUrl` setting and also copies that
+loopback URL into the hub process as `AGY_LLM_GATEWAY_URL`. Its language server
+is the downloaded `agy` hub, not the 2.5.5 `--cloud_code_endpoint` launcher.
 Install the IDE edition from the [official download page](https://antigravity.google/download).
 
 ## Check, configure and launch
@@ -31,7 +34,8 @@ requires the proxy to be running.
 
 Preflight requires recognized Antigravity product metadata and an unpacked
 `app/out/main.js` entry point. It accepts an extension that declares
-`jetski.cloudCodeUrl`, or the inspected IDE 2.5.5 core implementation. That release
+`jetski.cloudCodeUrl`, the inspected IDE 2.5.5 core implementation, or the
+inspected IDE 2.6.0 hub launcher. The 2.5.5 release
 uses the setting internally without declaring it in the extension manifest;
 preflight verifies its release commit, product/extension identity and both core
 and language-server endpoint code. Unsupported layouts fail before settings change.
