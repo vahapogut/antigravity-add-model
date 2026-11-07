@@ -5,7 +5,7 @@
 import { readFileSync } from 'fs';
 
 import log from 'electron-log';
-import { assertUserImageParts, getImageSource, localFilePath } from './images';
+import { assertUserImageParts, getImageSource, localFilePath, nestedFunctionResponseParts } from './images';
 import {
   normalizeToolSchema,
   translateToolCallToNative,
@@ -76,6 +76,8 @@ interface GeminiFunctionResponse {
   name: string;
   response: unknown;
   id?: string;
+  /** Media produced by the tool; the language server nests images here. */
+  parts?: GeminiPart[];
 }
 
 interface GeminiRequestBody {
@@ -218,6 +220,7 @@ function mapUserContentParts(parts: GeminiPart[]): OpenAIContentPart[] {
 }
 
 function compactContent(parts: OpenAIContentPart[]): string | OpenAIContentPart[] {
+  // Any image forces the parts array; otherwise a tool result would collapse to text.
   return parts.some((part) => part.type === 'image_url')
     ? parts
     : parts.map((part) => (part.type === 'text' ? part.text : '')).join('\n');
@@ -319,6 +322,16 @@ export function mapGeminiToOpenAI(
           for (const p of item.parts) {
             if (!p.thought) pendingToolResponseContent.push(...mapUserContentParts([p]));
             if (p.functionResponse) {
+              // Tool media arrives as nested parts, not as top-level image parts.
+              // They cannot live in an OpenAI tool message, so forward them as a
+              // native image in the user turn that accompanies the tool results.
+              const nested = nestedFunctionResponseParts(p);
+              if (nested.length) {
+                // A top-level inlineData/fileData would only yield a placeholder here;
+                // images must be translated from the nested parts themselves.
+                const nestedContent = mapUserContentParts(nested);
+                if (nestedContent.length) pendingToolResponseContent.push(...nestedContent);
+              }
               const funcName = p.functionResponse.name || '';
               const modelTCIds = modelToolCallIds.get(stateKey) || {};
               const ids = historyCallIds.get(funcName) || [];

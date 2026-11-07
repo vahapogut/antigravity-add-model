@@ -61,6 +61,7 @@ function mapUserContentParts(parts) {
     return content;
 }
 function compactContent(parts) {
+    // Any image forces the parts array; otherwise a tool result would collapse to text.
     return parts.some((part) => part.type === 'image_url')
         ? parts
         : parts.map((part) => (part.type === 'text' ? part.text : '')).join('\n');
@@ -159,6 +160,17 @@ function mapGeminiToOpenAI(geminiBody, modelName, stateKey = modelName) {
                         if (!p.thought)
                             pendingToolResponseContent.push(...mapUserContentParts([p]));
                         if (p.functionResponse) {
+                            // Tool media arrives as nested parts, not as top-level image parts.
+                            // They cannot live in an OpenAI tool message, so forward them as a
+                            // native image in the user turn that accompanies the tool results.
+                            const nested = (0, images_1.nestedFunctionResponseParts)(p);
+                            if (nested.length) {
+                                // A top-level inlineData/fileData would only yield a placeholder here;
+                                // images must be translated from the nested parts themselves.
+                                const nestedContent = mapUserContentParts(nested);
+                                if (nestedContent.length)
+                                    pendingToolResponseContent.push(...nestedContent);
+                            }
                             const funcName = p.functionResponse.name || '';
                             const modelTCIds = shared_1.modelToolCallIds.get(stateKey) || {};
                             const ids = historyCallIds.get(funcName) || [];
