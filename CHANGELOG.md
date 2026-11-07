@@ -2,6 +2,10 @@
 
 Release history preserved from the project README. Historical entries describe the behavior of their release; see [compatibility and recovery](docs/compatibility.md) for current installation guidance.
 
+### Unreleased — Windows 2.0.6 native picker verification
+
+- Document the manually verified Windows 10 / standalone Antigravity 2.0.6 case where the Language Server called the hard-coded Cloud Code model-list endpoint instead of the local proxy. Record the exact post-patch request path, proxy log signatures, fixed port (50999), recovery safeguards and environment details that were not captured. The endpoint patch and binary-patch regression tests already exist; this entry adds reproducible verification notes rather than duplicating the implementation.
+
 ### Unreleased — Automatic workspace artifact metadata correction
 
 - Prevent custom models from classifying ordinary workspace files as artifacts by sending optional `ArtifactMetadata`. Use the current native IDE workspace paths, artifact directory and tool schema to remove the misplaced field before execution, without changing the requested path, contents or overwrite setting. Genuine artifact calls and ambiguous/custom contexts remain unchanged.

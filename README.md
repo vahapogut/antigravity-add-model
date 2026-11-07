@@ -309,11 +309,12 @@ Close the app before repair or restore. Use the Windows endpoint option when app
 | Black screen after an app update | Follow [startup recovery](docs/compatibility.md#black-screen-after-an-update); avoid restoring an arbitrary older archive. |
 | Windows installer keeps asking to close Antigravity | Follow [update preparation](docs/compatibility.md#windows-installer-asks-to-close-antigravity); collect the exact installer error if it persists. |
 | A model is missing | Check that it is enabled, saved, and using the correct provider model ID. |
+| Windows standalone 2.0.6: models missing from the native picker | Check the actual Language Server request path and the fixed-port endpoint patch; see the [verified Windows case](docs/verification-windows-native-picker.md). |
 | Provider returns 401, 403, or 404 | Check credentials, account access/location, API URL, and model availability. |
 | Port 50999 is occupied | A binary-patched Windows install needs that fixed port; ordinary unpatched operation can choose another port. |
 | TLS connection fails | Check the endpoint certificate and your trusted CA configuration. |
 
-More details: [compatibility and recovery](docs/compatibility.md) · [model configuration](docs/configuration.md)
+More details: [compatibility and recovery](docs/compatibility.md) · [Windows 2.0.6 picker verification](docs/verification-windows-native-picker.md) · [model configuration](docs/configuration.md)
 
 ## Credentials and data
 

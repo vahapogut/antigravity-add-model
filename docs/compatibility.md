@@ -239,6 +239,8 @@ port that the binary cannot use. Normal unpatched operation retains dynamic-port
 fallback. Language-server restarts reuse the existing proxy listener; concurrent
 starts and shutdowns are coordinated so a restart does not collide with its own port.
 
+The [verified Windows 10 / standalone Antigravity 2.0.6 case](verification-windows-native-picker.md) records the observed Language Server bypass, post-patch log signatures, and the limits of that single-machine validation.
+
 ## Provider 403/404 errors are a separate problem
 
 The `UNSUPPORTED_LOCATION` response in issue #1 is a Google account/service
