@@ -1,1 +1,1 @@
-{"version":3,"file":"subagentModels.d.ts","sourceRoot":"","sources":["../../src/proxy/subagentModels.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,WAAW,EAAE,MAAM,UAAU,CAAC;AAG5C,oGAAoG;AACpG,wBAAgB,8BAA8B,CAAC,MAAM,EAAE,WAAW,EAAE,EAAE,QAAQ,EAAE,MAAM,GAAG,WAAW,GAAG,SAAS,CAQ/G"}
+{"version":3,"file":"subagentModels.d.ts","sourceRoot":"","sources":["../../src/proxy/subagentModels.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,WAAW,EAAE,MAAM,UAAU,CAAC;AAG5C,oGAAoG;AACpG,wBAAgB,8BAA8B,CAAC,MAAM,EAAE,WAAW,EAAE,EAAE,QAAQ,EAAE,MAAM,GAAG,WAAW,GAAG,SAAS,CAkB/G"}

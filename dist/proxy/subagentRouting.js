@@ -105,9 +105,21 @@ function stripHistoricalPromptMarkers(text) {
 }
 function subagents(call) {
     const args = object(call.args);
-    if (!args || !Array.isArray(args.Subagents))
+    if (!args)
         return undefined;
-    return args.Subagents.map(object);
+    if (Array.isArray(args.Subagents))
+        return args.Subagents.map(object);
+    if (Array.isArray(args.subagents))
+        return args.subagents.map(object);
+    if ('Prompt' in args ||
+        'prompt' in args ||
+        'Model' in args ||
+        'model' in args ||
+        'TypeName' in args ||
+        'typeName' in args) {
+        return [args];
+    }
+    return undefined;
 }
 function callKey(scope, id) {
     return JSON.stringify([scope, id]);
@@ -135,8 +147,8 @@ function childIds(value, depth = 0) {
         return [record.conversationId];
     if ('output' in record)
         return childIds(record.output, depth + 1);
-    for (const key of ['Subagents', 'subagents', 'results']) {
-        if (Array.isArray(record[key]))
+    for (const key of ['Subagents', 'subagents', 'results', 'result', 'data']) {
+        if (key in record)
             return childIds(record[key], depth + 1);
     }
     return undefined;
@@ -297,14 +309,29 @@ class SubagentRoutingBridge {
                     continue;
                 for (const key of ['parameters', 'parametersJsonSchema']) {
                     const parameters = object(clone(declaration[key]));
-                    const array = object(object(parameters?.properties)?.Subagents);
-                    const properties = object(object(array?.items)?.properties);
-                    const model = object(properties?.Model);
-                    if (!model)
+                    if (!parameters)
                         continue;
-                    delete model.enum;
-                    model.description = DESCRIPTION;
-                    declaration[key] = parameters;
+                    let changed = false;
+                    // Batched form: parameters.properties.Subagents.items.properties.Model
+                    const array = object(object(parameters.properties)?.Subagents) ??
+                        object(object(parameters.properties)?.subagents);
+                    const arrayModel = object(object(object(array?.items)?.properties)?.Model) ??
+                        object(object(object(array?.items)?.properties)?.model);
+                    if (arrayModel) {
+                        delete arrayModel.enum;
+                        arrayModel.description = DESCRIPTION;
+                        changed = true;
+                    }
+                    // Flat form: parameters.properties.Model
+                    const directModel = object(object(parameters.properties)?.Model) ??
+                        object(object(parameters.properties)?.model);
+                    if (directModel) {
+                        delete directModel.enum;
+                        directModel.description = DESCRIPTION;
+                        changed = true;
+                    }
+                    if (changed)
+                        declaration[key] = parameters;
                 }
             }
         }
@@ -323,13 +350,20 @@ class SubagentRoutingBridge {
                     let expired = false;
                     for (let index = 0; index < entries.length; index++) {
                         const entry = entries[index];
-                        if (!entry || typeof entry.Prompt !== 'string')
+                        if (!entry)
+                            continue;
+                        if (typeof entry.Prompt !== 'string' && typeof entry.prompt === 'string') {
+                            entry.Prompt = entry.prompt;
+                        }
+                        if (typeof entry.Prompt !== 'string')
                             continue;
                         const entryTokens = tokens(entry.Prompt);
                         if (entryTokens.length > 1)
                             throw new SubagentRoutingError('Ambiguous subagent routing in conversation history.');
                         for (const token of entryTokens) {
                             entry.Prompt = stripMarker(entry.Prompt, token);
+                            if (typeof entry.prompt === 'string')
+                                entry.prompt = stripMarker(entry.prompt, token);
                             const state = this.markers.get(token);
                             // Restarted/expired history must not lock the parent out of
                             // starting a fresh child. Only current child ingress fails closed.
@@ -341,10 +375,15 @@ class SubagentRoutingBridge {
                                 throw new SubagentRoutingError('Subagent tool history belongs to another parent conversation.');
                             markerStates.push(state);
                             entryMarkers.set(index, token);
-                            if (state.selector === undefined)
+                            if (state.selector === undefined) {
                                 delete entry.Model;
-                            else
+                                delete entry.model;
+                            }
+                            else {
                                 entry.Model = state.selector;
+                                if ('model' in entry)
+                                    entry.model = state.selector;
+                            }
                             state.touched = this.now();
                         }
                     }
@@ -379,12 +418,20 @@ class SubagentRoutingBridge {
                         if (!entry || !intent.token)
                             continue;
                         const state = this.requireMarker(intent.token);
-                        if (intent.selector === undefined)
+                        if (intent.selector === undefined) {
                             delete entry.Model;
-                        else
+                            delete entry.model;
+                        }
+                        else {
                             entry.Model = intent.selector;
+                            if ('model' in entry)
+                                entry.model = intent.selector;
+                        }
                         if (typeof entry.Prompt === 'string')
                             entry.Prompt = stripMarker(entry.Prompt, intent.token);
+                        if (typeof entry.prompt === 'string' && entry.prompt !== entry.Prompt) {
+                            entry.prompt = stripMarker(entry.prompt, intent.token);
+                        }
                         state.touched = this.now();
                     }
                     saved.touched = this.now();
@@ -445,16 +492,18 @@ class SubagentRoutingBridge {
         const intents = entries.map((entry) => {
             if (!entry)
                 return {};
-            if (entry.Model !== undefined && typeof entry.Model !== 'string')
+            const rawModel = entry.Model ?? entry.model;
+            if (rawModel !== undefined && typeof rawModel !== 'string')
                 throw new SubagentRoutingError('A subagent Model must be a built-in tier or an exact configured model name.', 400);
-            const selector = typeof entry?.Model === 'string' ? entry.Model.trim() : '';
+            const selector = typeof rawModel === 'string' ? rawModel.trim() : '';
             const inherited = (!selector || selector === 'inherit') && context.modelName;
             if (!inherited && (!selector || TIERS.has(selector)))
                 return {};
-            if (typeof entry.Prompt !== 'string')
+            const rawPrompt = entry.Prompt ?? entry.prompt;
+            if (typeof rawPrompt !== 'string')
                 throw new SubagentRoutingError('Custom-model subagents require a text Prompt for safe routing.', 400);
             return {
-                selector: entry.Model,
+                selector: rawModel,
                 modelName: inherited ? this.requireBoundModel(inherited, resolve) : this.requireModel(selector, resolve),
             };
         });
@@ -472,7 +521,14 @@ class SubagentRoutingBridge {
                 const state = this.requireMarker(intent.token);
                 this.requireBoundModel(state.modelName, resolve);
                 entries[index].Model = 'inherit';
-                entries[index].Prompt += `\n\n[antigravity-subagent-route:${intent.token}]`;
+                if ('model' in entries[index])
+                    entries[index].model = 'inherit';
+                if (typeof entries[index].Prompt === 'string') {
+                    entries[index].Prompt += `\n\n[antigravity-subagent-route:${intent.token}]`;
+                }
+                if (typeof entries[index].prompt === 'string' && entries[index].prompt !== entries[index].Prompt) {
+                    entries[index].prompt += `\n\n[antigravity-subagent-route:${intent.token}]`;
+                }
             }
             call.id = previous.toolId;
             return;
@@ -494,7 +550,14 @@ class SubagentRoutingBridge {
                 touched: this.now(),
             });
             entries[index].Model = 'inherit';
-            entries[index].Prompt += `\n\n[antigravity-subagent-route:${token}]`;
+            if ('model' in entries[index])
+                entries[index].model = 'inherit';
+            if (typeof entries[index].Prompt === 'string') {
+                entries[index].Prompt += `\n\n[antigravity-subagent-route:${token}]`;
+            }
+            if (typeof entries[index].prompt === 'string' && entries[index].prompt !== entries[index].Prompt) {
+                entries[index].prompt += `\n\n[antigravity-subagent-route:${token}]`;
+            }
         }
         this.calls.set(callKey(context.scope, id), {
             scope: context.scope,

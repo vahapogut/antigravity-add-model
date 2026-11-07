@@ -1162,8 +1162,9 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
     return;
   }
 
-  // P0-4: Enforce maximum request body size to prevent memory exhaustion DoS
-  const MAX_BODY_SIZE = 10 * 1024 * 1024; // 10 MB
+  // P0-4: Enforce maximum request body size to prevent memory exhaustion DoS while
+  // allowing large multimodal payloads (high-resolution images, attachments).
+  const MAX_BODY_SIZE = 100 * 1024 * 1024; // 100 MB
   let bodyLength = 0;
   let bodyRejected = false;
 
@@ -1174,13 +1175,13 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
       if (!bodyRejected) {
         bodyRejected = true;
         log.warn(`[Proxy] Request body exceeds ${MAX_BODY_SIZE / 1024 / 1024}MB limit (${req.method} ${req.url})`);
-        req.destroy();
         if (!res.headersSent) {
-          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.writeHead(413, { 'Content-Type': 'application/json', Connection: 'close' });
           res.end(
             JSON.stringify({ error: { message: `Request body too large. Maximum: ${MAX_BODY_SIZE / 1024 / 1024}MB` } }),
           );
         }
+        req.destroy();
       }
       return;
     }
