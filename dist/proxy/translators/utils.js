@@ -405,6 +405,10 @@ function normalizeSchemaNode(value) {
 function normalizeToolSchema(schema) {
     const normalized = JSON.parse(JSON.stringify(schema));
     normalizeSchemaNode(normalized);
+    // Zero-argument tools can arrive as `{ type: 'object' }`. Strict OpenAI-compatible
+    // servers such as LM Studio reject a root object without `properties` (issue #35).
+    if (normalized.type === 'object' && normalized.properties === undefined)
+        normalized.properties = {};
     return normalized;
 }
 /**

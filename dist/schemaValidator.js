@@ -209,6 +209,9 @@ function validateCustomModel(model) {
                 return { valid: false, error: `extraBody cannot override ${key}` };
         }
     }
+    if (m.systemPrompt !== undefined && (typeof m.systemPrompt !== 'string' || m.systemPrompt.length > 20000)) {
+        return { valid: false, error: 'systemPrompt must be text of at most 20000 characters' };
+    }
     if (m.googleProject !== undefined && typeof m.googleProject !== 'string')
         return { valid: false, error: 'googleProject must be a string' };
     if (m.googleAccounts !== undefined) {
