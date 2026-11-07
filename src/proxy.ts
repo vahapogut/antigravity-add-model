@@ -40,6 +40,8 @@ export interface CustomModel {
   customHeaders?: Record<string, string>;
   encryptedHeaders?: boolean;
   extraBody?: Record<string, unknown>;
+  /** Extra instructions appended after Antigravity's own system instruction for this model. */
+  systemPrompt?: string;
   rawUrl?: boolean;
   gateway?: boolean;
   supportsVision?: boolean;

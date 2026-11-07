@@ -104,6 +104,19 @@ window.addEventListener('DOMContentLoaded', () => {
         parent.append(label);
         return input;
     }
+    function textAreaField(parent, title, id, value, placeholder) {
+        const label = element('label', 'agy-field');
+        label.htmlFor = id;
+        label.append(element('span', '', title));
+        const input = element('textarea');
+        input.id = id;
+        input.rows = 3;
+        input.value = typeof value === 'string' ? value : '';
+        input.placeholder = placeholder;
+        label.append(input);
+        parent.append(label);
+        return input;
+    }
     function readJson(input, title) {
         if (!input.value.trim())
             return undefined;
@@ -1250,6 +1263,7 @@ window.addEventListener('DOMContentLoaded', () => {
             const fallbacks = field(advanced, 'Fallback model configuration names (comma separated)', 'agy-fallback-models', Array.isArray(existing?.fallbackModels) ? existing.fallbackModels.join(', ') : '');
             const headers = jsonField(advanced, 'Custom headers (JSON)', 'agy-custom-headers', existing?.customHeaders);
             const extraBody = jsonField(advanced, 'Additional request fields (JSON)', 'agy-extra-body', existing?.extraBody);
+            const systemPrompt = textAreaField(advanced, 'System prompt (added after Antigravity’s own instructions)', 'agy-system-prompt', existing?.systemPrompt, 'For example: Always answer in Turkish.');
             const breaker = existing?.circuitBreaker;
             const breakerGrid = element('div', 'agy-grid');
             const breakerEnabled = selectField(breakerGrid, 'Circuit breaker', 'agy-breaker-enabled', [
@@ -1371,6 +1385,7 @@ window.addEventListener('DOMContentLoaded', () => {
                         .filter(Boolean),
                     customHeaders,
                     extraBody: readJson(extraBody, 'Additional request fields'),
+                    systemPrompt: systemPrompt.value.trim() || undefined,
                     supportsVision: vision.value === '' ? undefined : vision.value === 'true',
                     rawUrl: rawUrl.value === 'true',
                     allowUnauthorized: tls.value === 'true',
@@ -1572,7 +1587,7 @@ window.addEventListener('DOMContentLoaded', () => {
     function openGenerationTest(model) {
         const { body, status } = openModal('Test model generation');
         body.append(element('p', '', `Model: ${model.displayName || model.externalModelName || model.name}`));
-        body.append(element('p', 'agy-muted', 'Sends one “Reply with OK.” request with a 32-token output limit using this model’s saved settings. Your provider may charge for the request. No conversation content is sent.'));
+        body.append(element('p', 'agy-muted', 'Sends one “Reply with OK.” request with a 1024-token output limit using this model’s saved settings. Your provider may charge for the request. No conversation content is sent.'));
         body.append(button('Run generation test', async () => {
             setStatus(status, 'Sending a short generation test…');
             const result = requireSuccess(await storageAPI.testModelGeneration(model));

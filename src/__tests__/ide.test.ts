@@ -119,6 +119,23 @@ describe('verified IDE endpoint adapter', () => {
     expect(fs.readFileSync(f.settings, 'utf8')).toBe('{}\n');
     expect(fs.readFileSync(path.join(f.app, 'out/main.js'))).toEqual(originalCore);
   });
+  it('recognizes the Linux IDE 2.6.0 release commit reported in issue #42', () => {
+    const f = { ...hubEndpointFixture(), platform: 'linux' };
+    const product = path.join(f.app, 'product.json');
+    put(product, fs.readFileSync(product, 'utf8').replace('9e3a5da5d6731effd57d47d88bbe5df14ac6ccdd', '895a06674a2fc1c62bc9d2219cd28c254fb80ed7'));
+    const launcher = path.join(f.app, 'extensions/agy/vscode/extension.js');
+    const originalLauncher = fs.readFileSync(launcher);
+    expect(inspectIde(f).declaredBy).toBe('core:antigravity-ide-2.6.0');
+    expect(configureIde({ ...f, action: 'apply' })).toMatchObject({ applied: true, launcherPatched: true });
+    expect(configureIde({ ...f, action: 'restore' }).launcherRestored).toBe(true);
+    expect(fs.readFileSync(launcher)).toEqual(originalLauncher);
+  });
+  it('still refuses an unknown IDE 2.6.0 release commit', () => {
+    const f = hubEndpointFixture();
+    const product = path.join(f.app, 'product.json');
+    put(product, fs.readFileSync(product, 'utf8').replace('9e3a5da5d6731effd57d47d88bbe5df14ac6ccdd', '0'.repeat(40)));
+    expect(() => inspectIde(f)).toThrow('UNSUPPORTED_IDE');
+  });
   it('refuses an IDE 2.6.0 launcher without the hub environment hook before writing settings', () => {
     const f = hubEndpointFixture();
     const launcher = path.join(f.app, 'extensions/agy/vscode/extension.js');

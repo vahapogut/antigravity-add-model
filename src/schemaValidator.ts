@@ -210,6 +210,9 @@ export function validateCustomModel(model: unknown): ValidationResult {
       if (reserved.includes(key)) return { valid: false, error: `extraBody cannot override ${key}` };
     }
   }
+  if (m.systemPrompt !== undefined && (typeof m.systemPrompt !== 'string' || m.systemPrompt.length > 20_000)) {
+    return { valid: false, error: 'systemPrompt must be text of at most 20000 characters' };
+  }
   if (m.googleProject !== undefined && typeof m.googleProject !== 'string') return { valid: false, error: 'googleProject must be a string' };
   if (m.googleAccounts !== undefined) {
     if (!Array.isArray(m.googleAccounts) || m.googleAccounts.length > 50) return { valid: false, error: 'googleAccounts must be an array with at most 50 accounts' };

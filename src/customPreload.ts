@@ -202,6 +202,25 @@ window.addEventListener('DOMContentLoaded', () => {
     parent.append(label);
     return input;
   }
+  function textAreaField(
+    parent: HTMLElement,
+    title: string,
+    id: string,
+    value: unknown,
+    placeholder: string,
+  ): HTMLTextAreaElement {
+    const label = element('label', 'agy-field');
+    label.htmlFor = id;
+    label.append(element('span', '', title));
+    const input = element('textarea');
+    input.id = id;
+    input.rows = 3;
+    input.value = typeof value === 'string' ? value : '';
+    input.placeholder = placeholder;
+    label.append(input);
+    parent.append(label);
+    return input;
+  }
   function readJson(input: HTMLTextAreaElement, title: string): Record<string, unknown> | undefined {
     if (!input.value.trim()) return undefined;
     try {
@@ -1636,6 +1655,13 @@ window.addEventListener('DOMContentLoaded', () => {
       );
       const headers = jsonField(advanced, 'Custom headers (JSON)', 'agy-custom-headers', existing?.customHeaders);
       const extraBody = jsonField(advanced, 'Additional request fields (JSON)', 'agy-extra-body', existing?.extraBody);
+      const systemPrompt = textAreaField(
+        advanced,
+        'System prompt (added after Antigravity’s own instructions)',
+        'agy-system-prompt',
+        existing?.systemPrompt,
+        'For example: Always answer in Turkish.',
+      );
       const breaker = existing?.circuitBreaker as
         | { enabled?: boolean; failureThreshold?: number; cooldownMs?: number }
         | undefined;
@@ -1784,6 +1810,7 @@ window.addEventListener('DOMContentLoaded', () => {
             .filter(Boolean),
           customHeaders,
           extraBody: readJson(extraBody, 'Additional request fields'),
+          systemPrompt: systemPrompt.value.trim() || undefined,
           supportsVision: vision.value === '' ? undefined : vision.value === 'true',
           rawUrl: rawUrl.value === 'true',
           allowUnauthorized: tls.value === 'true',
@@ -2079,7 +2106,7 @@ window.addEventListener('DOMContentLoaded', () => {
       element(
         'p',
         'agy-muted',
-        'Sends one “Reply with OK.” request with a 32-token output limit using this model’s saved settings. Your provider may charge for the request. No conversation content is sent.',
+        'Sends one “Reply with OK.” request with a 1024-token output limit using this model’s saved settings. Your provider may charge for the request. No conversation content is sent.',
       ),
     );
     body.append(

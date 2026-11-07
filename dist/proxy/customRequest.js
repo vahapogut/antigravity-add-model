@@ -357,7 +357,10 @@ async function runCustomModelRequest(res, primary, originalBody, isStream, allMo
                         // The IDE can omit thought parts when replaying completed tool calls.
                         // Recover only this conversation/provider's matching turn before budgeting.
                         const history = format === 'openai' ? reasoningReplay_1.reasoningReplayCache.restore(originalBody, model) : originalBody;
-                        const body = (0, requestOptions_1.trimContext)(history, model.contextWindow, outputBudget);
+                        // Each attempt uses its own model's prompt, so a fallback never inherits the
+                        // primary's. Added before trimming so the context budget counts it.
+                        const prompted = (0, requestOptions_1.appendModelSystemPrompt)(history, model.systemPrompt);
+                        const body = (0, requestOptions_1.trimContext)(prompted, model.contextWindow, outputBudget);
                         const effectiveModel = outputBudget ? { ...model, maxOutputTokens: outputBudget } : model;
                         payload = (0, requestOptions_1.applyRequestOptions)(registry.translateRequest(model.provider, body, externalName, format, stateKey), effectiveModel, format, isStream, compactionEffort);
                         const target = cloudCode || model.rawUrl

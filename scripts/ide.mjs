@@ -18,9 +18,14 @@ const MAX_SETTINGS = 4 * 1024 * 1024;
 const CORE_ENDPOINT_RELEASE = 'ecfbad74d93962fc8ca485d93ab9b4f3d4cb6cf8';
 // IDE 2.6.0 still reads jetski.cloudCodeUrl in the Electron client, but its
 // language-server hub no longer receives --cloud_code_endpoint. The hub does
-// honor AGY_LLM_GATEWAY_URL for model discovery. This release was inspected
-// on Windows; keep the exception limited to that commit and launcher shape.
-const HUB_ENDPOINT_RELEASE = '9e3a5da5d6731effd57d47d88bbe5df14ac6ccdd';
+// honor AGY_LLM_GATEWAY_URL for model discovery. Keep the exception limited to
+// these release commits and the exact launcher shape checked below.
+const HUB_ENDPOINT_RELEASES = new Set([
+  // Windows build, verified live in PR #40. macOS reports the same commit (#41).
+  '9e3a5da5d6731effd57d47d88bbe5df14ac6ccdd',
+  // Linux build reported in #42. Its launcher code matches the same anchor.
+  '895a06674a2fc1c62bc9d2219cd28c254fb80ed7',
+]);
 const HUB_ENV_ANCHOR = 'AGY_ENABLE_HUB:"1",ANTIGRAVITY_VSCODE_HOST:"1",ANTIGRAVITY_AUTH_SUCCESS_APP:n.env.uriScheme||"vscode"};';
 const HUB_GATEWAY_MARKER = 'agyGatewayUrl';
 const HUB_ENV_INJECTION = 'if(!c.AGY_LLM_GATEWAY_URL){var agyGatewayUrl=n.workspace.getConfiguration().get("jetski.cloudCodeUrl");if(typeof agyGatewayUrl==="string"&&/^http:\\/\\/127\\.0\\.0\\.1:\\d+$/.test(agyGatewayUrl))c.AGY_LLM_GATEWAY_URL=agyGatewayUrl}';
@@ -191,7 +196,7 @@ function hubLauncherPath(app) {
   return path.join(app, 'extensions/agy/vscode/extension.js');
 }
 function hubEndpointSupport(app, pkg, product) {
-  if (pkg.version !== '1.107.0' || product.ideVersion !== '2.6.0' || product.commit !== HUB_ENDPOINT_RELEASE ||
+  if (pkg.version !== '1.107.0' || product.ideVersion !== '2.6.0' || !HUB_ENDPOINT_RELEASES.has(product.commit) ||
       product.nameShort !== 'Antigravity IDE' || product.applicationName !== 'antigravity-ide') return false;
   const manifest = path.join(app, 'extensions/agy/package.json');
   if (!exists(manifest)) return false;
@@ -256,7 +261,7 @@ export function inspectIde(options = {}) {
   const initial = options.resources ? [path.resolve(options.resources)] : platform === 'win32'
     ? [path.join(env.LOCALAPPDATA || path.join(home, 'AppData/Local'), 'Programs/Antigravity IDE'), path.join(env.LOCALAPPDATA || path.join(home, 'AppData/Local'), 'Programs/Antigravity')]
     : platform === 'darwin' ? ['/Applications/Antigravity IDE.app', '/Applications/Antigravity.app', path.join(home, 'Applications/Antigravity IDE.app')]
-      : ['/opt/antigravity', '/usr/share/antigravity', '/usr/lib/antigravity', path.join(home, '.local/share/antigravity-ide')];
+      : ['/opt/antigravity-ide', '/opt/antigravity', '/usr/share/antigravity', '/usr/lib/antigravity', path.join(home, '.local/share/antigravity-ide')];
   const candidates = initial.flatMap(root => [root, path.join(root, 'resources'), path.join(root, 'Contents/Resources')]);
   for (const resources of candidates) {
     const app = path.join(resources, 'app');
