@@ -26,7 +26,7 @@ IDE 2.1.1 reported in [Issue #2](https://github.com/vahapogut/antigravity-add-mo
 | --- | --- |
 | Standalone Electron `app.asar`, entry `dist/main.js` | Validated runtime hooks; vendor APIs, certificate handling, updater and window code are retained |
 | Standalone Windows app connected to WSL | Vendor WSL behavior is retained; custom-model proxy routing applies only to local sessions |
-| Unpacked IDE `app/out` with a declared endpoint setting, verified 2.5.5 core, or verified 2.6.0 hub launcher | Separate `ide:apply`/`ide:launch` adapter. Windows 2.5.5 live chat is verified. Windows 2.6.0 is recognized by commit `9e3a5da5…` and forwards the loopback proxy to the `agy` hub; restart the IDE after apply |
+| Unpacked IDE `app/out` with a declared endpoint setting, verified 2.5.5 core, or verified 2.6.0 hub launcher | Separate `ide:apply`/`ide:launch` adapter. Windows 2.5.5 live chat is verified. Windows 2.6.0 is recognized by commit `9e3a5da5…` and forwards the loopback proxy to the `agy` hub; restart the IDE after apply. macOS (same commit) and Linux (`895a0667…`, `/opt/antigravity-ide`) 2.6.0 are recognized but not yet confirmed end to end |
 | Archived IDE with an `out/main.js` entry point | Unsupported; refused without changing the application |
 | Missing or unrecognized application layout | Explicit error; no success message |
 

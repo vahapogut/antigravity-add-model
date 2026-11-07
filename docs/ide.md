@@ -10,6 +10,11 @@ The verified releases are **Antigravity IDE 2.5.5** and **2.6.0**, both based on
 `version`. IDE 2.6.0 keeps the `jetski.cloudCodeUrl` setting and also copies that
 loopback URL into the hub process as `AGY_LLM_GATEWAY_URL`. Its language server
 is the downloaded `agy` hub, not the 2.5.5 `--cloud_code_endpoint` launcher.
+IDE 2.6.0 was verified live on Windows. The macOS build reports the same release
+commit, and the Linux build (commit `895a0667…`, installed under
+`/opt/antigravity-ide`) is recognized from a user report. Both are accepted only
+when the launcher matches the inspected code, but neither has been confirmed end
+to end yet. Please report the result in the issue tracker.
 Install the IDE edition from the [official download page](https://antigravity.google/download).
 
 ## Check, configure and launch
