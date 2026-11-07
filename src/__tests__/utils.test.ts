@@ -89,6 +89,18 @@ describe('normalizeToolSchema', () => {
     },
   );
 
+  it.each(['object', 'OBJECT'])('adds empty properties to a root %s schema that declares none', (type) => {
+    expect(normalizeToolSchema({ type })).toEqual({ type: 'object', properties: {} });
+    expect(normalizeToolSchema({ type, required: [] })).toEqual({ type: 'object', properties: {}, required: [] });
+  });
+
+  it('keeps declared properties and leaves non-object root schemas without properties', () => {
+    const declared = { type: 'object', properties: { path: { type: 'string' } } };
+    expect(normalizeToolSchema(declared)).toEqual(declared);
+    expect(normalizeToolSchema({ type: 'string' })).toEqual({ type: 'string' });
+    expect(normalizeToolSchema({ anyOf: [{ type: 'string' }] })).toEqual({ anyOf: [{ type: 'string' }] });
+  });
+
   it('preserves existing numbers and non-integer constraint keywords', () => {
     const schema = { minLength: 1, maxItems: 0, minimum: '1.5', maximum: '10', multipleOf: '0.1' };
     expect(normalizeToolSchema(schema)).toEqual(schema);

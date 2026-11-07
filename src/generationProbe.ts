@@ -3,6 +3,14 @@ import type { ServerResponse } from 'node:http';
 import type { CustomModel } from './proxy';
 import { runCustomModelRequest } from './proxy/customRequest';
 
+/**
+ * Output budget for "Test generation". Reasoning models (for example Qwen3 or
+ * DeepSeek-R1 behind llama.cpp) spend tokens on reasoning before the answer, so a
+ * tiny budget fails them even though they work in chat (issue #42). Other models
+ * still stop after replying "OK", so the larger limit does not raise their cost.
+ */
+export const GENERATION_PROBE_OUTPUT_TOKENS = 1024;
+
 /** A bounded response sink exercises the real request path without opening another listening port. */
 class ProbeResponse extends Writable {
   statusCode = 200;
@@ -32,7 +40,7 @@ export async function runGenerationProbe(input: CustomModel) {
     fallbackModels: [],
     timeout: 30000,
     retryBudgetMs: 30000,
-    maxOutputTokens: 32,
+    maxOutputTokens: GENERATION_PROBE_OUTPUT_TOKENS,
     extraBody: undefined,
     thinkingBudget: undefined,
     circuitBreaker: { enabled: false },
@@ -40,7 +48,10 @@ export async function runGenerationProbe(input: CustomModel) {
   await runCustomModelRequest(
     response as unknown as ServerResponse,
     model,
-    { contents: [{ role: 'user', parts: [{ text: 'Reply with OK.' }] }], generationConfig: { maxOutputTokens: 32 } },
+    {
+      contents: [{ role: 'user', parts: [{ text: 'Reply with OK.' }] }],
+      generationConfig: { maxOutputTokens: GENERATION_PROBE_OUTPUT_TOKENS },
+    },
     false,
     [model],
     false,
@@ -50,7 +61,7 @@ export async function runGenerationProbe(input: CustomModel) {
     return {
       success: false,
       status: response.statusCode,
-      error: `Generation failed (HTTP ${response.statusCode}). Check model access, provider quota, configuration and the 32-token test output limit.`,
+      error: `Generation failed (HTTP ${response.statusCode}). Check model access, provider quota, configuration and the ${GENERATION_PROBE_OUTPUT_TOKENS}-token test output limit.`,
     };
   return {
     success: true,

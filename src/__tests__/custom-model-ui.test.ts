@@ -624,10 +624,12 @@ describe('custom model settings in the preserved vendor preload', () => {
     f.input('agy-raw-url', 'true');
     f.input('agy-fallback-models', 'models/backup, models/local');
     f.input('agy-extra-body', '{"temperature":0.2}');
+    f.input('agy-system-prompt', '  Always answer in Turkish.  ');
     await f.click('Save model');
     expect(f.invoke).toHaveBeenCalledWith(
       'storage:save-custom-model',
       expect.objectContaining({
+        systemPrompt: 'Always answer in Turkish.',
         name: 'models/renamed',
         originalName: 'models/primary',
         externalModelName: 'model-a-v2',

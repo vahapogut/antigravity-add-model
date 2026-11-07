@@ -83,7 +83,7 @@ describe('explicit generation test', () => {
       expect(result.success).toBe(true);
       expect(JSON.stringify(captured.body)).toContain('Reply with OK.');
       expect(JSON.stringify(captured.body)).not.toContain('private-');
-      expect(captured.body.max_tokens ?? captured.body.generationConfig?.maxOutputTokens).toBe(32);
+      expect(captured.body.max_tokens ?? captured.body.generationConfig?.maxOutputTokens).toBe(1024);
       expect(
         captured.headers.authorization || captured.headers['x-api-key'] || captured.headers['x-goog-api-key'],
       ).toContain('private-key');
@@ -139,7 +139,7 @@ describe('explicit generation test', () => {
     );
     const result = await manager().testGeneration({ provider: 'openai', apiUrl: url, externalModelName: 'test' });
     expect(result).toMatchObject({ success: false, status: 502 });
-    expect(result).toHaveProperty('error', expect.stringContaining('32-token test output limit'));
+    expect(result).toHaveProperty('error', expect.stringContaining('1024-token test output limit'));
     expect(getDiagnostics().requests[0]).toMatchObject({ outcome: 'failed', status: 502 });
     expect(getDiagnostics().summary).toMatchObject({ failed: 1, succeeded: 0 });
   });

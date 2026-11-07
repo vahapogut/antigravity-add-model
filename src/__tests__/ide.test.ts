@@ -26,6 +26,20 @@ function fixture(source: string | null = '{}\n') {
   put(executable, 'fixture executable - never run');
   return { root, resources, settings, executable, platform: 'win32', app };
 }
+function hubEndpointFixture() {
+  const f = fixture();
+  put(path.join(f.app, 'product.json'), JSON.stringify({ nameShort: 'Antigravity IDE', applicationName: 'antigravity-ide', ideVersion: '2.6.0', commit: '9e3a5da5d6731effd57d47d88bbe5df14ac6ccdd' }));
+  put(path.join(f.app, 'extensions/antigravity/package.json'), '{}');
+  put(path.join(f.app, 'extensions/agy/package.json'), JSON.stringify({ name: 'google-antigravity', publisher: 'google', main: './dist/extension.js' }));
+  put(path.join(f.app, 'out/main.js'), 'cloudCodeUrlOverride:this._configurationService.getValue("jetski.cloudCodeUrl");this.makePostRequest("v1internal:fetchAvailableModels",eSt);');
+  put(path.join(f.app, 'extensions/agy/vscode/extension.js'), [
+    '["--hub"',
+    '"--app_data_dir=antigravity"',
+    '`--csrf_token=${this.csrfToken}`',
+    'AGY_ENABLE_HUB:"1",ANTIGRAVITY_VSCODE_HOST:"1",ANTIGRAVITY_AUTH_SUCCESS_APP:n.env.uriScheme||"vscode"};',
+  ].join(','));
+  return f;
+}
 function coreEndpointFixture() {
   const f = fixture();
   put(path.join(f.app, 'product.json'), JSON.stringify({ nameShort: 'Antigravity IDE', applicationName: 'antigravity-ide', ideVersion: '2.5.5', commit: 'ecfbad74d93962fc8ca485d93ab9b4f3d4cb6cf8' }));
@@ -87,6 +101,48 @@ describe('verified IDE endpoint adapter', () => {
     expect(fs.readFileSync(f.settings, 'utf8')).toBe('{}\n');
     expect(fs.readFileSync(path.join(f.app, 'out/main.js'))).toEqual(originalCore);
     expect(fs.readFileSync(path.join(f.app, 'extensions/antigravity/dist/extension.js'))).toEqual(originalExtension);
+  });
+  it('recognizes IDE 2.6.0 and points its hub at the loopback proxy without editing core', () => {
+    const f = hubEndpointFixture();
+    const launcher = path.join(f.app, 'extensions/agy/vscode/extension.js');
+    const originalLauncher = fs.readFileSync(launcher);
+    const originalCore = fs.readFileSync(path.join(f.app, 'out/main.js'));
+    expect(inspectIde(f).declaredBy).toBe('core:antigravity-ide-2.6.0');
+    expect(configureIde({ ...f, action: 'apply' })).toMatchObject({ applied: true, ideVersion: '2.6.0', launcherPatched: true });
+    const patched = fs.readFileSync(launcher, 'utf8');
+    expect(patched.match(/var agyGatewayUrl/g)).toHaveLength(1);
+    expect(patched).toContain('127\\.0\\.0\\.1');
+    expect(configureIde({ ...f, action: 'apply' }).status).toBe('unchanged');
+    expect(fs.readFileSync(launcher, 'utf8').match(/var agyGatewayUrl/g)).toHaveLength(1);
+    expect(configureIde({ ...f, action: 'restore' }).launcherRestored).toBe(true);
+    expect(fs.readFileSync(launcher)).toEqual(originalLauncher);
+    expect(fs.readFileSync(f.settings, 'utf8')).toBe('{}\n');
+    expect(fs.readFileSync(path.join(f.app, 'out/main.js'))).toEqual(originalCore);
+  });
+  it('recognizes the Linux IDE 2.6.0 release commit reported in issue #42', () => {
+    const f = { ...hubEndpointFixture(), platform: 'linux' };
+    const product = path.join(f.app, 'product.json');
+    put(product, fs.readFileSync(product, 'utf8').replace('9e3a5da5d6731effd57d47d88bbe5df14ac6ccdd', '895a06674a2fc1c62bc9d2219cd28c254fb80ed7'));
+    const launcher = path.join(f.app, 'extensions/agy/vscode/extension.js');
+    const originalLauncher = fs.readFileSync(launcher);
+    expect(inspectIde(f).declaredBy).toBe('core:antigravity-ide-2.6.0');
+    expect(configureIde({ ...f, action: 'apply' })).toMatchObject({ applied: true, launcherPatched: true });
+    expect(configureIde({ ...f, action: 'restore' }).launcherRestored).toBe(true);
+    expect(fs.readFileSync(launcher)).toEqual(originalLauncher);
+  });
+  it('still refuses an unknown IDE 2.6.0 release commit', () => {
+    const f = hubEndpointFixture();
+    const product = path.join(f.app, 'product.json');
+    put(product, fs.readFileSync(product, 'utf8').replace('9e3a5da5d6731effd57d47d88bbe5df14ac6ccdd', '0'.repeat(40)));
+    expect(() => inspectIde(f)).toThrow('UNSUPPORTED_IDE');
+  });
+  it('refuses an IDE 2.6.0 launcher without the hub environment hook before writing settings', () => {
+    const f = hubEndpointFixture();
+    const launcher = path.join(f.app, 'extensions/agy/vscode/extension.js');
+    fs.writeFileSync(launcher, fs.readFileSync(launcher, 'utf8').replace('AGY_ENABLE_HUB', 'AGY_DISABLED'));
+    expect(() => configureIde({ ...f, action: 'apply' })).toThrow('UNSUPPORTED_IDE');
+    expect(fs.readFileSync(f.settings, 'utf8')).toBe('{}\n');
+    expect(fs.existsSync(`${f.settings}.antigravity-model-patch`)).toBe(false);
   });
   it.each(['core-setting', 'catalog', 'ls-update', 'ls-launch', 'ide-subclient', 'release', 'publisher'])(
     'refuses an unverified core layout missing %s before modifying settings', (missing) => {

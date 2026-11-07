@@ -26,6 +26,29 @@ describe('configured subagent model selection', () => {
     expect(resolveConfiguredSubagentModel(models, 'custom-shared-upstream')).toBeUndefined();
   });
 
+  it('does not let a looser name match make a unique catalog alias ambiguous', () => {
+    const qwen = { ...model('models/qwen'), displayName: 'Qwen coder', externalModelName: 'qwen3-coder' };
+    const local = { ...model('models/local'), displayName: 'Local', externalModelName: 'coder' };
+    const models = [qwen, local];
+    expect(resolveConfiguredSubagentModel(models, 'custom-qwen3-coder')).toBe(qwen);
+    expect(resolveConfiguredSubagentModel(models, 'models/custom-qwen3-coder')).toBe(qwen);
+    expect(resolveConfiguredSubagentModel(models, 'coder')).toBe(local);
+  });
+
+  it('falls back to display or upstream names, then to the last path segment', () => {
+    const omni = {
+      ...model('models/custom/openrouter/omni-intelligent'),
+      displayName: 'Omni',
+      externalModelName: 'openrouter/omni-intelligent',
+    };
+    const other = { ...model('models/other'), displayName: 'Other', externalModelName: 'other-model' };
+    const models = [omni, other];
+    expect(resolveConfiguredSubagentModel(models, 'Omni')).toBe(omni);
+    expect(resolveConfiguredSubagentModel(models, 'openrouter/omni-intelligent')).toBe(omni);
+    expect(resolveConfiguredSubagentModel(models, 'models/custom/omni-intelligent')).toBe(omni);
+    expect(resolveConfiguredSubagentModel(models, 'intelligent')).toBeUndefined();
+  });
+
   it('rejects disabled entries and gives exact saved names priority over another entry alias', () => {
     const first = model('models/first');
     const disabled = model(`models/${localModelSlug(first)}`, false);

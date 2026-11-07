@@ -130,6 +130,7 @@ are supported in configuration but do not have a separate editor control.
 | `circuitBreaker` | `enabled`, `failureThreshold`, `cooldownMs`; default threshold `3`, cooldown `30000` ms. |
 | `customHeaders` | Object of string header values. Reserved transport headers and line breaks are rejected. |
 | `extraBody` | Additional JSON request fields; cannot replace model/messages/contents/system/tools/stream routing fields. Ordinary exported configuration, not secret storage. |
+| `systemPrompt` | Text of up to 20000 characters added after Antigravity's own system instruction for this model, for example `Always answer in Turkish.` Antigravity's instruction is never replaced, because it carries the agent and tool rules. Each fallback model uses its own prompt. Counts toward the context window. |
 | `rawUrl` | Use the exact request URL instead of protocol path normalization. |
 | `supportsVision`, `supportsThinking` | Advertised capability overrides. Thinking capability is JSON/import; these flags do not add upstream capabilities. |
 | `allowUnauthorized` | Disable certificate verification for this model only; leave false for normal endpoints. |
@@ -538,10 +539,11 @@ attempts are excluded from token totals. Elapsed time covers the whole request.
 Prompt text, response text, request URLs and credentials are not retained.
 
 **Test generation (uses quota)** in the model editor sends the fixed prompt
-`Reply with OK.` with a 32-token output budget, a 30-second limit, no tools,
+`Reply with OK.` with a 1024-token output budget, a 30-second limit, no tools,
 retries or fallback models. It exercises the same request translation as normal
-chat and reports whether generated text was received. Some reasoning models need
-a larger minimum output budget and can fail this small test despite being usable.
+chat and reports whether generated text was received. The budget leaves room for
+reasoning models that think before answering; other models stop after replying.
+A reply that contains only reasoning and no answer text still counts as a failure.
 **Test connection** still checks the provider's catalog/authentication without
 requesting generation.
 

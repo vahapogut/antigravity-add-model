@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import { AddressInfo } from 'node:net';
-import { diagnose } from '../../scripts/doctor.mjs';
+import { diagnose, languageServerEndpointCheck } from '../../scripts/doctor.mjs';
 
 const directories: string[] = [];
 const servers: http.Server[] = [];
@@ -38,6 +38,24 @@ async function fixture(contents?: string) {
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   return { directory, models, proxyUrl: url, gatewayUrl: url };
 }
+describe('native model picker endpoint diagnostics', () => {
+  it('warns when a recognized language server still targets the remote catalogue', () => {
+    const check = languageServerEndpointCheck('dynamic');
+    expect(check).toEqual(expect.objectContaining({ name: 'native model picker', status: 'warning' }));
+    expect(check?.message).toContain('--patch-language-server');
+    expect(check?.message).toContain('50999');
+  });
+
+  it('confirms the fixed local endpoint and ignores unknown binaries', () => {
+    expect(languageServerEndpointCheck('fixed')).toEqual({
+      name: 'native model picker',
+      status: 'ok',
+      message: 'The language-server endpoint is configured to use the local proxy on port 50999.',
+    });
+    expect(languageServerEndpointCheck('unknown')).toBeNull();
+  });
+});
+
 describe('read-only diagnostics', () => {
   it('reports absent build files and preserves malformed model files', async () => {
     const f = await fixture('{broken');

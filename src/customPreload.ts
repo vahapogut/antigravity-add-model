@@ -247,6 +247,9 @@ function initCustomPreload(): void {
     'Cooldown (milliseconds)': '冷却时长 (毫秒)',
     'Search provider models': '搜索提供商模型',
     'Filter by model name or ID': '按模型名称或 ID 过滤',
+    'System prompt (added after Antigravity’s own instructions)': '系统提示词 (追加在 Antigravity 默认指令之后)',
+    'For example: Always answer in Turkish.': '例如：始终使用中文回答。',
+    'Sends one “Reply with OK.” request with a 1024-token output limit using this model’s saved settings. Your provider may charge for the request. No conversation content is sent.': '使用该模型保存的配置发送一条“Reply with OK.”测试请求 (输出限制 1024 Token)。服务商可能会对该请求计费。不会发送任何会话内容。',
 
     // Select options
     'OpenAI compatible': '兼容 OpenAI',
@@ -470,6 +473,25 @@ function initCustomPreload(): void {
     input.spellcheck = false;
     input.value = value ? JSON.stringify(value, null, 2) : '';
     input.placeholder = '{}';
+    label.append(input);
+    parent.append(label);
+    return input;
+  }
+  function textAreaField(
+    parent: HTMLElement,
+    title: string,
+    id: string,
+    value: unknown,
+    placeholder: string,
+  ): HTMLTextAreaElement {
+    const label = element('label', 'agy-field');
+    label.htmlFor = id;
+    label.append(element('span', '', t(title)));
+    const input = element('textarea');
+    input.id = id;
+    input.rows = 3;
+    input.value = typeof value === 'string' ? value : '';
+    input.placeholder = t(placeholder);
     label.append(input);
     parent.append(label);
     return input;
@@ -1916,6 +1938,13 @@ function initCustomPreload(): void {
       );
       const headers = jsonField(advanced, 'Custom headers (JSON)', 'agy-custom-headers', existing?.customHeaders);
       const extraBody = jsonField(advanced, 'Additional request fields (JSON)', 'agy-extra-body', existing?.extraBody);
+      const systemPrompt = textAreaField(
+        advanced,
+        'System prompt (added after Antigravity’s own instructions)',
+        'agy-system-prompt',
+        existing?.systemPrompt,
+        'For example: Always answer in Turkish.',
+      );
       const breaker = existing?.circuitBreaker as
         | { enabled?: boolean; failureThreshold?: number; cooldownMs?: number }
         | undefined;
@@ -2064,6 +2093,7 @@ function initCustomPreload(): void {
             .filter(Boolean),
           customHeaders,
           extraBody: readJson(extraBody, 'Additional request fields'),
+          systemPrompt: systemPrompt.value.trim() || undefined,
           supportsVision: vision.value === '' ? undefined : vision.value === 'true',
           rawUrl: rawUrl.value === 'true',
           allowUnauthorized: tls.value === 'true',
@@ -2359,7 +2389,7 @@ function initCustomPreload(): void {
       element(
         'p',
         'agy-muted',
-        'Sends one “Reply with OK.” request with a 32-token output limit using this model’s saved settings. Your provider may charge for the request. No conversation content is sent.',
+        'Sends one “Reply with OK.” request with a 1024-token output limit using this model’s saved settings. Your provider may charge for the request. No conversation content is sent.',
       ),
     );
     body.append(

@@ -12,6 +12,12 @@ export interface GeminiBody {
     [key: string]: unknown;
 }
 /**
+ * Append a model's configured system prompt after Antigravity's own system
+ * instruction. The IDE's instruction carries tool and agent rules, so it is kept
+ * first and never replaced. Returns the same body when there is nothing to add.
+ */
+export declare function appendModelSystemPrompt(body: GeminiBody, systemPrompt: string | undefined): GeminiBody;
+/**
  * Fingerprints from the verified Antigravity IDE 2.5.5 language-server binary
  * and its observed live checkpoint request.
  * Only the final plain user turn can trigger it; quoted prompts, history, tool

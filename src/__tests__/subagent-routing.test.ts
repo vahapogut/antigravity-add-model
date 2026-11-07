@@ -567,4 +567,87 @@ describe('subagent routing at the common Gemini boundary', () => {
     const repeated = bridge.rewriteCandidate(candidate(['custom-a'], 'call-1'), context, resolve);
     expect(repeated).toEqual(first);
   });
+
+  it('relaxes flat invoke_subagent Model declarations directly on parameters.properties.Model', () => {
+    const bridge = new SubagentRoutingBridge();
+    const flatSchema = {
+      type: 'object',
+      properties: {
+        Model: { type: 'string', enum: ['inherit', 'flash_lite', 'flash', 'pro'] },
+        Prompt: { type: 'string' },
+        Role: { type: 'string' },
+        TypeName: { type: 'string' },
+      },
+      required: ['TypeName', 'Role', 'Prompt'],
+    };
+    const body: GeminiBody = {
+      ...parent(),
+      tools: [
+        {
+          functionDeclarations: [
+            { name: 'invoke_subagent', parameters: flatSchema },
+          ],
+        },
+      ],
+    };
+    const prepared = bridge.prepareRequest(body, resolve).body;
+    const tools = prepared.tools as {
+      functionDeclarations: { parameters?: typeof flatSchema }[];
+    }[];
+    expect(tools[0].functionDeclarations[0].parameters.properties.Model.enum).toBeUndefined();
+    expect(tools[0].functionDeclarations[0].parameters.properties.Model.description).toContain('exact saved name');
+  });
+
+  it('rewrites and routes flat invoke_subagent tool calls and restores history', () => {
+    const bridge = new SubagentRoutingBridge();
+    const context = bridge.prepareRequest(parent(), resolve).context;
+    const flatCall = {
+      content: {
+        role: 'model',
+        parts: [
+          {
+            functionCall: {
+              name: 'invoke_subagent',
+              args: {
+                TypeName: 'research',
+                Role: 'Researcher',
+                Model: 'custom-a',
+                Prompt: 'Perform deep research',
+              },
+            },
+          },
+        ],
+      },
+    };
+    const rewritten = bridge.rewriteCandidate(flatCall, context, resolve);
+    const rewrittenCall = rewritten.content.parts[0].functionCall as {
+      name: string;
+      args: { Model: string; Prompt: string; TypeName: string; Role: string };
+    };
+    // The emitted Model must be rewritten to 'inherit' so Antigravity validator does not reject it
+    expect(rewrittenCall.args.Model).toBe('inherit');
+    expect(rewrittenCall.args.Prompt).toContain('Perform deep research');
+    expect(rewrittenCall.args.Prompt).toContain('[antigravity-subagent-route:');
+
+    // Child initial prompt routes to the custom model
+    const childReq = child(rewrittenCall.args.Prompt);
+    const childPrepared = bridge.prepareRequest(childReq, resolve);
+    expect(childPrepared.modelName).toBe('custom-a');
+    expect(childPrepared.body.contents[0].parts[0].text).toBe('Perform deep research');
+
+    // History replay restores the custom Model so parent does not retry
+    const historyBody: GeminiBody = {
+      ...parent(),
+      contents: [
+        ...parent().contents,
+        rewritten.content,
+      ],
+    };
+    const restored = bridge.prepareRequest(historyBody, resolve);
+    const restoredCall = restored.body.contents[1].parts[0].functionCall as {
+      args: { Model: string; Prompt: string };
+    };
+    expect(restoredCall.args.Model).toBe('custom-a');
+    expect(restoredCall.args.Prompt).toBe('Perform deep research');
+  });
 });

@@ -26,7 +26,7 @@ IDE 2.1.1 reported in [Issue #2](https://github.com/vahapogut/antigravity-add-mo
 | --- | --- |
 | Standalone Electron `app.asar`, entry `dist/main.js` | Validated runtime hooks; vendor APIs, certificate handling, updater and window code are retained |
 | Standalone Windows app connected to WSL | Vendor WSL behavior is retained; custom-model proxy routing applies only to local sessions |
-| Unpacked IDE `app/out` with a declared endpoint setting or verified 2.5.5 core | Separate `ide:apply`/`ide:launch` adapter; Windows 2.5.5 live chat verified |
+| Unpacked IDE `app/out` with a declared endpoint setting, verified 2.5.5 core, or verified 2.6.0 hub launcher | Separate `ide:apply`/`ide:launch` adapter. Windows 2.5.5 live chat is verified. Windows 2.6.0 is recognized by commit `9e3a5da5…` and forwards the loopback proxy to the `agy` hub; restart the IDE after apply. macOS (same commit) and Linux (`895a0667…`, `/opt/antigravity-ide`) 2.6.0 are recognized but not yet confirmed end to end |
 | Archived IDE with an `out/main.js` entry point | Unsupported; refused without changing the application |
 | Missing or unrecognized application layout | Explicit error; no success message |
 
@@ -238,6 +238,8 @@ fail clearly if that port is occupied instead of silently choosing a different
 port that the binary cannot use. Normal unpatched operation retains dynamic-port
 fallback. Language-server restarts reuse the existing proxy listener; concurrent
 starts and shutdowns are coordinated so a restart does not collide with its own port.
+
+The [verified Windows 10 / standalone Antigravity 2.0.6 case](verification-windows-native-picker.md) records the observed Language Server bypass, post-patch log signatures, and the limits of that single-machine validation.
 
 ## Provider 403/404 errors are a separate problem
 
