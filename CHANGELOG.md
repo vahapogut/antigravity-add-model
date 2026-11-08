@@ -2,6 +2,12 @@
 
 Release history preserved from the project README. Historical entries describe the behavior of their release; see [compatibility and recovery](docs/compatibility.md) for current installation guidance.
 
+### Unreleased — macOS clone command
+
+- Add `npm run mac:clone`, an opt-in command that copies the official Antigravity app to `~/Applications/Antigravity (add-model).app`, patches only the copy, gives it its own bundle identifier and user data folder, updates `ElectronAsarIntegrity` to the patched `app.asar` header hash, and re-signs it ad hoc from the inside out with the original entitlements. It refuses any destination that is or resolves into the official app, and can be re-run after an official update. See [compatibility and recovery](docs/compatibility.md).
+- `deploy.mjs` still patches in place, and now prints a warning when the target is a macOS `.app`, because patching in place invalidates its code signature.
+- Verified on macOS 15.7 (arm64) with official Antigravity 2.29.0: clone build, `codesign --verify --deep --strict` passing on the clone, and launching and using the clone. Not verified: how the official updater behaves inside the clone, Intel Macs, other Antigravity versions. Tests stub `codesign` and the plist tools, so they run on every platform without a real signed app.
+
 ### Unreleased — IDE 2.6.0 native models and VS Code extension
 
 - Address [issue #46](https://github.com/vahapogut/antigravity-add-model/issues/46): pass the proxy to the IDE 2.6.0 `agy` hub as `CLOUD_CODE_URL` instead of `AGY_LLM_GATEWAY_URL`. The gateway variable switched the hub to gateway mode, so the picker listed only saved models and the native Google models disappeared. `ide:apply` upgrades a launcher patched by the earlier release from its saved original, and `ide:status` reports `launcherUpdateNeeded` until then. Managed launch sets the same variable.

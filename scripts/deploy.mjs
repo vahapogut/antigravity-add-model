@@ -111,7 +111,7 @@ function hashFile(filename) {
   }
   return hash.digest('hex');
 }
-function walk(root, relative = '') {
+export function walk(root, relative = '') {
   const result = [];
   for (const name of fs.readdirSync(path.join(root, relative)).sort()) {
     const item = relative ? `${relative}/${name}` : name;
@@ -303,6 +303,7 @@ export function preflight(options = {}) {
     runtimePatch = planRuntimePatch(
       (name) => extractFile(vendorFiles.archive, name),
       (name) => fs.readFileSync(path.join(dist, name)),
+      options.userDataDir,
     );
   }
   const plan = options.restore ? null : binaryPlan(resources, options.patchLanguageServer);
@@ -606,6 +607,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     else {
       if (!options.check)
         console.log('Close Antigravity before deploying. This installer does not stop or launch applications.');
+      if (
+        !options.check &&
+        !options.restore &&
+        /\.app[\\/]Contents[\\/]Resources$/.test(resolveResources(options.resources))
+      )
+        console.warn(
+          'WARNING: patching a macOS .app in place invalidates its code signature, so macOS may report the app as damaged. To leave the official app untouched, run "npm run mac:clone" to patch a separate, re-signed copy instead.',
+        );
       const result = await deploy(options);
       console.log(
         `${result.action === 'check' ? 'CHECK PASSED (no files changed)' : result.action === 'restore' ? 'RESTORED' : 'PATCH INSTALLED'}: standalone ${result.version} at ${result.resources}`,
