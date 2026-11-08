@@ -384,6 +384,15 @@ describe('standalone deployment with real ASAR fixtures', () => {
     expect(preflight({ ...f, resources: app }).resources).toBe(fs.realpathSync(macResources));
   });
 
+  it('warns that patching a macOS .app in place breaks its signature and names the clone command', async () => {
+    const f = await fixture();
+    const app = path.join(f.root, 'Antigravity.app');
+    await installVendor(f.root, path.join(app, 'Contents/Resources'));
+    const result = spawnSync(process.execPath, [installer, '--resources', app], { encoding: 'utf8' });
+    expect(result.stderr).toContain('invalidates its code signature');
+    expect(result.stderr).toContain('npm run mac:clone');
+  });
+
   it('leaves an unpacked macOS IDE untouched and the real CLI reports a nonzero exit', async () => {
     const f = await fixture();
     const app = path.join(f.root, 'Antigravity IDE.app');

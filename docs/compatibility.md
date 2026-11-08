@@ -136,6 +136,42 @@ After an upstream update, run `--check` again and rebuild before redeploying.
 Report a new failure with the desktop/IDE distinction, app version, OS, installer
 output, and first application error. Do not include API keys or auth headers.
 
+### macOS: patch a separate copy instead of the signed app
+
+Patching `/Applications/Antigravity.app` in place invalidates its code
+signature, so macOS may report the app as damaged. `deploy.mjs` still patches in
+place and prints a warning when the target is a macOS `.app`. As an opt-in
+alternative, build a patched copy and leave the official app untouched:
+
+```sh
+npm run build
+npm run mac:clone
+# optional: npm run mac:clone -- --source "/path/Antigravity.app" --target "/path/Copy.app"
+```
+
+The command copies the app to `~/Applications/Antigravity (add-model).app`,
+gives the copy its own `CFBundleIdentifier` (the original plus `.addmodel`) and
+its own user data folder, applies the same patch to the copy only, updates
+`ElectronAsarIntegrity` in `Info.plist` to the patched `app.asar` header hash,
+re-signs every nested bundle and Mach-O file ad hoc from the inside out with its
+original entitlements, and runs `codesign --verify --deep --strict` on the
+result. The official app is only read: the command refuses a destination that
+is, or resolves (including through symlinks) into, the official bundle, and it
+only replaces an existing destination that an earlier run created. Run it again
+after an official update to rebuild the copy.
+
+The copy is signed locally (ad hoc). It carries neither Google's signature nor
+notarization.
+
+Verified on macOS 15.7 (arm64) with official Antigravity 2.29.0: clone build,
+`codesign --verify --deep --strict` passing on the clone, and launching and using
+the clone.
+
+Not verified: how the official updater behaves inside the clone, Intel Macs, and
+other Antigravity versions. Automated tests replace `codesign` and the plist
+tools, so they cover the copy, `Info.plist` and hash logic on every platform but
+not real signing.
+
 ## Windows installer asks to close Antigravity
 
 First identify the product: **Antigravity IDE** and the **standalone desktop

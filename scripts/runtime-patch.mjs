@@ -86,7 +86,7 @@ function applyEdits(file, source, edits) {
   return Buffer.from(source);
 }
 
-function patchMain(bytes) {
+function patchMain(bytes, userDataDir) {
   const file = 'dist/main.js';
   const { source, tree } = parse(file, bytes);
   const ready = one(
@@ -111,7 +111,18 @@ function patchMain(bytes) {
   for (let node = ready.parent; node !== statement; node = node.parent) {
     if (ts.isFunctionLike(node)) unsupported(file, 'startup hook is nested inside a function');
   }
+  // Separate profile (and single-instance lock) for a macOS clone. It must run before the vendor module starts,
+  // and a prepended directive keeps the file's own "use strict" in effect.
+  const profileEdit = userDataDir
+    ? [
+        {
+          start: 0,
+          text: `"use strict";\n{ const profile = ${JSON.stringify(userDataDir)}; require('node:fs').mkdirSync(profile, { recursive: true, mode: 0o700 }); require('electron').app.setPath('userData', profile); }\n`,
+        },
+      ]
+    : [];
   return applyEdits(file, source, [
+    ...profileEdit,
     {
       start: statement.getStart(tree),
       text: `${MARKER}\nrequire('./modelPatch/desktop').install(() => require('./languageServer').getLsPort());\n`,
@@ -256,9 +267,9 @@ function patchPreload(vendorBytes, augmentations) {
  * Buffer/string contents. Vendor paths are archive-relative; build paths are
  * relative to dist. The caller separately copies its build into dist/modelPatch.
  */
-export function planRuntimePatch(readVendorFile, readBuildFile) {
+export function planRuntimePatch(readVendorFile, readBuildFile, userDataDir) {
   return new Map([
-    ['dist/main.js', patchMain(readInput(readVendorFile, 'dist/main.js'))],
+    ['dist/main.js', patchMain(readInput(readVendorFile, 'dist/main.js'), userDataDir)],
     ['dist/languageServer.js', patchLanguageServer(readInput(readVendorFile, 'dist/languageServer.js'))],
     [
       'dist/preload.js',
