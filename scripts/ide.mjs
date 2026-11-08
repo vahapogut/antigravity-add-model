@@ -17,9 +17,10 @@ const MAX_SETTINGS = 4 * 1024 * 1024;
 // Keep this exception limited to the official release actually inspected.
 const CORE_ENDPOINT_RELEASE = 'ecfbad74d93962fc8ca485d93ab9b4f3d4cb6cf8';
 // IDE 2.6.0 still reads jetski.cloudCodeUrl in the Electron client, but its
-// language-server hub no longer receives --cloud_code_endpoint. The hub does
-// honor AGY_LLM_GATEWAY_URL for model discovery. Keep the exception limited to
-// these release commits and the exact launcher shape checked below.
+// language-server hub no longer receives --cloud_code_endpoint. The `agy` hub
+// reads CLOUD_CODE_URL instead (#42), which keeps the native Cloud Code catalog
+// and generation path. Keep the exception limited to these release commits and
+// the exact launcher shape checked below.
 const HUB_ENDPOINT_RELEASES = new Set([
   // Windows build, verified live in PR #40. macOS reports the same commit (#41).
   '9e3a5da5d6731effd57d47d88bbe5df14ac6ccdd',
@@ -27,8 +28,13 @@ const HUB_ENDPOINT_RELEASES = new Set([
   '895a06674a2fc1c62bc9d2219cd28c254fb80ed7',
 ]);
 const HUB_ENV_ANCHOR = 'AGY_ENABLE_HUB:"1",ANTIGRAVITY_VSCODE_HOST:"1",ANTIGRAVITY_AUTH_SUCCESS_APP:n.env.uriScheme||"vscode"};';
-const HUB_GATEWAY_MARKER = 'agyGatewayUrl';
-const HUB_ENV_INJECTION = 'if(!c.AGY_LLM_GATEWAY_URL){var agyGatewayUrl=n.workspace.getConfiguration().get("jetski.cloudCodeUrl");if(typeof agyGatewayUrl==="string"&&/^http:\\/\\/127\\.0\\.0\\.1:\\d+$/.test(agyGatewayUrl))c.AGY_LLM_GATEWAY_URL=agyGatewayUrl}';
+const HUB_CLOUD_CODE_MARKER = 'agyCloudCodeUrl';
+const HUB_ENV_INJECTION = 'if(!c.CLOUD_CODE_URL){var agyCloudCodeUrl=n.workspace.getConfiguration().get("jetski.cloudCodeUrl");if(typeof agyCloudCodeUrl==="string"&&/^http:\\/\\/127\\.0\\.0\\.1:\\d+$/.test(agyCloudCodeUrl))c.CLOUD_CODE_URL=agyCloudCodeUrl}';
+// Earlier releases injected AGY_LLM_GATEWAY_URL. That puts the hub in LLM-gateway
+// mode, whose model list replaces the native Google models (#46). Apply upgrades
+// it from the saved original launcher.
+const LEGACY_HUB_GATEWAY_MARKER = 'agyGatewayUrl';
+const LEGACY_HUB_ENV_INJECTION = 'if(!c.AGY_LLM_GATEWAY_URL){var agyGatewayUrl=n.workspace.getConfiguration().get("jetski.cloudCodeUrl");if(typeof agyGatewayUrl==="string"&&/^http:\\/\\/127\\.0\\.0\\.1:\\d+$/.test(agyGatewayUrl))c.AGY_LLM_GATEWAY_URL=agyGatewayUrl}';
 const exec = promisify(execFile);
 function fail(code, message) { throw Object.assign(new Error(`${code}: ${message}`), { code }); }
 function exists(filename) {
@@ -214,7 +220,18 @@ function hubEndpointSupport(app, pkg, product) {
     launcherText.includes('"--app_data_dir=antigravity"') &&
     launcherText.includes('`--csrf_token=${this.csrfToken}`') &&
     launcherText.includes('AGY_ENABLE_HUB:"1"') &&
-    (launcherText.includes(HUB_ENV_ANCHOR) || launcherText.includes(HUB_GATEWAY_MARKER));
+    launcherText.includes(HUB_ENV_ANCHOR);
+}
+function hubInjection(original, injection) {
+  return Buffer.from(original.toString('utf8').replace(HUB_ENV_ANCHOR, HUB_ENV_ANCHOR + injection));
+}
+function hubLauncherBackup(names) {
+  const backup = readBounded(path.join(names.directory, 'launcher.original.js'));
+  const text = backup?.toString('utf8');
+  if (!backup || text.split(HUB_ENV_ANCHOR).length !== 2 || text.includes(HUB_CLOUD_CODE_MARKER) || text.includes(LEGACY_HUB_GATEWAY_MARKER)) {
+    fail('BACKUP_INVALID', 'IDE 2.6.0 launcher backup is missing or changed.');
+  }
+  return backup;
 }
 function syncHubLauncher(info, names) {
   if (info.declaredBy !== 'core:antigravity-ide-2.6.0') return {};
@@ -223,18 +240,23 @@ function syncHubLauncher(info, names) {
   if (!current) fail('UNSUPPORTED_IDE', 'IDE 2.6.0 language-server launcher was not found.');
   const source = current.toString('utf8');
   const backupName = path.join(names.directory, 'launcher.original.js');
-    if (source.includes(HUB_GATEWAY_MARKER)) {
-    if (!exists(backupName)) fail('BACKUP_INVALID', 'IDE 2.6.0 launcher backup is missing.');
-    const backup = readBounded(backupName);
-    if (!backup || !backup.toString('utf8').includes(HUB_ENV_ANCHOR) || backup.toString('utf8').includes(HUB_GATEWAY_MARKER)) {
-      fail('BACKUP_INVALID', 'IDE 2.6.0 launcher backup is missing or changed.');
-    }
+  if (source.includes(HUB_CLOUD_CODE_MARKER)) {
+    const backup = hubLauncherBackup(names);
     return { launcher: { path: filename, originalHash: hash(backup), patchedHash: hash(current) }, launcherChanged: false };
+  }
+  if (source.includes(LEGACY_HUB_GATEWAY_MARKER)) {
+    const backup = hubLauncherBackup(names);
+    if (!current.equals(hubInjection(backup, LEGACY_HUB_ENV_INJECTION))) {
+      fail('LAUNCHER_CHANGED', 'The IDE 2.6.0 launcher was edited after the earlier patch. Restore or reinstall the IDE, then apply again.');
+    }
+    const patched = hubInjection(backup, HUB_ENV_INJECTION);
+    atomic(filename, patched);
+    return { launcher: { path: filename, originalHash: hash(backup), patchedHash: hash(patched) }, launcherChanged: true };
   }
   if (!source.includes(HUB_ENV_ANCHOR) || source.split(HUB_ENV_ANCHOR).length !== 2) {
     fail('UNSUPPORTED_IDE', 'IDE 2.6.0 launcher does not contain the verified hub environment hook.');
   }
-  const patched = Buffer.from(source.replace(HUB_ENV_ANCHOR, HUB_ENV_ANCHOR + HUB_ENV_INJECTION));
+  const patched = hubInjection(current, HUB_ENV_INJECTION);
   noLinks(backupName);
   atomic(backupName, current);
   try {
@@ -354,7 +376,12 @@ export function configureIde(options = {}) {
   const summary = { action, resources: info.resources, settings: info.settings, version: info.version,
     ideVersion: info.ideVersion, endpoint, declaredBy: info.declaredBy };
   const applied = state?.status !== 'restored' && !!state && now.endpoint === state.endpoint;
-  if (action === 'check' || action === 'status') return { ...summary, applied, status: applied ? 'configured' : state?.status === 'active' ? 'conflict' : 'unconfigured', managedEndpoint: state?.endpoint };
+  if (action === 'check' || action === 'status') {
+    const legacyLauncher = info.declaredBy === 'core:antigravity-ide-2.6.0' &&
+      !!readBounded(hubLauncherPath(info.app))?.toString('utf8').includes(LEGACY_HUB_GATEWAY_MARKER);
+    return { ...summary, applied, status: applied ? 'configured' : state?.status === 'active' ? 'conflict' : 'unconfigured',
+      managedEndpoint: state?.endpoint, ...(legacyLauncher ? { launcherUpdateNeeded: true } : {}) };
+  }
   const names = paths(info);
   noLinks(names.directory);
   fs.mkdirSync(names.directory, { recursive: true, mode: 0o700 });
@@ -389,9 +416,9 @@ export function configureIde(options = {}) {
     if (state && state.status !== 'restored') {
       if (state.endpoint !== endpoint) fail('SETTINGS_CONFLICT', 'Restore the existing IDE adapter before choosing another proxy port.');
       if (now.endpoint === endpoint) {
-        const { launcherChanged: _changed, ...launcher } = syncHubLauncher(info, names);
+        const { launcherChanged, ...launcher } = syncHubLauncher(info, names);
         if (state.status === 'prepared' || launcher.launcher) atomic(names.state, stateBytes({ ...state, ...launcher, status: 'active' }));
-        return { ...summary, applied: true, status: 'unchanged', launcherPatched: Boolean(launcher.launcher) };
+        return { ...summary, applied: true, status: launcherChanged ? 'updated' : 'unchanged', launcherPatched: Boolean(launcher.launcher) };
       }
       const original = state.originalExists ? now.bytes && hash(now.bytes) === state.originalHash : now.bytes === null;
       if (state.status !== 'prepared' || !original) fail('SETTINGS_CONFLICT', 'The managed IDE setting was changed outside this adapter. Restore or resolve it before applying again.');
@@ -450,19 +477,15 @@ export async function launchIde(options = {}, hooks = {}) {
   // random process occupying the configured port must never count as ready.
   const start = hooks.startService || (async () => { await exec(process.execPath, args, { windowsHide: true, timeout: 30000, maxBuffer: 256 * 1024 }); });
   await start({ port: state.port, dataDir: options.dataDir });
+  const env = info.declaredBy === 'core:antigravity-ide-2.6.0' ? { ...process.env, CLOUD_CODE_URL: state.endpoint } : undefined;
   const launch = hooks.launch || (async () => {
     // This is the interactive IDE, not the background service: SW_HIDE leaves
     // Electron's first restored window invisible on Windows.
-    const child = spawn(executable, launchArgs, {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: false,
-      env: info.declaredBy === 'core:antigravity-ide-2.6.0' ? { ...process.env, AGY_LLM_GATEWAY_URL: state.endpoint } : undefined,
-    });
+    const child = spawn(executable, launchArgs, { detached: true, stdio: 'ignore', windowsHide: false, env });
     await new Promise((resolve, reject) => { child.once('spawn', resolve); child.once('error', reject); });
     child.unref();
   });
-  await launch(executable, launchArgs);
+  await launch(executable, launchArgs, env);
   return { action: 'launch', status: 'launched', resources: info.resources, settings: info.settings, endpoint: state.endpoint };
 }
 export function parseIdeArgs(args) {
