@@ -236,7 +236,8 @@ describe('Windows update recovery', () => {
     expect(script).toContain('CloseHandle($handle)');
     expect(script).not.toMatch(/CreateMutex|ReleaseMutex|WaitFor|CommandLine|Stop-Process/);
     expect(args).toContain('Hidden');
-    expect(run.mock.calls[0]?.[2]).toMatchObject({ windowsHide: true, timeout: 15000 });
+    // Add-Type compiles C# on every run; a busy runner took longer than 15 s (main CI run 42482353252).
+    expect(run.mock.calls[0]?.[2]).toMatchObject({ windowsHide: true, timeout: 60000 });
     for (const value of [[], [{ name: names[0], status: 'absent' }], 'not json']) {
       run.mockResolvedValueOnce({ stdout: typeof value === 'string' ? value : JSON.stringify(value) });
       await expect(probeWindowsMutexes(names, { platform: 'win32', exec: run })).rejects.toThrow('MUTEX_CHECK_UNAVAILABLE');
@@ -246,11 +247,12 @@ describe('Windows update recovery', () => {
     await expect(probeWindowsMutexes(names, { platform: 'linux', exec: run })).rejects.toThrow('MUTEX_CHECK_UNAVAILABLE');
   });
 
+  // Two real PowerShell probes, each allowed up to 60 s, must fit inside the test timeout.
   it.skipIf(process.platform !== 'win32')('can read absence of a unique Windows mutex without creating it', async () => {
     const name = `antigravity-test-${randomUUID()}`;
     expect(await probeWindowsMutexes([name])).toEqual([{ name, status: 'absent' }]);
     expect(await probeWindowsMutexes([name])).toEqual([{ name, status: 'absent' }]);
-  });
+  }, 130000);
 
   it('rejects corrupted IDE backups and external endpoint conflicts before service shutdown', async () => {
     for (const problem of ['backup', 'malformed-backup', 'endpoint']) {

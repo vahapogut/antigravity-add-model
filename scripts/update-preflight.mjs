@@ -110,8 +110,9 @@ $results = @(foreach ($mutexName in @(${names.map(name => `'${name}'`).join(',')
 });
 ConvertTo-Json -InputObject $results -Compress`;
   try {
+    // Add-Type compiles the C# above on every run, which can take well over 15 s on a busy machine.
     const { stdout } = await (options.exec || exec)(powershell, ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', script],
-      { windowsHide: true, timeout: 15000, maxBuffer: 64 * 1024, encoding: 'utf8' });
+      { windowsHide: true, timeout: 60000, maxBuffer: 64 * 1024, encoding: 'utf8' });
     return validateMutexProbe(names, JSON.parse(stdout.replace(/^\ufeff/, '').trim()));
   } catch {
     fail('MUTEX_CHECK_UNAVAILABLE', 'Windows mutex inspection failed. No mutex was created, acquired or forcibly released.');

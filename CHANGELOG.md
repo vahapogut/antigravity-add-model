@@ -2,6 +2,10 @@
 
 Release history preserved from the project README. Historical entries describe the behavior of their release; see [compatibility and recovery](docs/compatibility.md) for current installation guidance.
 
+### Unreleased — Windows update check timeout
+
+- `update:check` and `update:prepare` now allow the Windows mutex check up to 60 seconds instead of 15. The check compiles a small C# helper through PowerShell `Add-Type` on every run, and on a busy machine that alone took longer than 15 seconds. The check then reported the mutexes as unavailable and blocked update preparation even with nothing running.
+
 ### Unreleased — macOS clone command
 
 - Add `npm run mac:clone`, an opt-in command that copies the official Antigravity app to `~/Applications/Antigravity (add-model).app`, patches only the copy, gives it its own bundle identifier and user data folder, updates `ElectronAsarIntegrity` to the patched `app.asar` header hash, and re-signs it ad hoc from the inside out with the original entitlements. It refuses any destination that is or resolves into the official app, and can be re-run after an official update. See [compatibility and recovery](docs/compatibility.md).
