@@ -128,6 +128,10 @@ npm run build
 
 Already have the repository? Update your checkout, then run the dependency and build commands again.
 
+Using the **Google Antigravity extension in VS Code**? No installer is needed:
+start the proxy and open VS Code with `CLOUD_CODE_URL` set, as described in
+[VS Code extension](docs/vscode.md).
+
 Using **Antigravity IDE**? Continue with [IDE setup](docs/ide.md) instead of the
 standalone installer below. Its basic flow is:
 

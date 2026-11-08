@@ -8,13 +8,28 @@ setting and starts an independent local proxy. It does not replace vendor code.
 The verified releases are **Antigravity IDE 2.5.5** and **2.6.0**, both based on
 **VS Code 1.107.0**. `ide:check` reports these separately as `ideVersion` and
 `version`. IDE 2.6.0 keeps the `jetski.cloudCodeUrl` setting and also copies that
-loopback URL into the hub process as `AGY_LLM_GATEWAY_URL`. Its language server
+loopback URL into the hub process as `CLOUD_CODE_URL`. Its language server
 is the downloaded `agy` hub, not the 2.5.5 `--cloud_code_endpoint` launcher.
-IDE 2.6.0 was verified live on Windows. The macOS build reports the same release
-commit, and the Linux build (commit `895a0667…`, installed under
+With `CLOUD_CODE_URL` the hub sends account setup, the model catalog and
+generation through the proxy, so the native Google models stay in the picker
+next to saved models.
+
+Earlier versions of this adapter used `AGY_LLM_GATEWAY_URL` instead. That puts
+the hub in gateway mode, where the picker lists only saved models
+([issue #46](https://github.com/vahapogut/antigravity-add-model/issues/46)).
+After updating this repository, close the IDE and run `npm run ide:apply` again.
+It upgrades the launcher from the saved original. Until then `ide:status`
+reports `launcherUpdateNeeded: true`.
+
+On Windows, 2.6.0 detection and the launcher patch were checked live with the
+earlier gateway variable. The `CLOUD_CODE_URL` route was used live on Linux in
+[issue #42](https://github.com/vahapogut/antigravity-add-model/issues/42) but
+has not been confirmed on Windows or macOS yet. The macOS build reports the same
+release commit, and the Linux build (commit `895a0667…`, installed under
 `/opt/antigravity-ide`) is recognized from a user report. Both are accepted only
-when the launcher matches the inspected code, but neither has been confirmed end
-to end yet. Please report the result in the issue tracker.
+when the launcher matches the inspected code. Please report the result in the
+issue tracker. The VS Code extension uses the same backend; see
+[VS Code extension](vscode.md).
 Install the IDE edition from the [official download page](https://antigravity.google/download).
 
 ## Check, configure and launch
@@ -241,7 +256,11 @@ later edits. It refuses a conflicting manual endpoint change or damaged backup.
 Keep these backups until the adapter is removed. Comments and trailing commas
 are supported; duplicate keys and malformed JSONC are rejected.
 
-Service state/logs live under `<data-dir>/.ide-proxy/`. Start is idempotent for
+Service state/logs live under `<data-dir>/.ide-proxy/`; the log file is
+`service.log` (by default `~/.gemini/antigravity/.ide-proxy/service.log`). If the
+native Google models are missing from the picker, look for a
+`Native model catalog unavailable` warning there: it names the HTTP status or
+network error. Start is idempotent for
 the same directory and port. Stop authenticates the owned instance; it does not
 kill a process just because it uses that port or an old recorded PID.
 

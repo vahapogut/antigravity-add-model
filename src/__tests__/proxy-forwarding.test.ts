@@ -59,6 +59,7 @@ async function fixture(
   fs.writeFileSync(path.join(directory, 'custom_models.json'), '{"models":[]}');
   // Only the transport destination changes: both sides use real HTTP parsers and sockets.
   const forwarded: { target: string; headers: http.OutgoingHttpHeaders }[] = [];
+  const log = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
   const dependencies: Record<string, unknown> = {
     http: {
       ...http,
@@ -78,7 +79,7 @@ async function fixture(
     path,
     zlib,
     electron: { app: { getAppPath: () => path.resolve('scratch/forwarding-fixture') } },
-    'electron-log': { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+    'electron-log': log,
     './proxy/shared': { startCleanupInterval: vi.fn(), stopCleanupInterval: vi.fn(), recordOfficialQuota },
     './proxy/modelUtils': {},
     './proxy/modelCatalog': modelCatalog,
@@ -128,6 +129,7 @@ async function fixture(
   return {
     url: `http://127.0.0.1:${await module.exports.startProxy({ dataDirectory: directory, ideCloudCodeRouting, shutdownGraceMs })}`,
     forwarded,
+    log,
     stop: module.exports.stopProxy,
   };
 }
@@ -654,6 +656,65 @@ describe('buffered Google metadata forwarding', () => {
     expect(result.status).toBe(502);
     expect(result.body.toString()).toContain('Could not determine the native Cloud Code account route');
     expect(proxy.forwarded).toEqual([]);
+  });
+
+  it('looks up an unknown account route before forwarding the native model catalog', async () => {
+    const upstream = await serve((request, response) => {
+      request.resume();
+      request.on('end', () => {
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.end(JSON.stringify({ models: { 'native-fixture': { displayName: 'Native fixture' } } }));
+      });
+    });
+    const lookup = vi.fn().mockResolvedValue({ status: 200, body: { paidTier: { usesGcpTos: false } } });
+    const proxy = await fixture(upstream, true, lookup);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const result = await post(proxy.url + '/v1internal:fetchAvailableModels', '{"project":"same-project"}', false);
+      expect(result.status).toBe(200);
+      expect(JSON.parse(result.body.toString('utf8'))).toMatchObject({
+        models: { 'native-fixture': { displayName: 'Native fixture' } },
+      });
+    }
+    expect(lookup).toHaveBeenCalledTimes(1);
+    expect(proxy.forwarded.map((entry) => entry.target)).toEqual([
+      'https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels',
+      'https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels',
+    ]);
+  });
+
+  it('still forwards the native model catalog when the account route lookup fails', async () => {
+    const upstream = await serve((request, response) => {
+      request.resume();
+      request.on('end', () => {
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.end(JSON.stringify({ models: { 'native-fixture': { displayName: 'Native fixture' } } }));
+      });
+    });
+    const proxy = await fixture(upstream, true, async () => {
+      throw new Error('lookup unavailable');
+    });
+    const result = await post(proxy.url + '/v1internal:fetchAvailableModels', '{}', false);
+    expect(result.status).toBe(200);
+    expect(JSON.parse(result.body.toString('utf8'))).toMatchObject({ models: { 'native-fixture': {} } });
+    expect(proxy.forwarded.map((entry) => entry.target)).toEqual([
+      'https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels',
+    ]);
+  });
+
+  it('logs why the native model catalog is missing instead of failing silently', async () => {
+    const upstream = await serve((request, response) => {
+      request.resume();
+      request.on('end', () => {
+        response.writeHead(403, { 'content-type': 'application/json' });
+        response.end('{"error":{"status":"PERMISSION_DENIED"}}');
+      });
+    });
+    const proxy = await fixture(upstream);
+    const result = await post(proxy.url + '/v1internal:fetchAvailableModels', '{}', false);
+    expect(result.status).toBe(200);
+    expect(proxy.log.warn).toHaveBeenCalledWith(expect.stringContaining('Native model catalog unavailable'));
+    expect(proxy.log.warn).toHaveBeenCalledWith(expect.stringContaining('HTTP 403'));
+    expect(JSON.stringify(proxy.log.warn.mock.calls)).not.toContain('forwarding-fixture-token');
   });
 
   it('preserves the IDE tier route across metadata and model-catalog requests', async () => {
