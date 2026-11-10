@@ -410,6 +410,64 @@ function hasSubagentTool(body) {
         body.contents?.some((content) => content.parts?.some((part) => part.functionCall?.name === 'invoke_subagent')) ||
         false);
 }
+/** Forward the native model catalog and add saved models; any upstream failure lists saved models only. */
+function forwardCloudCodeCatalog(req, res, body, targetUrl) {
+    const parsedUrl = new URL(req.url, targetUrl);
+    const fwdHeaders = forwardingHeaders(req.headers);
+    fwdHeaders['host'] = parsedUrl.host;
+    fwdHeaders['content-length'] = String(body.length);
+    delete fwdHeaders['accept-encoding'];
+    let responded = false;
+    const reply = (catalog = {}, failure) => {
+        if (responded || res.headersSent || res.writableEnded || res.destroyed || res.socket?.destroyed)
+            return;
+        responded = true;
+        // Log the reason: otherwise a missing native list only shows up as a picker with saved models.
+        if (failure) {
+            electron_log_1.default.warn(`[Proxy] Native model catalog unavailable from ${parsedUrl.host} (${failure}); listing saved models only.`);
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(customCloudCodeCatalog(catalog)));
+    };
+    const googleReq = https.request(parsedUrl, { method: req.method, headers: fwdHeaders }, (googleRes) => {
+        const chunks = [];
+        let length = 0;
+        googleRes.on('data', (chunk) => {
+            const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+            length += bytes.length;
+            if (length > 8 * 1024 * 1024) {
+                reply({}, 'response larger than 8 MB');
+                googleReq.destroy();
+                return;
+            }
+            chunks.push(bytes);
+        });
+        googleRes.on('error', () => reply({}, 'response error'));
+        googleRes.on('aborted', () => reply({}, 'response aborted'));
+        googleRes.on('end', () => {
+            if (!googleRes.statusCode || googleRes.statusCode < 200 || googleRes.statusCode >= 300) {
+                reply({}, `HTTP ${googleRes.statusCode || 'unknown'}`);
+                return;
+            }
+            try {
+                reply(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+            }
+            catch {
+                reply({}, 'unreadable response');
+            }
+        });
+    });
+    // Install before headers arrive: an upstream that never sends headers still gets a bounded fallback.
+    googleReq.setTimeout(30000, () => {
+        reply({}, 'timed out');
+        googleReq.destroy();
+    });
+    googleReq.on('error', (error) => reply({}, error.message));
+    trackUpstream(googleReq);
+    if (body.length > 0)
+        googleReq.write(body);
+    googleReq.end();
+}
 function proxyToGoogle(req, res, reqBody, nativeSubagent) {
     const generation = req.url.includes('generateContent') || req.url.includes('streamGenerateContent');
     const cloudCode = req.url.includes('v1internal') || req.url.includes('daily-cloudcode');
@@ -1043,63 +1101,25 @@ function handleRequest(req, res) {
         // 1. Intercept /v1internal:fetchAvailableModels
         if (req.url.includes('/v1internal:fetchAvailableModels')) {
             electron_log_1.default.info('[Proxy] Intercepting fetchAvailableModels request');
-            const targetUrl = cloudCodeRouting?.resolve(req.headers) || 'https://daily-cloudcode-pa.googleapis.com';
-            const parsedUrl = new URL(req.url, targetUrl);
-            const fwdHeaders = forwardingHeaders(req.headers);
-            fwdHeaders['host'] = parsedUrl.host;
-            fwdHeaders['content-length'] = String(fullBody.length);
-            delete fwdHeaders['accept-encoding'];
-            const fwdOptions = {
-                method: req.method,
-                headers: fwdHeaders,
-            };
-            let responded = false;
-            const reply = (catalog = {}) => {
-                if (responded || res.headersSent || res.writableEnded || res.destroyed || res.socket?.destroyed)
-                    return;
-                responded = true;
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify(customCloudCodeCatalog(catalog)));
-            };
-            const googleReq = https.request(parsedUrl, fwdOptions, (googleRes) => {
-                const chunks = [];
-                let length = 0;
-                googleRes.on('data', (chunk) => {
-                    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-                    length += bytes.length;
-                    if (length > 8 * 1024 * 1024) {
-                        reply();
-                        googleReq.destroy();
-                        return;
-                    }
-                    chunks.push(bytes);
-                });
-                googleRes.on('error', () => reply());
-                googleRes.on('aborted', () => reply());
-                googleRes.on('end', () => {
-                    if (!googleRes.statusCode || googleRes.statusCode < 200 || googleRes.statusCode >= 300) {
-                        reply();
-                        return;
-                    }
-                    try {
-                        reply(JSON.parse(Buffer.concat(chunks).toString('utf8')));
-                    }
-                    catch {
-                        reply();
-                    }
-                });
-            });
-            // Install before headers arrive: an upstream that never sends headers still gets a bounded fallback.
-            googleReq.setTimeout(30000, () => {
-                reply();
-                googleReq.destroy();
-            });
-            googleReq.on('error', () => reply());
-            trackUpstream(googleReq);
-            if (fullBody && fullBody.length > 0) {
-                googleReq.write(fullBody);
+            const routing = cloudCodeRouting;
+            if (!routing) {
+                forwardCloudCodeCatalog(req, res, fullBody, 'https://daily-cloudcode-pa.googleapis.com');
+                return;
             }
-            googleReq.end();
+            // Ask Google for the catalog on the same account endpoint as generation. Without a
+            // known route (for example after a proxy restart) a daily-tier account would be sent
+            // to production and could lose its native models. A failed lookup keeps the old default.
+            const controller = new AbortController();
+            const cancel = () => controller.abort();
+            res.once('close', cancel);
+            void routing
+                .resolveForGeneration(req.headers, fullBody, controller.signal)
+                .catch(() => routing.resolve(req.headers))
+                .then((origin) => {
+                res.off('close', cancel);
+                if (!res.destroyed && !res.writableEnded)
+                    forwardCloudCodeCatalog(req, res, fullBody, origin);
+            });
             return;
         }
         // 2. Intercept /v1beta/models or /v1/models list request
@@ -1156,6 +1176,7 @@ function handleRequest(req, res) {
                             googleJson.models = [...mappedCustom, ...googleJson.models];
                         }
                         else {
+                            electron_log_1.default.warn(`[Proxy] Google model list returned no models (HTTP ${googleRes.statusCode || 'unknown'}); listing saved models only.`);
                             googleJson.models = mappedCustom;
                         }
                         res.writeHead(200, { 'Content-Type': 'application/json' });

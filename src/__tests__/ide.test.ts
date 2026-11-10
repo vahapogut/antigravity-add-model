@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { configureIde, editSetting, inspectIde, launchIde, parseIdeArgs, parseSettings, proxyEndpoint } from '../../scripts/ide.mjs';
 
 const roots: string[] = [];
@@ -39,6 +40,11 @@ function hubEndpointFixture() {
     'AGY_ENABLE_HUB:"1",ANTIGRAVITY_VSCODE_HOST:"1",ANTIGRAVITY_AUTH_SUCCESS_APP:n.env.uriScheme||"vscode"};',
   ].join(','));
   return f;
+}
+/** The launcher text written by releases before #46, which used the gateway variable. */
+function legacyGatewayLauncher(original: Buffer) {
+  const anchor = 'AGY_ENABLE_HUB:"1",ANTIGRAVITY_VSCODE_HOST:"1",ANTIGRAVITY_AUTH_SUCCESS_APP:n.env.uriScheme||"vscode"};';
+  return original.toString('utf8').replace(anchor, anchor + 'if(!c.AGY_LLM_GATEWAY_URL){var agyGatewayUrl=n.workspace.getConfiguration().get("jetski.cloudCodeUrl");if(typeof agyGatewayUrl==="string"&&/^http:\\/\\/127\\.0\\.0\\.1:\\d+$/.test(agyGatewayUrl))c.AGY_LLM_GATEWAY_URL=agyGatewayUrl}');
 }
 function coreEndpointFixture() {
   const f = fixture();
@@ -110,14 +116,58 @@ describe('verified IDE endpoint adapter', () => {
     expect(inspectIde(f).declaredBy).toBe('core:antigravity-ide-2.6.0');
     expect(configureIde({ ...f, action: 'apply' })).toMatchObject({ applied: true, ideVersion: '2.6.0', launcherPatched: true });
     const patched = fs.readFileSync(launcher, 'utf8');
-    expect(patched.match(/var agyGatewayUrl/g)).toHaveLength(1);
+    expect(patched.match(/var agyCloudCodeUrl/g)).toHaveLength(1);
+    expect(patched).toContain('c.CLOUD_CODE_URL=agyCloudCodeUrl');
+    // Gateway mode replaces the native model list (#46); the hub must stay on Cloud Code.
+    expect(patched).not.toContain('AGY_LLM_GATEWAY_URL');
     expect(patched).toContain('127\\.0\\.0\\.1');
     expect(configureIde({ ...f, action: 'apply' }).status).toBe('unchanged');
-    expect(fs.readFileSync(launcher, 'utf8').match(/var agyGatewayUrl/g)).toHaveLength(1);
+    expect(fs.readFileSync(launcher, 'utf8').match(/var agyCloudCodeUrl/g)).toHaveLength(1);
+    expect(configureIde({ ...f, action: 'status' }).launcherUpdateNeeded).toBeUndefined();
     expect(configureIde({ ...f, action: 'restore' }).launcherRestored).toBe(true);
     expect(fs.readFileSync(launcher)).toEqual(originalLauncher);
     expect(fs.readFileSync(f.settings, 'utf8')).toBe('{}\n');
     expect(fs.readFileSync(path.join(f.app, 'out/main.js'))).toEqual(originalCore);
+  });
+  it('upgrades a launcher patched with the earlier gateway variable (#46)', () => {
+    const f = hubEndpointFixture();
+    const launcher = path.join(f.app, 'extensions/agy/vscode/extension.js');
+    const originalLauncher = fs.readFileSync(launcher);
+    configureIde({ ...f, action: 'apply' });
+    // Recreate the state an earlier release left behind: the old injection plus its hash.
+    const legacy = legacyGatewayLauncher(originalLauncher);
+    fs.writeFileSync(launcher, legacy);
+    const stateFile = path.join(`${f.settings}.antigravity-model-patch`, 'state.json');
+    const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+    state.launcher.patchedHash = createHash('sha256').update(legacy).digest('hex');
+    fs.writeFileSync(stateFile, JSON.stringify(state));
+
+    expect(configureIde({ ...f, action: 'status' })).toMatchObject({ applied: true, launcherUpdateNeeded: true });
+    expect(configureIde({ ...f, action: 'apply' })).toMatchObject({ applied: true, status: 'updated', launcherPatched: true });
+    const upgraded = fs.readFileSync(launcher, 'utf8');
+    expect(upgraded).not.toContain('AGY_LLM_GATEWAY_URL');
+    expect(upgraded.match(/c\.CLOUD_CODE_URL=agyCloudCodeUrl/g)).toHaveLength(1);
+    expect(configureIde({ ...f, action: 'status' }).launcherUpdateNeeded).toBeUndefined();
+    expect(configureIde({ ...f, action: 'apply' }).status).toBe('unchanged');
+    expect(configureIde({ ...f, action: 'restore' }).launcherRestored).toBe(true);
+    expect(fs.readFileSync(launcher)).toEqual(originalLauncher);
+  });
+  it('refuses to upgrade an earlier gateway patch that was edited afterwards', () => {
+    const f = hubEndpointFixture();
+    const launcher = path.join(f.app, 'extensions/agy/vscode/extension.js');
+    const originalLauncher = fs.readFileSync(launcher);
+    configureIde({ ...f, action: 'apply' });
+    const edited = legacyGatewayLauncher(originalLauncher) + '/* local edit */';
+    fs.writeFileSync(launcher, edited);
+    expect(() => configureIde({ ...f, action: 'apply' })).toThrow('LAUNCHER_CHANGED');
+    expect(fs.readFileSync(launcher, 'utf8')).toBe(edited);
+  });
+  it('passes the proxy to the IDE 2.6.0 hub environment on managed launch', async () => {
+    const f = hubEndpointFixture();
+    configureIde({ ...f, action: 'apply', port: 51123 });
+    const launch = vi.fn();
+    await launchIde(f, { startService: async () => {}, launch });
+    expect(launch.mock.calls[0][2]).toMatchObject({ CLOUD_CODE_URL: 'http://127.0.0.1:51123' });
   });
   it('recognizes the Linux IDE 2.6.0 release commit reported in issue #42', () => {
     const f = { ...hubEndpointFixture(), platform: 'linux' };

@@ -26,7 +26,8 @@ IDE 2.1.1 reported in [Issue #2](https://github.com/vahapogut/antigravity-add-mo
 | --- | --- |
 | Standalone Electron `app.asar`, entry `dist/main.js` | Validated runtime hooks; vendor APIs, certificate handling, updater and window code are retained |
 | Standalone Windows app connected to WSL | Vendor WSL behavior is retained; custom-model proxy routing applies only to local sessions |
-| Unpacked IDE `app/out` with a declared endpoint setting, verified 2.5.5 core, or verified 2.6.0 hub launcher | Separate `ide:apply`/`ide:launch` adapter. Windows 2.5.5 live chat is verified. Windows 2.6.0 is recognized by commit `9e3a5da5…` and forwards the loopback proxy to the `agy` hub; restart the IDE after apply. macOS (same commit) and Linux (`895a0667…`, `/opt/antigravity-ide`) 2.6.0 are recognized but not yet confirmed end to end |
+| Unpacked IDE `app/out` with a declared endpoint setting, verified 2.5.5 core, or verified 2.6.0 hub launcher | Separate `ide:apply`/`ide:launch` adapter. Windows 2.5.5 live chat is verified. Windows 2.6.0 is recognized by commit `9e3a5da5…` and passes the loopback proxy to the `agy` hub as `CLOUD_CODE_URL`, so the native models stay next to saved ones (this route is not yet confirmed live on Windows); restart the IDE after apply, and re-run apply after updating from a version that used `AGY_LLM_GATEWAY_URL` (#46). macOS (same commit) and Linux (`895a0667…`, `/opt/antigravity-ide`) 2.6.0 are recognized but not yet confirmed end to end |
+| Google Antigravity extension for VS Code (`google.google-antigravity`) | No adapter or file changes: start the proxy, then start VS Code with `CLOUD_CODE_URL` pointing at it. Based on inspecting extension 1.11.0; not yet confirmed end to end. See [VS Code extension](vscode.md) |
 | Archived IDE with an `out/main.js` entry point | Unsupported; refused without changing the application |
 | Missing or unrecognized application layout | Explicit error; no success message |
 
@@ -134,6 +135,42 @@ requires a clean vendor reinstall; arbitrary `.backup` files are never guessed.
 After an upstream update, run `--check` again and rebuild before redeploying.
 Report a new failure with the desktop/IDE distinction, app version, OS, installer
 output, and first application error. Do not include API keys or auth headers.
+
+### macOS: patch a separate copy instead of the signed app
+
+Patching `/Applications/Antigravity.app` in place invalidates its code
+signature, so macOS may report the app as damaged. `deploy.mjs` still patches in
+place and prints a warning when the target is a macOS `.app`. As an opt-in
+alternative, build a patched copy and leave the official app untouched:
+
+```sh
+npm run build
+npm run mac:clone
+# optional: npm run mac:clone -- --source "/path/Antigravity.app" --target "/path/Copy.app"
+```
+
+The command copies the app to `~/Applications/Antigravity (add-model).app`,
+gives the copy its own `CFBundleIdentifier` (the original plus `.addmodel`) and
+its own user data folder, applies the same patch to the copy only, updates
+`ElectronAsarIntegrity` in `Info.plist` to the patched `app.asar` header hash,
+re-signs every nested bundle and Mach-O file ad hoc from the inside out with its
+original entitlements, and runs `codesign --verify --deep --strict` on the
+result. The official app is only read: the command refuses a destination that
+is, or resolves (including through symlinks) into, the official bundle, and it
+only replaces an existing destination that an earlier run created. Run it again
+after an official update to rebuild the copy.
+
+The copy is signed locally (ad hoc). It carries neither Google's signature nor
+notarization.
+
+Verified on macOS 15.7 (arm64) with official Antigravity 2.29.0: clone build,
+`codesign --verify --deep --strict` passing on the clone, and launching and using
+the clone.
+
+Not verified: how the official updater behaves inside the clone, Intel Macs, and
+other Antigravity versions. Automated tests replace `codesign` and the plist
+tools, so they cover the copy, `Info.plist` and hash logic on every platform but
+not real signing.
 
 ## Windows installer asks to close Antigravity
 
