@@ -15,6 +15,7 @@ import * as modelCatalog from '../proxy/modelCatalog';
 import * as modelIdentity from '../modelIdentity';
 import * as customRequest from '../proxy/customRequest';
 import * as modelStore from '../modelStore';
+import * as cryptoStore from '../cryptoStore';
 import * as schemaValidator from '../schemaValidator';
 import * as subagentRouting from '../proxy/subagentRouting';
 import * as subagentModels from '../proxy/subagentModels';
@@ -118,7 +119,7 @@ async function fixture(options: ProxyStartOptions = {}, overrides: Record<string
     './proxy/customRequest': customRequest,
     './modelStore': modelStore,
     './schemaValidator': schemaValidator,
-    './cryptoStore': { decryptModels: (models: unknown) => models },
+    './cryptoStore': { decryptModels: (models: unknown) => models, removePlaintextBackup: () => false },
     './proxy/subagentRouting': subagentRouting,
     './proxy/subagentModels': subagentModels,
     './proxy/googlePoolFailover': googlePoolFailover,
@@ -154,7 +155,7 @@ async function fixture(options: ProxyStartOptions = {}, overrides: Record<string
   proxies.push(module.exports);
   const management = vi.fn(() => false);
   const port = await module.exports.startProxy({ dataDirectory: directory, handleManagement: management, ...options });
-  return { ...module.exports, port, lsPort, calls, downloads, management };
+  return { ...module.exports, port, lsPort, calls, downloads, management, directory };
 }
 
 const generationRoute = '/v1beta/models/security-fixture:generateContent';
@@ -344,6 +345,44 @@ describe('local text attachments', () => {
     fs.writeFileSync(file, 'synthetic attachment text');
     expect((await request(app.port, generationRoute, {}, attachment(pathToFileURL(file).href))).status).toBe(200);
     expect(app.calls.find((call) => call.path.startsWith('/provider'))?.body).toContain('synthetic attachment text');
+  });
+});
+
+describe('stored credential upkeep', () => {
+  it('re-protects credentials kept in the retired readable form and drops the readable backup', async () => {
+    const app = await fixture({}, { './cryptoStore': cryptoStore });
+    cryptoStore.configureCredentialDirectory(app.directory);
+    const file = path.join(app.directory, 'custom_models.json');
+    const retired = (value: string) => `fallback:${Buffer.from(value).toString('base64')}`;
+    const model = JSON.parse(fs.readFileSync(file, 'utf8')).models[0];
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        models: [
+          {
+            ...model,
+            apiKey: retired('retired-form-key'),
+            encrypted: true,
+            customHeaders: { 'X-Extra': retired('retired-form-header') },
+            encryptedHeaders: true,
+          },
+        ],
+      }),
+    );
+    fs.writeFileSync(
+      `${file}.bak`,
+      JSON.stringify({ models: [{ ...model, apiKey: 'readable-key', encrypted: false }] }),
+    );
+
+    for (let round = 0; round < 2; round++) {
+      expect((await request(app.port, generationRoute, {}, prompt)).status).toBe(200);
+      expect(app.calls.at(-1)?.authorization).toBe('Bearer retired-form-key');
+    }
+    const saved = JSON.parse(fs.readFileSync(file, 'utf8')).models[0];
+    expect(saved.apiKey).toMatch(/^local-gcm:/);
+    expect(saved.customHeaders['X-Extra']).toMatch(/^local-gcm:/);
+    expect(cryptoStore.decryptString(saved.customHeaders['X-Extra'])).toBe('retired-form-header');
+    expect(fs.existsSync(`${file}.bak`)).toBe(false);
   });
 });
 

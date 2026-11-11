@@ -106,7 +106,7 @@ function requestModels(
     },
     './proxy/customRequest': { runCustomModelRequest },
     './modelStore': { readModelConfig: () => models },
-    './cryptoStore': { decryptModels: (value: unknown) => value },
+    './cryptoStore': { decryptModels: (value: unknown) => value, removePlaintextBackup: () => false },
     './schemaValidator': { validateCustomModel },
     './proxy/loopbackSecurity': loopbackSecurity,
     './proxy/listen': {},

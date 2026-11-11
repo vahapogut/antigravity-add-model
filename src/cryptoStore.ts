@@ -41,18 +41,40 @@ function encryptLocal(value: string): string {
   return 'local-gcm:' + Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString('base64');
 }
 
+/** A stored secret that anyone who can read the file can also read: clear text or the retired base64 form. */
+function readable(value: unknown): value is string {
+  return typeof value === 'string' && value !== '' && value !== 'none' && !/^(enc:|local-gcm:)/.test(value);
+}
+
 /**
- * Creates a backup of the specified file with a .bak extension.
+ * Earlier releases copied the configuration to "<file>.bak" before encrypting it.
+ * Remove that copy while it still holds a readable credential; leave any other file alone.
  */
-export function backupFile(filePath: string): void {
+export function removePlaintextBackup(filePath: string): boolean {
+  const backupPath = filePath + '.bak';
   try {
-    if (fs.existsSync(filePath)) {
-      const backupPath = filePath + '.bak';
-      fs.copyFileSync(filePath, backupPath);
-      log.info('[CryptoStore] Credential backup created.');
-    }
+    if (!fs.lstatSync(backupPath).isFile()) return false;
+    const parsed = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
+    const models: unknown = Array.isArray(parsed) ? parsed : parsed?.models;
+    if (!Array.isArray(models)) return false;
+    const exposed = models.some(
+      (model) =>
+        model &&
+        typeof model === 'object' &&
+        (readable(model.apiKey) ||
+          Object.values(model.customHeaders || {}).some(readable) ||
+          (Array.isArray(model.googleAccounts) ? model.googleAccounts : []).some(
+            (account: Record<string, unknown> | null) =>
+              account && [account.accessToken, account.refreshToken, account.clientSecret].some(readable),
+          )),
+    );
+    if (!exposed) return false;
+    fs.unlinkSync(backupPath);
+    log.info('[CryptoStore] Removed an unencrypted configuration backup left by an earlier release.');
+    return true;
   } catch {
-    log.error('[CryptoStore] Could not create credential backup. Check file permissions and available disk space.');
+    // A missing or unreadable backup is not ours to judge.
+    return false;
   }
 }
 
@@ -135,6 +157,14 @@ export function decryptString(encryptedText: string): string {
 
   // Plaintext (older config, not yet migrated)
   return encryptedText;
+}
+
+/** Re-protect a stored secret kept in clear or in the retired base64 form; other values are returned unchanged. */
+export function protectStoredSecret(value: string): string {
+  if (!readable(value)) return value;
+  if (!value.startsWith('fallback:')) return encryptString(value);
+  const plain = decryptString(value);
+  return plain === 'DECRYPTION_FAILED' ? value : encryptString(plain);
 }
 
 interface ModelWithKey {

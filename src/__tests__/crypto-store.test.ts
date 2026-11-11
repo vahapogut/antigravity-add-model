@@ -14,7 +14,12 @@ function fixture(available = false, failEncryption = false, failDecryption = fal
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-crypto-'));
   directories.push(directory);
   const logs: unknown[][] = [];
-  const api = {} as { encryptString(value: string): string; decryptString(value: string): string };
+  const api = {} as {
+    encryptString(value: string): string;
+    decryptString(value: string): string;
+    protectStoredSecret(value: string): string;
+    removePlaintextBackup(filePath: string): boolean;
+  };
   const dependencies: Record<string, unknown> = {
     fs,
     path,
@@ -100,5 +105,56 @@ describe('credential encryption', () => {
     expect(codec.decryptString('enc:c2VjcmV0')).toBe('DECRYPTION_FAILED');
     expect(codec.logs.flat().join(' ')).toContain('OS-backed credentials could not be decrypted');
     expect(JSON.stringify(codec.logs)).not.toContain('sensitive-provider-token');
+  });
+  it('re-protects secrets stored in clear or in the retired base64 form', () => {
+    const codec = fixture();
+    for (const stored of ['plain-old-key', 'fallback:c2VjcmV0']) {
+      const upgraded = codec.protectStoredSecret(stored);
+      expect(upgraded).toMatch(/^local-gcm:/);
+      expect(codec.decryptString(upgraded)).toBe(stored === 'plain-old-key' ? 'plain-old-key' : 'secret');
+    }
+    const current = codec.encryptString('secret');
+    expect(codec.protectStoredSecret(current)).toBe(current);
+    expect(codec.protectStoredSecret('enc:AA==')).toBe('enc:AA==');
+    expect(codec.protectStoredSecret('none')).toBe('none');
+    expect(codec.protectStoredSecret('')).toBe('');
+  });
+});
+describe('leftover configuration backup', () => {
+  const write = (codec: ReturnType<typeof fixture>, value: unknown) => {
+    const file = path.join(codec.directory, 'custom_models.json');
+    fs.writeFileSync(`${file}.bak`, typeof value === 'string' ? value : JSON.stringify(value));
+    return file;
+  };
+  it.each([
+    ['an API key', { models: [{ name: 'models/a', apiKey: 'plain-old-key' }] }],
+    ['a retired base64 key', { models: [{ name: 'models/a', apiKey: 'fallback:c2VjcmV0', encrypted: true }] }],
+    ['a header value', { models: [{ name: 'models/a', apiKey: 'none', customHeaders: { 'X-Key': 'plain' } }] }],
+    ['an account token', { models: [{ name: 'models/a', googleAccounts: [{ refreshToken: 'plain-refresh' }] }] }],
+  ])('removes a backup that still holds %s in readable form', (_name, value) => {
+    const codec = fixture();
+    const file = write(codec, value);
+    expect(codec.removePlaintextBackup(file)).toBe(true);
+    expect(fs.existsSync(`${file}.bak`)).toBe(false);
+    expect(JSON.stringify(codec.logs)).not.toMatch(/plain|c2VjcmV0/);
+  });
+  it('keeps a backup that holds no readable credential, and anything it cannot parse', () => {
+    const codec = fixture();
+    const protectedKey = codec.encryptString('secret');
+    for (const value of [
+      {
+        models: [
+          { name: 'models/a', apiKey: protectedKey, encrypted: true },
+          { name: 'models/b', apiKey: 'none' },
+        ],
+      },
+      '{not json',
+      { unrelated: true },
+    ]) {
+      const file = write(codec, value);
+      expect(codec.removePlaintextBackup(file)).toBe(false);
+      expect(fs.existsSync(`${file}.bak`)).toBe(true);
+    }
+    expect(codec.removePlaintextBackup(path.join(codec.directory, 'missing.json'))).toBe(false);
   });
 });
