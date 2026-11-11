@@ -39,6 +39,15 @@ class FakeServer extends EventEmitter {
   }
 }
 
+/** The listener also holds the IPv6 loopback side of its port; that socket is mocked too. */
+class FakeCompanion extends EventEmitter {
+  listen = vi.fn((_options: unknown, ready: () => void) => {
+    ready();
+    return this;
+  });
+  close = vi.fn(() => this);
+}
+
 interface ProxyModule {
   startProxy(): Promise<number>;
   stopProxy(): Promise<void>;
@@ -98,7 +107,11 @@ function fixture(fixed = true) {
     './cryptoStore': {},
     // These are the production marker parser and listener, with only the socket mocked.
     './proxy/loopbackSecurity': loopbackSecurity,
-    './proxy/listen': { getRequiredProxyPort, listenProxy },
+    './proxy/listen': {
+      getRequiredProxyPort,
+      listenProxy: (server: http.Server, port?: number, allowFallback?: boolean) =>
+        listenProxy(server, port, allowFallback, () => new FakeCompanion() as unknown as net.Server),
+    },
   };
   const module = { exports: {} as ProxyModule };
   runInNewContext(compiled, {
