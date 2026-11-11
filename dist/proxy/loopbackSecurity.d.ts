@@ -5,4 +5,6 @@ export declare function guardLoopbackRequest(req: IncomingMessage, res: ServerRe
 export declare function languageServerModelsUrl(value: string, port?: number): URL | undefined;
 /** Incoming Google credentials may only accompany HTTPS downloads from Google API hosts. */
 export declare function authenticatedGoogleFileUrl(value: string): URL | undefined;
+/** Converting a file URL must never turn an attachment into a remote SMB read. */
+export declare function localFilePath(url: URL): string;
 //# sourceMappingURL=loopbackSecurity.d.ts.map

@@ -2,6 +2,15 @@
 
 Release history preserved from the project README. Historical entries describe the behavior of their release; see [compatibility and recovery](docs/compatibility.md) for current installation guidance.
 
+### Unreleased — Local hardening
+
+- Text attachments are resolved with the same local file URL check as the request translators. File URLs that name another host are rejected in both places.
+- The proxy listens on both loopback addresses (`127.0.0.1` and `[::1]`) of its port. If either side is already taken, it moves to another port in dynamic mode and reports the port as occupied when the port is fixed.
+- Saved credentials still kept in the retired `fallback:` form are re-encrypted when the configuration is loaded. The migration to the encrypted format no longer leaves `custom_models.json.bak` behind, and an existing copy that still holds a readable credential is removed on the next load.
+- `proxy:start -- --open` opens the browser manager with a single-use sign-in code that is valid for one minute, and no longer prints the management URL. Without `--open` the URL is printed as before. A service started by an earlier version must be stopped and started again before `--open` works.
+- The gateway login page falls back to `/` for a `next` value whose path starts with two slashes.
+- For IDE 2.6.0, `ide:restore` writes only that installation's launcher, and both restore and re-apply require the saved original to match the patched launcher. A mismatch stops `ide:apply` with `LAUNCHER_CHANGED`; repair or reinstall the IDE, then apply again.
+
 ### Unreleased — Windows update check timeout
 
 - `update:check` and `update:prepare` now allow the Windows mutex check up to 60 seconds instead of 15. The check compiles a small C# helper through PowerShell `Add-Type` on every run, and on a busy machine that alone took longer than 15 seconds. The check then reported the mutexes as unavailable and blocked update preparation even with nothing running.

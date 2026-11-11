@@ -1,9 +1,10 @@
 /** Set before reading credentials when running the owned Node proxy service. */
 export declare function configureCredentialDirectory(directory: string): void;
 /**
- * Creates a backup of the specified file with a .bak extension.
+ * Earlier releases copied the configuration to "<file>.bak" before encrypting it.
+ * Remove that copy while it still holds a readable credential; leave any other file alone.
  */
-export declare function backupFile(filePath: string): void;
+export declare function removePlaintextBackup(filePath: string): boolean;
 /**
  * Checks if Electron's safeStorage API is fully functional on the current system.
  */
@@ -16,6 +17,8 @@ export declare function encryptString(plainText: string): string;
  * Decrypts a previously encrypted string. Handles safeStorage, base64 fallback, and plaintext gracefully.
  */
 export declare function decryptString(encryptedText: string): string;
+/** Re-protect a stored secret kept in clear or in the retired base64 form; other values are returned unchanged. */
+export declare function protectStoredSecret(value: string): string;
 interface ModelWithKey {
     apiKey?: string;
     encrypted?: boolean;

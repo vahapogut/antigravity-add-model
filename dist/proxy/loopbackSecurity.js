@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.guardLoopbackRequest = guardLoopbackRequest;
 exports.languageServerModelsUrl = languageServerModelsUrl;
 exports.authenticatedGoogleFileUrl = authenticatedGoogleFileUrl;
+exports.localFilePath = localFilePath;
+const node_url_1 = require("node:url");
 function validPort(port) {
     return Number.isInteger(port) && Number(port) > 0 && Number(port) <= 65535;
 }
@@ -65,5 +67,24 @@ function authenticatedGoogleFileUrl(value) {
     catch {
         return undefined;
     }
+}
+/** Converting a file URL must never turn an attachment into a remote SMB read. */
+function localFilePath(url) {
+    const remoteFileError = 'Only local file URLs are supported; network shares are not allowed.';
+    if (url.protocol !== 'file:' ||
+        (url.hostname && url.hostname.toLowerCase() !== 'localhost') ||
+        /^[\\/]{2}/.test(url.pathname)) {
+        throw new Error(remoteFileError);
+    }
+    let localPath;
+    try {
+        localPath = (0, node_url_1.fileURLToPath)(url);
+    }
+    catch {
+        throw new Error('Invalid local attachment file URL.');
+    }
+    if (/^[\\/]{2}/.test(localPath))
+        throw new Error(remoteFileError);
+    return localPath;
 }
 //# sourceMappingURL=loopbackSecurity.js.map
