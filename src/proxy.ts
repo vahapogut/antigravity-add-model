@@ -142,7 +142,12 @@ import { readModelConfig, writeJsonAtomic } from './modelStore';
 import { getRequiredProxyPort, listenProxy } from './proxy/listen';
 import { subagentRouting, SubagentRoutingError } from './proxy/subagentRouting';
 import { resolveConfiguredSubagentModel } from './proxy/subagentModels';
-import { authenticatedGoogleFileUrl, guardLoopbackRequest, languageServerModelsUrl } from './proxy/loopbackSecurity';
+import {
+  authenticatedGoogleFileUrl,
+  guardLoopbackRequest,
+  languageServerModelsUrl,
+  localFilePath,
+} from './proxy/loopbackSecurity';
 import { forwardNativeGeneration, NativeSubagentRouting } from './proxy/nativeSubagentResponse';
 import { attemptGooglePoolFailover, resolveGoogleFailoverPool } from './proxy/googlePoolFailover';
 
@@ -843,7 +848,8 @@ async function resolveFileData(
         const uri = fd.fileUri;
         let fileContent = '';
         if (uri.startsWith('file://')) {
-          const fp = uri.replace('file://', '').replace(/\//g, path.sep);
+          // Same rule as the translators: local paths only, never a network share.
+          const fp = localFilePath(new URL(uri));
           if (fs.existsSync(fp)) fileContent = fs.readFileSync(fp, 'utf-8');
         } else if (authHeader && authenticatedGoogleFileUrl(uri)) {
           fileContent = await downloadFileContent(uri, authHeader);

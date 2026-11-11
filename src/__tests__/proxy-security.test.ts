@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import * as http from 'node:http';
 import * as net from 'node:net';
 import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import * as loopbackSecurity from '../proxy/loopbackSecurity';
@@ -53,7 +54,7 @@ function request(port: number, target: string, headers: Record<string, string> =
   });
 }
 
-async function fixture(options: ProxyStartOptions = {}) {
+async function fixture(options: ProxyStartOptions = {}, overrides: Record<string, unknown> = {}) {
   const directory = fs.mkdtempSync(path.join(tmpdir(), 'agy-security-'));
   directories.push(directory);
   const calls: { path: string; authorization?: string; body: string }[] = [];
@@ -128,6 +129,7 @@ async function fixture(options: ProxyStartOptions = {}) {
       getRequiredProxyPort: () => undefined,
       listenProxy: (server: http.Server) => listenProxy(server, 0),
     },
+    ...overrides,
   };
   const module = {
     exports: {} as {
@@ -304,6 +306,44 @@ describe('desktop proxy HTTP boundaries', () => {
     expect(app.downloads.some((call) => call.hostname === 'attacker.invalid')).toBe(false);
     await send('https://generativelanguage.googleapis.com/image.png', 'image/png');
     expect(app.downloads).toHaveLength(2);
+  });
+});
+
+describe('local text attachments', () => {
+  const attachment = (fileUri: string) => ({
+    contents: [{ role: 'user', parts: [{ fileData: { fileUri, mimeType: 'text/plain' } }] }],
+  });
+
+  it('never touches the filesystem for a file URL that names another host', async () => {
+    const touched: string[] = [];
+    const guarded =
+      (name: 'existsSync' | 'readFileSync') =>
+      (target: fs.PathLike, ...rest: unknown[]) => {
+        if (String(target).includes('untrusted-host')) {
+          touched.push(String(target));
+          if (name === 'existsSync') return false;
+          throw new Error('Unexpected filesystem I/O');
+        }
+        return (fs[name] as (...args: unknown[]) => unknown)(target, ...rest);
+      };
+    const app = await fixture(
+      {},
+      { fs: { ...fs, existsSync: guarded('existsSync'), readFileSync: guarded('readFileSync') } },
+    );
+    for (const fileUri of ['file:////untrusted-host/share/notes.txt', 'file://untrusted-host/share/notes.txt'])
+      await request(app.port, generationRoute, {}, attachment(fileUri));
+    expect(touched).toEqual([]);
+    expect(app.calls.filter((call) => call.path.startsWith('/provider'))).toHaveLength(0);
+  });
+
+  it('still sends the text of a local attachment to the selected provider', async () => {
+    const app = await fixture();
+    const directory = fs.mkdtempSync(path.join(tmpdir(), 'agy-security-'));
+    directories.push(directory);
+    const file = path.join(directory, 'local notes.txt');
+    fs.writeFileSync(file, 'synthetic attachment text');
+    expect((await request(app.port, generationRoute, {}, attachment(pathToFileURL(file).href))).status).toBe(200);
+    expect(app.calls.find((call) => call.path.startsWith('/provider'))?.body).toContain('synthetic attachment text');
   });
 });
 
