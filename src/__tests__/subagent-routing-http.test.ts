@@ -98,7 +98,7 @@ async function fixture(models: CustomModel[], fallback: string) {
     './proxy/customRequest': customRequest,
     './modelStore': { readModelConfig: () => models.map((model) => ({ ...model })) },
     './schemaValidator': { validateCustomModel },
-    './cryptoStore': { decryptModels: (values: CustomModel[]) => values },
+    './cryptoStore': { decryptModels: (values: CustomModel[]) => values, removePlaintextBackup: () => false },
     './proxy/loopbackSecurity': loopbackSecurity,
     './proxy/listen': {
       getRequiredProxyPort: () => undefined,

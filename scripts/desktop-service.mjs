@@ -173,7 +173,7 @@ function acquireLock(options, name = 'start.lock') {
   };
 }
 
-export async function serviceCommand(options) {
+export async function serviceCommand(options, hooks = {}) {
   const initial = readState(options);
   if (options.command === 'status') return (await health(initial)) ? description(initial) : { status: 'stopped' };
   if (options.command === 'stop') {
@@ -298,8 +298,18 @@ export async function serviceCommand(options) {
       }
       if (!ready) throw new Error(`Proxy did not become ready; inspect ${p.log}`);
     }
-    const result = description(ready, true);
-    if (options.open) await require(path.join(ROOT, 'dist', 'browserLauncher.js')).openBrowser(result.managementUrl);
+    const result = description(ready, !options.open);
+    if (options.open) {
+      // Other local accounts can read a browser's command line, so it carries a single-use
+      // sign-in code instead of the management token.
+      const handoff = await request(ready, 'handoff', 'POST');
+      if (!/^[a-f0-9]{64}$/.test(handoff?.code || ''))
+        throw new Error(
+          'The running service cannot issue a browser sign-in code. If it was started by an earlier version, stop it and start it again.',
+        );
+      const openBrowser = hooks.openBrowser || require(path.join(ROOT, 'dist', 'browserLauncher.js')).openBrowser;
+      await openBrowser(`${result.endpoint}/_addon/#code=${handoff.code}`);
+    }
     return result;
   } finally {
     release();

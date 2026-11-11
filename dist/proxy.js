@@ -233,6 +233,8 @@ function getAdvertisedModelCapabilities(model) {
         },
     };
 }
+/** Configuration files whose leftover backup has already been looked at in this process. */
+const checkedConfigBackups = new Set();
 // ─── Model Loading ────────────────────────────────────────────────────────
 function loadCustomModels() {
     const filePath = getCustomModelsPath();
@@ -284,30 +286,34 @@ function loadCustomModels() {
     }
     try {
         const models = (0, modelStore_1.readModelConfig)(filePath);
-        // Auto-migration check
+        // Auto-migration check. The retired base64 form was saved with the encrypted flags set, so it is
+        // looked for whatever those flags say.
         const unprotected = (value) => typeof value === 'string' && value && value !== 'none' && !/^(enc:|fallback:|local-gcm:)/.test(value);
+        const retired = (value) => typeof value === 'string' && value.startsWith('fallback:');
+        const accountSecrets = (m) => (m.googleAccounts || []).flatMap((account) => [account.accessToken, account.refreshToken, account.clientSecret]);
         const needsMigration = models.some((m) => (!m.encrypted && unprotected(m.apiKey)) ||
             (!m.encryptedHeaders && Object.values(m.customHeaders || {}).some(unprotected)) ||
-            (!m.encryptedGoogleAccounts &&
-                (m.googleAccounts || []).some((account) => [account.accessToken, account.refreshToken, account.clientSecret].some(unprotected))));
+            (!m.encryptedGoogleAccounts && accountSecrets(m).some(unprotected)) ||
+            [m.apiKey, ...Object.values(m.customHeaders || {}), ...accountSecrets(m)].some(retired));
         if (needsMigration) {
             electron_log_1.default.info('[Proxy] Plaintext custom_models.json detected. Migrating to encrypted format...');
-            cryptoStore.backupFile(filePath);
             const encryptedModels = cryptoStore.encryptModels(models);
             for (const model of encryptedModels) {
-                if (model.customHeaders && !model.encryptedHeaders) {
+                if (retired(model.apiKey))
+                    model.apiKey = cryptoStore.protectStoredSecret(model.apiKey);
+                if (model.customHeaders && (!model.encryptedHeaders || Object.values(model.customHeaders).some(retired))) {
                     model.customHeaders = Object.fromEntries(Object.entries(model.customHeaders).map(([name, value]) => [
                         name,
-                        unprotected(value) ? cryptoStore.encryptString(value) : value,
+                        unprotected(value) || retired(value) ? cryptoStore.protectStoredSecret(value) : value,
                     ]));
                     model.encryptedHeaders = true;
                 }
-                if (model.googleAccounts && !model.encryptedGoogleAccounts) {
+                if (model.googleAccounts && (!model.encryptedGoogleAccounts || accountSecrets(model).some(retired))) {
                     model.googleAccounts = model.googleAccounts.map((account) => {
                         const encrypted = { ...account };
                         for (const field of ['accessToken', 'refreshToken', 'clientSecret'])
-                            if (unprotected(encrypted[field]))
-                                encrypted[field] = cryptoStore.encryptString(encrypted[field]);
+                            if (unprotected(encrypted[field]) || retired(encrypted[field]))
+                                encrypted[field] = cryptoStore.protectStoredSecret(encrypted[field]);
                         return encrypted;
                     });
                     model.encryptedGoogleAccounts = true;
@@ -321,6 +327,11 @@ function loadCustomModels() {
             catch (err) {
                 electron_log_1.default.error('[Proxy] Failed to write encrypted custom_models.json during migration:', err);
             }
+        }
+        // Earlier releases left an unencrypted copy of this file beside it.
+        if (!checkedConfigBackups.has(filePath)) {
+            checkedConfigBackups.add(filePath);
+            cryptoStore.removePlaintextBackup(filePath);
         }
         const decrypted = cryptoStore.decryptModels(models);
         for (const model of decrypted) {
@@ -711,7 +722,8 @@ async function resolveFileData(body, reqHeaders, downstream) {
                 const uri = fd.fileUri;
                 let fileContent = '';
                 if (uri.startsWith('file://')) {
-                    const fp = uri.replace('file://', '').replace(/\//g, path.sep);
+                    // Same rule as the translators: local paths only, never a network share.
+                    const fp = (0, loopbackSecurity_1.localFilePath)(new URL(uri));
                     if (fs.existsSync(fp))
                         fileContent = fs.readFileSync(fp, 'utf-8');
                 }

@@ -249,7 +249,9 @@
     const nextUrl = (() => {
       try {
         const nextCandidate = new URL(params.get('next') || '/', location.origin);
+        // A path that starts with two slashes would be read as another host when used on its own.
         return nextCandidate.origin === location.origin && nextCandidate.protocol === location.protocol
+          && !nextCandidate.pathname.startsWith('//')
           ? nextCandidate.pathname + nextCandidate.search + nextCandidate.hash : '/';
       } catch { return '/'; }
     })();

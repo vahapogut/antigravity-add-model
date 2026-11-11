@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { fileURLToPath } from 'node:url';
 
 function validPort(port: unknown): port is number {
   return Number.isInteger(port) && Number(port) > 0 && Number(port) <= 65535;
@@ -71,4 +72,24 @@ export function authenticatedGoogleFileUrl(value: string): URL | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** Converting a file URL must never turn an attachment into a remote SMB read. */
+export function localFilePath(url: URL): string {
+  const remoteFileError = 'Only local file URLs are supported; network shares are not allowed.';
+  if (
+    url.protocol !== 'file:' ||
+    (url.hostname && url.hostname.toLowerCase() !== 'localhost') ||
+    /^[\\/]{2}/.test(url.pathname)
+  ) {
+    throw new Error(remoteFileError);
+  }
+  let localPath: string;
+  try {
+    localPath = fileURLToPath(url);
+  } catch {
+    throw new Error('Invalid local attachment file URL.');
+  }
+  if (/^[\\/]{2}/.test(localPath)) throw new Error(remoteFileError);
+  return localPath;
 }

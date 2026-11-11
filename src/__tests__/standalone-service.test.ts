@@ -128,6 +128,55 @@ describe('owned Node proxy and management HTTP', () => {
       dom.window.close();
     }
   });
+  const post = (route: string, body: unknown, headers: Record<string, string> = {}) =>
+    request(options.port, route, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: endpoint, ...headers }, body: JSON.stringify(body) });
+  it('exchanges a single-use sign-in code for the management token', async () => {
+    expect((await post('/_addon/handoff', {})).status).toBe(401);
+    const issued = await post('/_addon/handoff', {}, { Authorization: `Bearer ${token}` });
+    expect(issued.status).toBe(200);
+    const { code } = JSON.parse(issued.text);
+    expect(code).toMatch(/^[a-f0-9]{64}$/);
+    expect(code).not.toBe(token);
+    for (const wrong of ['0'.repeat(64), '', code.slice(1), 7]) {
+      const refused = await post('/_addon/redeem', { code: wrong });
+      expect(refused.status).toBe(401);
+      expect(refused.text).not.toContain(token);
+    }
+    const redeemed = await post('/_addon/redeem', { code });
+    expect(redeemed.status).toBe(200);
+    expect(JSON.parse(redeemed.text)).toEqual({ token });
+    expect((await post('/_addon/redeem', { code })).status).toBe(401);
+  });
+  it('opens the browser manager with a sign-in code, never the token, and the page signs itself in', async () => {
+    const opened: string[] = [];
+    const started = await serviceCommand({ ...options, open: true }, { openBrowser: async (url: string) => void opened.push(url) });
+    expect(started).toMatchObject({ status: 'running', port: options.port, pid });
+    expect(started).not.toHaveProperty('managementUrl');
+    expect(opened).toHaveLength(1);
+    expect(opened[0]).toMatch(new RegExp(`^${endpoint}/_addon/#code=[a-f0-9]{64}$`));
+    expect(opened[0]).not.toContain(token);
+
+    const html = await request(options.port, '/_addon/');
+    const script = await request(options.port, '/_addon/app.js');
+    const dom = new JSDOM(html.text, { url: opened[0], runScripts: 'outside-only' });
+    const observed: string[] = [];
+    dom.window.fetch = async (input: string, init: RequestInit) => {
+      observed.push(String(input));
+      return fetch(new URL(String(input), endpoint), { ...init, headers: { ...init?.headers, Origin: endpoint } });
+    };
+    try {
+      dom.window.eval(script.text);
+      dom.window.dispatchEvent(new dom.window.Event('DOMContentLoaded'));
+      expect(dom.window.location.hash).toBe('');
+      await vi.waitFor(() => expect(dom.window.sessionStorage.getItem('antigravity-addon-token')).toBe(token));
+      await vi.waitFor(() => expect(dom.window.document.body.textContent).toContain('Add model'));
+      expect(observed.indexOf('/_addon/redeem')).toBe(0);
+      expect(observed).toContain('/_addon/rpc');
+    } finally {
+      dom.window.dispatchEvent(new dom.window.Event('pagehide'));
+      dom.window.close();
+    }
+  });
   it('requires the management token for every action and health/stop operation', async () => {
     for (const route of ['/_addon/health', '/_addon/rpc', '/_addon/stop', '/_addon/delegation/models', '/_addon/delegation/run']) {
       const response = await request(options.port, route, { method: route.endsWith('health') ? 'GET' : 'POST', headers: { Authorization: 'Bearer invalid', 'Content-Type': 'application/json' }, body: route.endsWith('health') ? undefined : '{}' });

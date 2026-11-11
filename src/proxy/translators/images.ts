@@ -1,6 +1,8 @@
 /** Image inputs shared by the OpenAI and Anthropic request translators. */
 import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
+import { localFilePath } from '../loopbackSecurity';
+
+export { localFilePath };
 
 export interface GeminiImagePart {
   inlineData?: { mimeType: string; data: string };
@@ -136,26 +138,6 @@ function imageBase64(data: unknown): string {
     throw new Error('Invalid image input: expected base64 image data.');
   }
   return normalized;
-}
-
-/** Converting a file URL must never turn an attachment into a remote SMB read. */
-export function localFilePath(url: URL): string {
-  const remoteFileError = 'Only local file URLs are supported; network shares are not allowed.';
-  if (
-    url.protocol !== 'file:' ||
-    (url.hostname && url.hostname.toLowerCase() !== 'localhost') ||
-    /^[\\/]{2}/.test(url.pathname)
-  ) {
-    throw new Error(remoteFileError);
-  }
-  let localPath: string;
-  try {
-    localPath = fileURLToPath(url);
-  } catch {
-    throw new Error('Invalid local attachment file URL.');
-  }
-  if (/^[\\/]{2}/.test(localPath)) throw new Error(remoteFileError);
-  return localPath;
 }
 
 /** Never fetch remote URLs here; the selected provider resolves them. */

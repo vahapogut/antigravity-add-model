@@ -44,12 +44,32 @@ const modelManagement_1 = require("./modelManagement");
 const modelActions_1 = require("./modelActions");
 const proxy_1 = require("./proxy");
 const modelDelegation_1 = require("./modelDelegation");
-function equalToken(actual, expected) {
+function equalSecret(actual, expected) {
     if (typeof actual !== 'string')
         return false;
     const bytes = Buffer.from(actual);
-    const wanted = Buffer.from(`Bearer ${expected}`);
+    const wanted = Buffer.from(expected);
     return bytes.length === wanted.length && (0, node_crypto_1.timingSafeEqual)(bytes, wanted);
+}
+function equalToken(actual, expected) {
+    return equalSecret(actual, `Bearer ${expected}`);
+}
+/** Parsed JSON body, or undefined when it is missing, malformed or larger than the limit. */
+async function readSmallJson(req, limit) {
+    let length = 0;
+    const chunks = [];
+    try {
+        for await (const chunk of req) {
+            length += chunk.length;
+            if (length > limit)
+                return undefined;
+            chunks.push(Buffer.from(chunk));
+        }
+        return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    }
+    catch {
+        return undefined;
+    }
 }
 const HTML = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Antigravity Model Manager</title><link rel="stylesheet" href="/_addon/style.css">
@@ -59,12 +79,15 @@ const HTML = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="v
 const STYLE = `:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#111318;color:#e7e9ed}body{margin:0}main{max-width:1100px;margin:3rem auto;padding:0 1.5rem}button,input,select,textarea{font:inherit}button{cursor:pointer}h1{font-size:1.8rem}p{color:#b7bfcc}a{color:#91bcff}`;
 const BRIDGE = `const key='antigravity-addon-token';
 const fragment=new URLSearchParams(location.hash.slice(1));
-if(fragment.has('token')){sessionStorage.setItem(key,fragment.get('token'));history.replaceState(null,'',location.pathname);}
+if(fragment.has('token')||fragment.has('code'))history.replaceState(null,'',location.pathname);
+if(fragment.has('token'))sessionStorage.setItem(key,fragment.get('token'));
+const ready=fragment.has('code')?fetch('/_addon/redeem',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:fragment.get('code')})}).then(async response=>{if(response.ok)sessionStorage.setItem(key,(await response.json()).token);}).catch(()=>{}):Promise.resolve();
 const bridge={invoke:async(channel,...args)=>{
+ await ready;
  const response=await fetch('/_addon/rpc',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+(sessionStorage.getItem(key)||'')},body:JSON.stringify({channel,args})});
  const value=await response.json();if(!response.ok)throw new Error(value.error||'Management request failed');return value;
 }};
-if(!sessionStorage.getItem(key))document.getElementById('connection-status').textContent='Open the management URL printed by npm run proxy:start -- --open to connect.';
+ready.then(()=>{if(!sessionStorage.getItem(key))document.getElementById('connection-status').textContent='Run npm run proxy:start -- --open again to connect.';});
 `;
 async function startStandaloneService(options) {
     if (!/^[a-f0-9]{64}$/.test(options.token) || !/^[a-f0-9-]{36}$/.test(options.instance))
@@ -77,6 +100,8 @@ async function startStandaloneService(options) {
     };
     const actions = (0, modelActions_1.createModelActions)(manager);
     const handleDelegation = (0, modelDelegation_1.createModelDelegation)(proxy_1.loadCustomModels);
+    // "proxy:start -- --open" puts this on the browser command line instead of the token.
+    let handoff;
     const augmentations = ['customPreload.js', 'contextUsagePreload.js'].map((name) => {
         const preload = fs.readFileSync(path.join(__dirname, name), 'utf8');
         return `(function(exports,require){\n${preload}\n})({},name=>{if(name==='electron')return {ipcRenderer:bridge};throw new Error('Unsupported module');});`;
@@ -105,8 +130,26 @@ async function startStandaloneService(options) {
             res.end(data);
             return true;
         }
+        if (req.method === 'POST' && req.url === '/_addon/redeem') {
+            void readSmallJson(req, 1024).then((body) => {
+                const pending = handoff;
+                const supplied = body?.code;
+                if (pending && Date.now() < pending.expires && equalSecret(supplied, pending.code)) {
+                    handoff = undefined;
+                    respond(res, 200, { token: options.token });
+                }
+                else
+                    respond(res, 401, { error: 'This sign-in code is not valid. Run proxy:start -- --open again.' });
+            });
+            return true;
+        }
         if (!equalToken(req.headers.authorization, options.token)) {
             respond(res, 401, { error: 'Open the authenticated management URL from proxy:start' });
+            return true;
+        }
+        if (req.method === 'POST' && req.url === '/_addon/handoff') {
+            handoff = { code: (0, node_crypto_1.randomBytes)(32).toString('hex'), expires: Date.now() + 60000 };
+            respond(res, 200, { code: handoff.code });
             return true;
         }
         if (handleDelegation(req, res))

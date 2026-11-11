@@ -98,10 +98,17 @@ as the desktop addon. **Diagnostics** shows measured recent requests;
 **Test generation** explicitly sends a small request that can consume provider
 quota. The ordinary **Test connection** continues to check connectivity/catalogs.
 
-The manager URL includes an access token in its fragment. The page moves this
-token into tab session storage; it is not sent as a URL query or logged in HTTP
-paths. Management actions require the token and the exact loopback origin.
-Keep that URL private. Generation remains available to local IDE processes;
+With `--open`, the browser receives a single-use sign-in code in the URL
+fragment. The code is valid for one minute, and the page exchanges it for the
+access token. The command then prints no management URL. If the page reports
+that it is not connected, run `proxy:start -- --open` again.
+
+Without `--open`, `proxy:start` prints a management URL with the access token in
+its fragment. Keep that URL private. In both cases the page keeps the token in
+tab session storage; it is not sent as a URL query or logged in HTTP paths.
+Management actions require the token and the exact loopback origin. A service
+started by an earlier version cannot issue sign-in codes: run `proxy:stop`, then
+start it again. Generation remains available to local IDE processes;
 the service rejects cross-origin browser requests and unrecognized Host headers.
 Use the separate authenticated [gateway](../gateway/README.md) for remote access.
 

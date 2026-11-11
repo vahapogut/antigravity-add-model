@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import * as http from 'node:http';
 import * as net from 'node:net';
 import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import * as loopbackSecurity from '../proxy/loopbackSecurity';
@@ -14,6 +15,7 @@ import * as modelCatalog from '../proxy/modelCatalog';
 import * as modelIdentity from '../modelIdentity';
 import * as customRequest from '../proxy/customRequest';
 import * as modelStore from '../modelStore';
+import * as cryptoStore from '../cryptoStore';
 import * as schemaValidator from '../schemaValidator';
 import * as subagentRouting from '../proxy/subagentRouting';
 import * as subagentModels from '../proxy/subagentModels';
@@ -53,7 +55,7 @@ function request(port: number, target: string, headers: Record<string, string> =
   });
 }
 
-async function fixture(options: ProxyStartOptions = {}) {
+async function fixture(options: ProxyStartOptions = {}, overrides: Record<string, unknown> = {}) {
   const directory = fs.mkdtempSync(path.join(tmpdir(), 'agy-security-'));
   directories.push(directory);
   const calls: { path: string; authorization?: string; body: string }[] = [];
@@ -117,7 +119,7 @@ async function fixture(options: ProxyStartOptions = {}) {
     './proxy/customRequest': customRequest,
     './modelStore': modelStore,
     './schemaValidator': schemaValidator,
-    './cryptoStore': { decryptModels: (models: unknown) => models },
+    './cryptoStore': { decryptModels: (models: unknown) => models, removePlaintextBackup: () => false },
     './proxy/subagentRouting': subagentRouting,
     './proxy/subagentModels': subagentModels,
     './proxy/googlePoolFailover': googlePoolFailover,
@@ -128,6 +130,7 @@ async function fixture(options: ProxyStartOptions = {}) {
       getRequiredProxyPort: () => undefined,
       listenProxy: (server: http.Server) => listenProxy(server, 0),
     },
+    ...overrides,
   };
   const module = {
     exports: {} as {
@@ -152,7 +155,7 @@ async function fixture(options: ProxyStartOptions = {}) {
   proxies.push(module.exports);
   const management = vi.fn(() => false);
   const port = await module.exports.startProxy({ dataDirectory: directory, handleManagement: management, ...options });
-  return { ...module.exports, port, lsPort, calls, downloads, management };
+  return { ...module.exports, port, lsPort, calls, downloads, management, directory };
 }
 
 const generationRoute = '/v1beta/models/security-fixture:generateContent';
@@ -304,6 +307,82 @@ describe('desktop proxy HTTP boundaries', () => {
     expect(app.downloads.some((call) => call.hostname === 'attacker.invalid')).toBe(false);
     await send('https://generativelanguage.googleapis.com/image.png', 'image/png');
     expect(app.downloads).toHaveLength(2);
+  });
+});
+
+describe('local text attachments', () => {
+  const attachment = (fileUri: string) => ({
+    contents: [{ role: 'user', parts: [{ fileData: { fileUri, mimeType: 'text/plain' } }] }],
+  });
+
+  it('never touches the filesystem for a file URL that names another host', async () => {
+    const touched: string[] = [];
+    const guarded =
+      (name: 'existsSync' | 'readFileSync') =>
+      (target: fs.PathLike, ...rest: unknown[]) => {
+        if (String(target).includes('untrusted-host')) {
+          touched.push(String(target));
+          if (name === 'existsSync') return false;
+          throw new Error('Unexpected filesystem I/O');
+        }
+        return (fs[name] as (...args: unknown[]) => unknown)(target, ...rest);
+      };
+    const app = await fixture(
+      {},
+      { fs: { ...fs, existsSync: guarded('existsSync'), readFileSync: guarded('readFileSync') } },
+    );
+    for (const fileUri of ['file:////untrusted-host/share/notes.txt', 'file://untrusted-host/share/notes.txt'])
+      await request(app.port, generationRoute, {}, attachment(fileUri));
+    expect(touched).toEqual([]);
+    expect(app.calls.filter((call) => call.path.startsWith('/provider'))).toHaveLength(0);
+  });
+
+  it('still sends the text of a local attachment to the selected provider', async () => {
+    const app = await fixture();
+    const directory = fs.mkdtempSync(path.join(tmpdir(), 'agy-security-'));
+    directories.push(directory);
+    const file = path.join(directory, 'local notes.txt');
+    fs.writeFileSync(file, 'synthetic attachment text');
+    expect((await request(app.port, generationRoute, {}, attachment(pathToFileURL(file).href))).status).toBe(200);
+    expect(app.calls.find((call) => call.path.startsWith('/provider'))?.body).toContain('synthetic attachment text');
+  });
+});
+
+describe('stored credential upkeep', () => {
+  it('re-protects credentials kept in the retired readable form and drops the readable backup', async () => {
+    const app = await fixture({}, { './cryptoStore': cryptoStore });
+    cryptoStore.configureCredentialDirectory(app.directory);
+    const file = path.join(app.directory, 'custom_models.json');
+    const retired = (value: string) => `fallback:${Buffer.from(value).toString('base64')}`;
+    const model = JSON.parse(fs.readFileSync(file, 'utf8')).models[0];
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        models: [
+          {
+            ...model,
+            apiKey: retired('retired-form-key'),
+            encrypted: true,
+            customHeaders: { 'X-Extra': retired('retired-form-header') },
+            encryptedHeaders: true,
+          },
+        ],
+      }),
+    );
+    fs.writeFileSync(
+      `${file}.bak`,
+      JSON.stringify({ models: [{ ...model, apiKey: 'readable-key', encrypted: false }] }),
+    );
+
+    for (let round = 0; round < 2; round++) {
+      expect((await request(app.port, generationRoute, {}, prompt)).status).toBe(200);
+      expect(app.calls.at(-1)?.authorization).toBe('Bearer retired-form-key');
+    }
+    const saved = JSON.parse(fs.readFileSync(file, 'utf8')).models[0];
+    expect(saved.apiKey).toMatch(/^local-gcm:/);
+    expect(saved.customHeaders['X-Extra']).toMatch(/^local-gcm:/);
+    expect(cryptoStore.decryptString(saved.customHeaders['X-Extra'])).toBe('retired-form-header');
+    expect(fs.existsSync(`${file}.bak`)).toBe(false);
   });
 });
 

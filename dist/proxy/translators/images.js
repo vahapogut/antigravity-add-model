@@ -1,14 +1,15 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.localFilePath = void 0;
 exports.hasImagePart = hasImagePart;
 exports.assertUserImageParts = assertUserImageParts;
 exports.omitUnsupportedToolImages = omitUnsupportedToolImages;
 exports.nestedFunctionResponseParts = nestedFunctionResponseParts;
-exports.localFilePath = localFilePath;
 exports.getImageSource = getImageSource;
 /** Image inputs shared by the OpenAI and Anthropic request translators. */
 const fs_1 = require("fs");
-const url_1 = require("url");
+const loopbackSecurity_1 = require("../loopbackSecurity");
+Object.defineProperty(exports, "localFilePath", { enumerable: true, get: function () { return loopbackSecurity_1.localFilePath; } });
 function isImageMimeType(mimeType) {
     return typeof mimeType === 'string' && /^image\//i.test(mimeType.trim());
 }
@@ -112,25 +113,6 @@ function imageBase64(data) {
     }
     return normalized;
 }
-/** Converting a file URL must never turn an attachment into a remote SMB read. */
-function localFilePath(url) {
-    const remoteFileError = 'Only local file URLs are supported; network shares are not allowed.';
-    if (url.protocol !== 'file:' ||
-        (url.hostname && url.hostname.toLowerCase() !== 'localhost') ||
-        /^[\\/]{2}/.test(url.pathname)) {
-        throw new Error(remoteFileError);
-    }
-    let localPath;
-    try {
-        localPath = (0, url_1.fileURLToPath)(url);
-    }
-    catch {
-        throw new Error('Invalid local attachment file URL.');
-    }
-    if (/^[\\/]{2}/.test(localPath))
-        throw new Error(remoteFileError);
-    return localPath;
-}
 /** Never fetch remote URLs here; the selected provider resolves them. */
 function getImageSource(part) {
     if (isImageMimeType(part.inlineData?.mimeType)) {
@@ -165,7 +147,7 @@ function getImageSource(part) {
     }
     if (url.protocol !== 'file:')
         throw new Error('Unsupported image URL. Use a file, HTTP, or HTTPS URL.');
-    const localPath = localFilePath(url);
+    const localPath = (0, loopbackSecurity_1.localFilePath)(url);
     let data;
     try {
         data = (0, fs_1.readFileSync)(localPath);

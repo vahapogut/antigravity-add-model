@@ -162,6 +162,51 @@ describe('verified IDE endpoint adapter', () => {
     expect(() => configureIde({ ...f, action: 'apply' })).toThrow('LAUNCHER_CHANGED');
     expect(fs.readFileSync(launcher, 'utf8')).toBe(edited);
   });
+  describe('IDE 2.6.0 launcher records', () => {
+    const sha = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
+    function applied() {
+      const f = hubEndpointFixture();
+      const launcher = path.join(f.app, 'extensions/agy/vscode/extension.js');
+      configureIde({ ...f, action: 'apply' });
+      const directory = `${f.settings}.antigravity-model-patch`;
+      const stateFile = path.join(directory, 'state.json');
+      const rewrite = (launcherRecord: unknown) =>
+        fs.writeFileSync(stateFile, JSON.stringify({ ...JSON.parse(fs.readFileSync(stateFile, 'utf8')), launcher: launcherRecord }));
+      return { f, launcher, patched: fs.readFileSync(launcher), saved: path.join(directory, 'launcher.original.js'), rewrite };
+    }
+    it('restores only the IDE launcher, whatever file its record names', () => {
+      const { f, launcher, patched, saved, rewrite } = applied();
+      const other = path.join(f.root, 'unrelated.js');
+      put(other, 'unrelated file');
+      fs.writeFileSync(saved, 'other contents');
+      rewrite({ path: other, originalHash: sha('other contents'), patchedHash: sha('unrelated file') });
+      expect(configureIde({ ...f, action: 'restore' }).launcherRestored).toBe(false);
+      expect(fs.readFileSync(other, 'utf8')).toBe('unrelated file');
+      expect(fs.readFileSync(launcher)).toEqual(patched);
+    });
+    it('restores the launcher only from the original it was patched from', () => {
+      const { f, launcher, patched, saved, rewrite } = applied();
+      fs.writeFileSync(saved, 'other contents');
+      rewrite({ path: launcher, originalHash: sha('other contents'), patchedHash: sha(patched) });
+      expect(configureIde({ ...f, action: 'restore' }).launcherRestored).toBe(false);
+      expect(fs.readFileSync(launcher)).toEqual(patched);
+    });
+    it('refuses to keep a patched launcher whose saved original no longer matches it', () => {
+      const { f, launcher, patched, saved } = applied();
+      fs.writeFileSync(saved, fs.readFileSync(saved, 'utf8') + '/* altered */');
+      expect(() => configureIde({ ...f, action: 'apply' })).toThrow('LAUNCHER_CHANGED');
+      expect(fs.readFileSync(launcher)).toEqual(patched);
+    });
+    it.each([['text'], [{ path: 5 }], [{ path: 'x', originalHash: 'not-a-hash', patchedHash: 'not-a-hash' }]])(
+      'rejects a malformed launcher record %j',
+      (record) => {
+        const { f, launcher, patched, rewrite } = applied();
+        rewrite(record);
+        expect(() => configureIde({ ...f, action: 'restore' })).toThrow('INVALID_STATE');
+        expect(fs.readFileSync(launcher)).toEqual(patched);
+      },
+    );
+  });
   it('passes the proxy to the IDE 2.6.0 hub environment on managed launch', async () => {
     const f = hubEndpointFixture();
     configureIde({ ...f, action: 'apply', port: 51123 });

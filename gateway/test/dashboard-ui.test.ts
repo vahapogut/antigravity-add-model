@@ -71,7 +71,11 @@ test('login redirect stays on the dashboard origin and tolerates malformed next 
   const login = fs.readFileSync(new URL('../dashboard/login.html', import.meta.url), 'utf8');
   const start = login.indexOf('const params =');
   const end = login.indexOf('const stored =', start);
-  for (const [next, expected] of [['javascript:alert(1)', '/'], ['//outside.invalid/', '/'], ['http://[', '/'], ['/models?view=custom', '/models?view=custom']]) {
+  for (const [next, expected] of [
+    ['javascript:alert(1)', '/'], ['//outside.invalid/', '/'], ['http://[', '/'], ['/models?view=custom', '/models?view=custom'],
+    // Dot segments are removed while parsing, which can leave a path that itself starts with two slashes.
+    ['/.//outside.invalid/', '/'], ['/%2e//outside.invalid/x', '/'], ['/a/..//outside.invalid', '/'],
+  ]) {
     const dom = new JSDOM('', { url: 'http://localhost/login.html?next=' + encodeURIComponent(next), runScripts: 'outside-only' });
     try {
       dom.window.eval(login.slice(start, end) + '\nwindow.redirectResult = nextUrl;');

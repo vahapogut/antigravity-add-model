@@ -242,6 +242,9 @@ function syncHubLauncher(info, names) {
   const backupName = path.join(names.directory, 'launcher.original.js');
   if (source.includes(HUB_CLOUD_CODE_MARKER)) {
     const backup = hubLauncherBackup(names);
+    if (!current.equals(hubInjection(backup, HUB_ENV_INJECTION))) {
+      fail('LAUNCHER_CHANGED', 'The IDE 2.6.0 launcher or its saved original was changed after patching. Repair or reinstall the IDE, then apply again.');
+    }
     return { launcher: { path: filename, originalHash: hash(backup), patchedHash: hash(current) }, launcherChanged: false };
   }
   if (source.includes(LEGACY_HUB_GATEWAY_MARKER)) {
@@ -267,13 +270,15 @@ function syncHubLauncher(info, names) {
   }
   return { launcher: { path: filename, originalHash: hash(current), patchedHash: hash(patched) }, launcherChanged: true };
 }
-function restoreHubLauncher(state, names) {
+function restoreHubLauncher(info, state, names) {
   if (!state?.launcher) return false;
-  const backupName = path.join(names.directory, 'launcher.original.js');
-  const backup = readBounded(backupName);
-  const current = readBounded(state.launcher.path);
+  // Only this installation's launcher is ever written, and only with the original it was patched from.
+  const filename = hubLauncherPath(info.app);
+  const backup = readBounded(path.join(names.directory, 'launcher.original.js'));
+  const current = readBounded(filename);
   if (!backup || !current || hash(backup) !== state.launcher.originalHash || hash(current) !== state.launcher.patchedHash) return false;
-  atomic(state.launcher.path, backup);
+  if (![HUB_ENV_INJECTION, LEGACY_HUB_ENV_INJECTION].some(injection => current.equals(hubInjection(backup, injection)))) return false;
+  atomic(filename, backup);
   return true;
 }
 export function inspectIde(options = {}) {
@@ -347,6 +352,8 @@ function loadState(info) {
       !['prepared', 'active', 'restored'].includes(state.status) || typeof state.originalExists !== 'boolean' ||
       !HASH.test(state.originalHash) || !HASH.test(state.patchedHash) || !Number.isInteger(state.port) ||
       state.endpoint !== proxyEndpoint({ port: state.port })) fail('INVALID_STATE', 'Invalid IDE patch manifest.');
+  if (state.launcher !== undefined && (state.launcher === null || typeof state.launcher !== 'object' || typeof state.launcher.path !== 'string' ||
+      !HASH.test(state.launcher.originalHash) || !HASH.test(state.launcher.patchedHash))) fail('INVALID_STATE', 'Invalid IDE patch manifest.');
   const backup = read(names.backup);
   if (!backup || hash(backup) !== state.originalHash) fail('BACKUP_INVALID', 'Original IDE settings backup is missing or changed.');
   parseSettings(backup.toString('utf8'));
@@ -398,7 +405,7 @@ export function configureIde(options = {}) {
       const original = state.backup;
       const unchangedOriginal = (state.originalExists ? now.bytes && hash(now.bytes) === state.originalHash : now.bytes === null);
       if (state.status === 'prepared' && unchangedOriginal) {
-        const launcherRestored = restoreHubLauncher(state, names);
+        const launcherRestored = restoreHubLauncher(info, state, names);
         atomic(names.state, stateBytes({ ...state, status: 'restored' }));
         return { ...summary, applied: false, status: 'restored', launcherRestored };
       }
@@ -411,7 +418,7 @@ export function configureIde(options = {}) {
       if (exact && !state.originalExists) fs.unlinkSync(info.settings);
       else atomic(info.settings, restored);
       atomic(names.state, stateBytes({ ...state, status: 'restored' }));
-      return { ...summary, applied: false, status: 'restored', preservedOtherEdits: !exact, launcherRestored: restoreHubLauncher(state, names) };
+      return { ...summary, applied: false, status: 'restored', preservedOtherEdits: !exact, launcherRestored: restoreHubLauncher(info, state, names) };
     }
     if (state && state.status !== 'restored') {
       if (state.endpoint !== endpoint) fail('SETTINGS_CONFLICT', 'Restore the existing IDE adapter before choosing another proxy port.');
@@ -439,7 +446,7 @@ export function configureIde(options = {}) {
       atomic(info.settings, patched);
       atomic(names.state, stateBytes({ ...manifest, status: 'active' }));
     } catch (error) {
-      if (launcherChanged) restoreHubLauncher(manifest, names);
+      if (launcherChanged) restoreHubLauncher(info, manifest, names);
       throw error;
     }
     return { ...summary, applied: true, status: 'configured', launcherPatched: Boolean(launcher.launcher) };

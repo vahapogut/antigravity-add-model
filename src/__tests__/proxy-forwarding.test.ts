@@ -101,6 +101,7 @@ async function fixture(
     './cryptoStore': {
       decryptModels: (models: unknown) => JSON.parse(JSON.stringify(models)),
       decryptString: (value: string) => value,
+      removePlaintextBackup: () => false,
     },
     './proxy/loopbackSecurity': loopbackSecurity,
     './proxy/listen': {
