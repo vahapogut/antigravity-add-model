@@ -17,6 +17,7 @@ import * as modelUtils from '../proxy/modelUtils';
 import * as modelCatalog from '../proxy/modelCatalog';
 import * as modelIdentity from '../modelIdentity';
 import * as customRequest from '../proxy/customRequest';
+import * as openaiRoutes from '../proxy/openaiRoutes';
 import * as modelStore from '../modelStore';
 import * as schemaValidator from '../schemaValidator';
 import { listenProxy } from '../proxy/listen';
@@ -83,6 +84,7 @@ async function fixture(models: CustomModel[]) {
     './proxy/cloudCodeRouting': {},
     './modelIdentity': modelIdentity,
     './proxy/customRequest': customRequest,
+    './proxy/openaiRoutes': openaiRoutes,
     './modelStore': modelStore,
     './schemaValidator': schemaValidator,
     './cryptoStore': { decryptModels: (value: unknown) => value, removePlaintextBackup: () => false },

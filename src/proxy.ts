@@ -150,6 +150,7 @@ import {
 } from './proxy/loopbackSecurity';
 import { forwardNativeGeneration, NativeSubagentRouting } from './proxy/nativeSubagentResponse';
 import { attemptGooglePoolFailover, resolveGoogleFailoverPool } from './proxy/googlePoolFailover';
+import { handleChatCompletions, handleOpenAIModels, type OpenAIRouteDeps } from './proxy/openaiRoutes';
 
 let languageServerPortResolver: (() => number | undefined) | undefined;
 let languageServerRoutingEnabled = false;
@@ -1201,6 +1202,14 @@ function handleGetAvailableModelsProxy(res: http.ServerResponse, reqBody: Buffer
 
 // ─── Main Request Handler ─────────────────────────────────────────────────
 
+// Wrappers resolve the bindings at call time, so module load order does not matter.
+const openAIRouteDeps: OpenAIRouteDeps = {
+  loadModels: () => loadCustomModels(),
+  matchModel: (models, selector) => matchCustomModel(models, selector),
+  runModel: (res, model, body, isStream, allModels, cloudEnvelope) =>
+    runCustomModelRequest(res, model, body, isStream, allModels, cloudEnvelope),
+};
+
 function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): void {
   let requestUrl: URL;
   try {
@@ -1294,6 +1303,17 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
       return;
     }
 
+    // 0a. OpenAI-compatible routes. Matched on the parsed pathname (query strings ignored) and
+    // evaluated before the generic /models list and the Gemini / Cloud Code generation intercepts.
+    if (req.method === 'GET' && requestUrl.pathname === '/v1/models') {
+      handleOpenAIModels(res, openAIRouteDeps);
+      return;
+    }
+    if (req.method === 'POST' && requestUrl.pathname === '/v1/chat/completions') {
+      handleChatCompletions(req, res, bodyStr, openAIRouteDeps);
+      return;
+    }
+
     // 1. Intercept /v1internal:fetchAvailableModels
     if (req.url!.includes('/v1internal:fetchAvailableModels')) {
       log.info('[Proxy] Intercepting fetchAvailableModels request');
@@ -1318,7 +1338,7 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
       return;
     }
 
-    // 2. Intercept /v1beta/models or /v1/models list request
+    // 2. Intercept /v1beta/models (and other non-/v1/models) list requests
     if (req.method === 'GET' && (req.url!.endsWith('/models') || req.url!.includes('/models?'))) {
       log.info('[Proxy] Intercepting models list request');
 

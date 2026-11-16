@@ -14,6 +14,7 @@ import * as modelUtils from '../proxy/modelUtils';
 import * as modelCatalog from '../proxy/modelCatalog';
 import * as modelIdentity from '../modelIdentity';
 import * as customRequest from '../proxy/customRequest';
+import * as openaiRoutes from '../proxy/openaiRoutes';
 import * as modelStore from '../modelStore';
 import * as cryptoStore from '../cryptoStore';
 import * as schemaValidator from '../schemaValidator';
@@ -117,6 +118,7 @@ async function fixture(options: ProxyStartOptions = {}, overrides: Record<string
     './proxy/modelCatalog': modelCatalog,
     './modelIdentity': modelIdentity,
     './proxy/customRequest': customRequest,
+    './proxy/openaiRoutes': openaiRoutes,
     './modelStore': modelStore,
     './schemaValidator': schemaValidator,
     './cryptoStore': { decryptModels: (models: unknown) => models, removePlaintextBackup: () => false },

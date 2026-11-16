@@ -31,6 +31,7 @@ const dependencies: Record<string, unknown> = {
   './proxy/googlePoolFailover': googlePoolFailover,
     './proxy/nativeSubagentResponse': {},
   './proxy/customRequest': { stopCustomRequests: vi.fn() },
+  './proxy/openaiRoutes': {},
   './proxy/subagentRouting': { subagentRouting: { clear: vi.fn() } },
   './modelStore': {},
   './cryptoStore': {},

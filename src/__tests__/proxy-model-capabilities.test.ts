@@ -15,6 +15,7 @@ import { detectModelCapabilities, nativeCatalogCapabilities, nativeModelExperime
 import { validateCustomModel } from '../schemaValidator';
 import * as modelCatalog from '../proxy/modelCatalog';
 import { runCustomModelRequest } from '../proxy/customRequest';
+import * as openaiRoutes from '../proxy/openaiRoutes';
 import { stopCleanupInterval } from '../proxy/shared';
 import { allocateModelIdentities, IdentityModel } from '../modelIdentity';
 
@@ -105,6 +106,7 @@ function requestModels(
         allocateModelIdentities(identityDirectory, models, upstream),
     },
     './proxy/customRequest': { runCustomModelRequest },
+    './proxy/openaiRoutes': openaiRoutes,
     './modelStore': { readModelConfig: () => models },
     './cryptoStore': { decryptModels: (value: unknown) => value, removePlaintextBackup: () => false },
     './schemaValidator': { validateCustomModel },
