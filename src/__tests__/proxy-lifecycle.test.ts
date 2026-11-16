@@ -103,6 +103,7 @@ function fixture(fixed = true) {
     './proxy/cloudCodeRouting': {},
     './modelIdentity': {},
     './proxy/customRequest': { stopCustomRequests: vi.fn(), getProxyMetrics: () => ({ requests: 0 }) },
+    './proxy/openaiRoutes': {},
     './modelStore': {},
     './cryptoStore': {},
     // These are the production marker parser and listener, with only the socket mocked.

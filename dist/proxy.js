@@ -96,6 +96,7 @@ const subagentModels_1 = require("./proxy/subagentModels");
 const loopbackSecurity_1 = require("./proxy/loopbackSecurity");
 const nativeSubagentResponse_1 = require("./proxy/nativeSubagentResponse");
 const googlePoolFailover_1 = require("./proxy/googlePoolFailover");
+const openaiRoutes_1 = require("./proxy/openaiRoutes");
 let languageServerPortResolver;
 let languageServerRoutingEnabled = false;
 /** Registered by the desktop with its own live language-server port getter. */
@@ -1026,6 +1027,12 @@ function handleGetAvailableModelsProxy(res, reqBody, lsUrl) {
     lsReq.end();
 }
 // ─── Main Request Handler ─────────────────────────────────────────────────
+// Wrappers resolve the bindings at call time, so module load order does not matter.
+const openAIRouteDeps = {
+    loadModels: () => loadCustomModels(),
+    matchModel: (models, selector) => matchCustomModel(models, selector),
+    runModel: (res, model, body, isStream, allModels, cloudEnvelope) => (0, customRequest_1.runCustomModelRequest)(res, model, body, isStream, allModels, cloudEnvelope),
+};
 function handleRequest(req, res) {
     let requestUrl;
     try {
@@ -1110,6 +1117,16 @@ function handleRequest(req, res) {
             res.end(JSON.stringify({ error: 'Missing ls parameter' }));
             return;
         }
+        // 0a. OpenAI-compatible routes. Matched on the parsed pathname (query strings ignored) and
+        // evaluated before the generic /models list and the Gemini / Cloud Code generation intercepts.
+        if (req.method === 'GET' && requestUrl.pathname === '/v1/models') {
+            (0, openaiRoutes_1.handleOpenAIModels)(res, openAIRouteDeps);
+            return;
+        }
+        if (req.method === 'POST' && requestUrl.pathname === '/v1/chat/completions') {
+            (0, openaiRoutes_1.handleChatCompletions)(req, res, bodyStr, openAIRouteDeps);
+            return;
+        }
         // 1. Intercept /v1internal:fetchAvailableModels
         if (req.url.includes('/v1internal:fetchAvailableModels')) {
             electron_log_1.default.info('[Proxy] Intercepting fetchAvailableModels request');
@@ -1134,7 +1151,7 @@ function handleRequest(req, res) {
             });
             return;
         }
-        // 2. Intercept /v1beta/models or /v1/models list request
+        // 2. Intercept /v1beta/models (and other non-/v1/models) list requests
         if (req.method === 'GET' && (req.url.endsWith('/models') || req.url.includes('/models?'))) {
             electron_log_1.default.info('[Proxy] Intercepting models list request');
             const targetUrl = 'https://generativelanguage.googleapis.com';

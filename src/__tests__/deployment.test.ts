@@ -97,7 +97,7 @@ describe('standalone deployment with real ASAR fixtures', () => {
       const contents = fs.readFileSync(filename, 'utf8');
       for (const match of contents.matchAll(/require\(["'](\.[^"']+)["']\)/g)) {
         let dependency = path.posix.normalize(path.posix.join(path.posix.dirname(file), match[1]));
-        if (!dependency.endsWith('.js')) dependency += '.js';
+        if (!/\.(c|m)?js$/.test(dependency)) dependency += '.js';
         expect(packaged.has(dependency), `${file} requires missing addon module ${dependency}`).toBe(true);
       }
     }

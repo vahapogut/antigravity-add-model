@@ -2,6 +2,14 @@
 
 Release history preserved from the project README. Historical entries describe the behavior of their release; see [compatibility and recovery](docs/compatibility.md) for current installation guidance.
 
+### Unreleased — OpenAI-compatible endpoint and request normalization
+
+- The local proxy now answers `GET /v1/models` in the OpenAI list format and `POST /v1/chat/completions` for saved custom models, so OpenAI-compatible tools can use the same models outside the IDE. Each model is listed by its name without `models/`, plus its external model name when different, with `context_window` and `max_output_tokens` when the model catalog knows them. `GET /v1beta/models` keeps the Gemini format. Bad requests return 400, an unknown model returns 404 `model_not_found`, and an error after a stream has started is sent as one error event followed by `[DONE]`. Image input, `top_p` and `stop` are not forwarded yet.
+- Streamed chat sends a `: keep-alive` comment every 3 seconds until the first token. For Antigravity clients, reasoning is shown as a `<think>...</think>` block inside the content, and an unclosed block is closed when the stream ends. Send `x-omninorm-raw-reasoning: true` to receive `reasoning_content` unchanged. This header now also works when the user agent is Antigravity.
+- New `src/norm/` modules resolve model limits from the models.dev and OpenRouter catalogs, clean outbound OpenAI payloads (token limits, old reasoning, images for text-only models, fields strict providers reject), and keep the IDE settings pointed at the proxy. A catalog entry only overrides a model's capabilities when the catalog actually knows that model, so unknown models keep the existing provider and name rules.
+- `proxy:start` repairs the IDE endpoint setting on startup with the bound port. A failed repair is logged as `[OmniNorm] IDE auto-patch skipped` or `failed` and never stops the service. Set `ANTIGRAVITY_IDE_AUTOPATCH=0` to turn it off.
+- `npm run build` and `npm run dev` copy `src/norm/*.mjs` to `dist/norm/`, and the addon deployment includes them. `scripts/ide.mjs` no longer uses top-level `await`, so the built service can load it with `require()`.
+
 ### Unreleased — Local hardening
 
 - Text attachments are resolved with the same local file URL check as the request translators. File URLs that name another host are rejected in both places.

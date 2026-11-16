@@ -15,6 +15,7 @@ import * as modelCatalog from '../proxy/modelCatalog';
 import * as modelIdentity from '../modelIdentity';
 import * as modelUtils from '../proxy/modelUtils';
 import * as customRequest from '../proxy/customRequest';
+import * as openaiRoutes from '../proxy/openaiRoutes';
 import * as shared from '../proxy/shared';
 import * as subagentRouting from '../proxy/subagentRouting';
 import * as subagentModels from '../proxy/subagentModels';
@@ -96,6 +97,7 @@ async function fixture(models: CustomModel[], fallback: string) {
     './proxy/googlePoolFailover': googlePoolFailover,
     './proxy/nativeSubagentResponse': nativeSubagentResponse,
     './proxy/customRequest': customRequest,
+    './proxy/openaiRoutes': openaiRoutes,
     './modelStore': { readModelConfig: () => models.map((model) => ({ ...model })) },
     './schemaValidator': { validateCustomModel },
     './cryptoStore': { decryptModels: (values: CustomModel[]) => values, removePlaintextBackup: () => false },

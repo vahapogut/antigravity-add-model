@@ -1,0 +1,20 @@
+declare module '*.mjs' {
+  export const defaultCatalogResolver: any;
+  export const CatalogResolver: any;
+  export const resolveModelSpec: any;
+  export const normalizeModelSlug: any;
+  export const DEFAULT_CACHE_PATH: string;
+  export const defaultRequestMutator: any;
+  export const RequestMutator: any;
+  export const mutateRequestPayload: any;
+  export const IMAGE_OMITTED_PLACEHOLDER: string;
+  export const StreamTransformer: any;
+  export const startSseHeartbeat: any;
+  export const isAntigravityChatClient: any;
+  export const DEFAULT_HEARTBEAT_INTERVAL_MS: number;
+  export const KEEP_ALIVE_COMMENT: string;
+  export const IdeAutoPatcher: any;
+  export const defaultIdeAutoPatcher: any;
+  export const ensureIdePatched: any;
+  export const getCandidateProductPaths: any;
+}

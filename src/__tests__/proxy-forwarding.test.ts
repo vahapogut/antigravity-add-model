@@ -16,6 +16,7 @@ import { CloudCodeRouting } from '../proxy/cloudCodeRouting';
 import * as modelCatalog from '../proxy/modelCatalog';
 import * as modelIdentity from '../modelIdentity';
 import * as customRequest from '../proxy/customRequest';
+import * as openaiRoutes from '../proxy/openaiRoutes';
 import type { ProxyStartOptions } from '../proxy';
 import { clearOfficialQuota, getOfficialQuota, recordOfficialQuota } from '../proxy/shared';
 
@@ -96,6 +97,7 @@ async function fixture(
       },
     },
     './proxy/customRequest': customRequest,
+    './proxy/openaiRoutes': openaiRoutes,
     './modelStore': { readModelConfig: () => models },
     './schemaValidator': { validateCustomModel: () => ({ valid: true }) },
     './cryptoStore': {

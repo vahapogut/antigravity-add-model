@@ -50,7 +50,11 @@ describe('owned Node proxy and management HTTP', () => {
   let upstreamPort: number;
   const upstreamCalls: { body: unknown; authorization?: string; path?: string }[] = [];
   const apiKey = 'integration-key-never-return-in-ui';
+  // The spawned service inherits process.env (spawn/execFile pass no `env`), so this keeps
+  // startup from running the IDE auto-patch against the developer's real IDE installation.
+  const previousAutoPatch = process.env.ANTIGRAVITY_IDE_AUTOPATCH;
   beforeAll(async () => {
+    process.env.ANTIGRAVITY_IDE_AUTOPATCH = '0';
     const server = http.createServer(async (req, res) => {
       let body = ''; for await (const chunk of req) body += chunk;
       upstreamCalls.push({ body: body ? JSON.parse(body) : null, authorization: req.headers.authorization, path: req.url });
@@ -73,6 +77,8 @@ describe('owned Node proxy and management HTTP', () => {
         expect(path.basename(root)).toMatch(/^agy-owned-service-/);
         fs.rmSync(root, { recursive: true, force: true });
       }
+      if (previousAutoPatch === undefined) delete process.env.ANTIGRAVITY_IDE_AUTOPATCH;
+      else process.env.ANTIGRAVITY_IDE_AUTOPATCH = previousAutoPatch;
     }
   });
   const rpc = async (channel: string, args: unknown[] = []) => {

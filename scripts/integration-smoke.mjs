@@ -5,8 +5,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
+import net from 'node:net';
 import Module, { createRequire } from 'node:module';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 
@@ -20,6 +21,84 @@ let proxy;
 let output = '';
 let calls = 0;
 const originalLoad = Module._load;
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const MODULE_LOAD_ERRORS = /ERR_REQUIRE_ASYNC_MODULE|ERR_MODULE_NOT_FOUND/;
+
+/** R2.2, R2.5: the compiled CommonJS proxy and the auto-patcher load with plain require(). */
+function checkNormModulesLoad() {
+  const targets = ['dist/proxy/customRequest.js', 'dist/proxy/modelUtils.js', 'dist/norm/ideAutoPatcher.mjs']
+    .map(file => path.join(root, file));
+  const script = `for (const file of ${JSON.stringify(targets)}) require(file);`;
+  const result = spawnSync(process.execPath, ['-e', script], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 30000 });
+  const text = `${result.stdout}${result.stderr}`;
+  assert.equal(result.status, 0, `require() of the built OmniNorm modules failed:\n${text}`);
+  assert.doesNotMatch(text, MODULE_LOAD_ERRORS);
+}
+
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address();
+      server.close(() => resolve(port));
+    });
+  });
+}
+
+function canConnect(port) {
+  return new Promise(resolve => {
+    const socket = net.connect({ host: '127.0.0.1', port });
+    const done = ok => { socket.destroy(); resolve(ok); };
+    socket.once('connect', () => done(true));
+    socket.once('error', () => done(false));
+    socket.setTimeout(500, () => done(false));
+  });
+}
+
+async function stopChild(processHandle) {
+  if (!processHandle || processHandle.exitCode !== null || processHandle.signalCode !== null) return;
+  const exited = new Promise(resolve => processHandle.once('exit', resolve));
+  processHandle.kill('SIGTERM'); // TerminateProcess on Windows, a graceful signal elsewhere.
+  await Promise.race([exited, sleep(3000)]);
+  if (processHandle.exitCode === null && processHandle.signalCode === null) {
+    processHandle.kill('SIGKILL');
+    await Promise.race([exited, sleep(3000)]);
+  }
+}
+
+/** R2.1: the built standalone service accepts TCP connections within 10 s without module loading errors. */
+async function checkStandaloneServiceStarts() {
+  const port = await freePort();
+  const dataDirectory = path.join(temporary, 'service-data');
+  const serviceHome = path.join(temporary, 'service-home');
+  fs.mkdirSync(dataDirectory, { recursive: true });
+  fs.mkdirSync(serviceHome, { recursive: true });
+  let serviceOutput = '';
+  const service = spawn(process.execPath, [path.join(root, 'scripts/desktop-service.mjs'), 'run', '--port', String(port), '--data-dir', dataDirectory], {
+    cwd: root,
+    env: { ...process.env, ANTIGRAVITY_IDE_AUTOPATCH: '0', HOME: serviceHome, USERPROFILE: serviceHome },
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  service.stdout.on('data', chunk => { serviceOutput += chunk; });
+  service.stderr.on('data', chunk => { serviceOutput += chunk; });
+  try {
+    const deadline = Date.now() + 10000;
+    let connected = false;
+    while (!connected && Date.now() < deadline) {
+      if (service.exitCode !== null) throw new Error(`Standalone service exited (${service.exitCode}) during startup:\n${serviceOutput}`);
+      connected = await canConnect(port);
+      if (!connected) await sleep(100);
+    }
+    assert.ok(connected, `Standalone service did not accept a TCP connection on 127.0.0.1:${port} within 10 s:\n${serviceOutput}`);
+    assert.doesNotMatch(serviceOutput, MODULE_LOAD_ERRORS, serviceOutput);
+  } finally {
+    await stopChild(service);
+  }
+  assert.doesNotMatch(serviceOutput, MODULE_LOAD_ERRORS, serviceOutput);
+}
+
 const provider = http.createServer(async (req, res) => {
   assert.equal(req.headers.authorization, 'Bearer fixture-provider-key');
   if (req.url === '/v1/models') { res.end(JSON.stringify({ data: [{ id: 'mock-model' }] })); return; }
@@ -36,6 +115,9 @@ const provider = http.createServer(async (req, res) => {
 });
 
 try {
+  checkNormModulesLoad();
+  await checkStandaloneServiceStarts();
+  console.log('PASS: built OmniNorm modules load with require() and the standalone service accepts TCP connections without module loading errors.');
   await new Promise(resolve => provider.listen(0, '127.0.0.1', resolve));
   fs.mkdirSync(gatewayData, { recursive: true });
   const settings = {

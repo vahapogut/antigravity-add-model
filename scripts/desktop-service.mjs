@@ -221,6 +221,8 @@ export async function serviceCommand(options, hooks = {}) {
       };
       const running = await startStandaloneService({
         ...options,
+        // ANTIGRAVITY_IDE_AUTOPATCH=0 disables the startup IDE auto-patch (tests, CI smoke checks).
+        ...(process.env.ANTIGRAVITY_IDE_AUTOPATCH === '0' ? { ideAutoPatch: false } : {}),
         token: state.token,
         instance: state.instance,
         onStop: () => {
