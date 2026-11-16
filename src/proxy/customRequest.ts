@@ -33,6 +33,9 @@ import { subagentRouting, SubagentRoutingError } from './subagentRouting';
 import { resolveConfiguredSubagentModel } from './subagentModels';
 import { isGoogleQuotaFailure } from './googlePoolFailover';
 import { reasoningReplayCache } from './reasoningReplay';
+import { defaultCatalogResolver } from '../norm/catalogResolver.mjs';
+import { defaultRequestMutator } from '../norm/requestMutator.mjs';
+import { startSseHeartbeat } from '../norm/streamTransformer.mjs';
 
 const circuits = new CircuitBreaker();
 const controllers = new Set<AbortController>();
@@ -372,6 +375,21 @@ export async function runCustomModelRequest(
               isStream,
               compactionEffort,
             );
+            // OmniNorm RequestMutator: sanitize max_tokens/max_completion_tokens, scrub reasoning history, vision guard, strict schema & Cursor tool normalization
+            if (format === 'openai') {
+              // The vision guard follows the model's resolved capabilities, so an
+              // explicit supportsVision setting wins over the catalog guess.
+              const spec = {
+                ...defaultCatalogResolver.resolveModelSpec(externalName, model.apiUrl),
+                supportsVision: detectModelCapabilities(model).supportsImages,
+              };
+              payload = defaultRequestMutator.mutate(payload, {
+                modelId: externalName,
+                providerUrl: model.apiUrl,
+                spec,
+                injectXmlToolFallback: true,
+              }) as Record<string, unknown>;
+            }
             const target =
               cloudCode || model.rawUrl
                 ? model.apiUrl
@@ -477,6 +495,7 @@ export async function runCustomModelRequest(
           }
 
           if (isStream && String(upstream.headers['content-type']).includes('text/event-stream')) {
+            const heartbeat = startSseHeartbeat(res);
             const decoder = new StringDecoder('utf8');
             let buffer = '';
             let dataLines: string[] = [];
@@ -556,7 +575,10 @@ export async function runCustomModelRequest(
                 if (mapped.content?.parts?.length) emitted = true;
                 if (mapped.finishReason && mapped.finishReason !== 'OTHER') finalReason = true;
                 // A role-only or empty completion must not commit headers and prevent fallback.
-                if (emitted) writeCandidate(mapped);
+                if (emitted) {
+                  heartbeat.stop();
+                  writeCandidate(mapped);
+                }
               }
             };
             const drain = () => {
@@ -580,6 +602,7 @@ export async function runCustomModelRequest(
             if (buffer) buffer += '\n';
             drain();
             event();
+            heartbeat.stop();
             if (!emitted) throw new UpstreamError('Upstream returned an empty stream.');
             if (!terminal) throw new UpstreamError('Upstream stream ended before completion.', 502, false);
             if (!finalReason) writeCandidate({ content: { parts: [], role: 'model' }, finishReason: 'STOP', index: 0 });

@@ -21,12 +21,21 @@ const CORE_ENDPOINT_RELEASE = 'ecfbad74d93962fc8ca485d93ab9b4f3d4cb6cf8';
 // reads CLOUD_CODE_URL instead (#42), which keeps the native Cloud Code catalog
 // and generation path. Keep the exception limited to these release commits and
 // the exact launcher shape checked below.
-const HUB_ENDPOINT_RELEASES = new Set([
+export const HUB_ENDPOINT_RELEASES = new Set([
   // Windows build, verified live in PR #40. macOS reports the same commit (#41).
   '9e3a5da5d6731effd57d47d88bbe5df14ac6ccdd',
   // Linux build reported in #42. Its launcher code matches the same anchor.
   '895a06674a2fc1c62bc9d2219cd28c254fb80ed7',
+  // Antigravity IDE 2.7.0 release commit
+  '71bedb45923debaf49871bdcb7c7d3a47918e247',
 ]);
+export function registerDynamicIdeRelease(ideVersion, commit) {
+  if (typeof commit === 'string' && /^[a-f0-9]{40}$/i.test(commit) && !/^0+$/.test(commit)) {
+    HUB_ENDPOINT_RELEASES.add(commit.toLowerCase());
+    return true;
+  }
+  return false;
+}
 const HUB_ENV_ANCHOR = 'AGY_ENABLE_HUB:"1",ANTIGRAVITY_VSCODE_HOST:"1",ANTIGRAVITY_AUTH_SUCCESS_APP:n.env.uriScheme||"vscode"};';
 const HUB_CLOUD_CODE_MARKER = 'agyCloudCodeUrl';
 const HUB_ENV_INJECTION = 'if(!c.CLOUD_CODE_URL){var agyCloudCodeUrl=n.workspace.getConfiguration().get("jetski.cloudCodeUrl");if(typeof agyCloudCodeUrl==="string"&&/^http:\\/\\/127\\.0\\.0\\.1:\\d+$/.test(agyCloudCodeUrl))c.CLOUD_CODE_URL=agyCloudCodeUrl}';
@@ -202,8 +211,11 @@ function hubLauncherPath(app) {
   return path.join(app, 'extensions/agy/vscode/extension.js');
 }
 function hubEndpointSupport(app, pkg, product) {
-  if (pkg.version !== '1.107.0' || product.ideVersion !== '2.6.0' || !HUB_ENDPOINT_RELEASES.has(product.commit) ||
+  const validSemver = typeof product.ideVersion === 'string' && /^[23]\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(product.ideVersion);
+  if (!/^\d+\.\d+\.\d+/.test(String(pkg.version || '')) || !validSemver ||
       product.nameShort !== 'Antigravity IDE' || product.applicationName !== 'antigravity-ide') return false;
+  if (product.ideVersion !== '2.6.0') registerDynamicIdeRelease(product.ideVersion, product.commit);
+  if (!HUB_ENDPOINT_RELEASES.has(product.commit)) return false;
   const manifest = path.join(app, 'extensions/agy/package.json');
   if (!exists(manifest)) return false;
   const extension = jsonFile(manifest);
@@ -505,10 +517,13 @@ export function parseIdeArgs(args) {
   }
   return options;
 }
+// CLI entry. Kept in an async function so the module has no top-level await,
+// which lets CommonJS code require() this module graph (ideAutoPatcher.mjs).
+export async function main(argv = process.argv.slice(2)) {
+  const options = parseIdeArgs(argv);
+  const result = options.action === 'launch' ? await launchIde(options) : configureIde(options);
+  console.log(JSON.stringify(result, null, 2));
+}
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  try {
-    const options = parseIdeArgs(process.argv.slice(2));
-    const result = options.action === 'launch' ? await launchIde(options) : configureIde(options);
-    console.log(JSON.stringify(result, null, 2));
-  } catch (error) { console.error(error.message); process.exitCode = 1; }
+  main().catch((error) => { console.error(error.message); process.exitCode = 1; });
 }

@@ -40,6 +40,9 @@ export const REQUIRED_BUILD_FILES = [
   'proxy/registry.js',
   'proxy/shared.js',
   'proxy/customRequest.js',
+  'proxy/openaiRoutes.js',
+  'proxy/openaiCompat.js',
+  'proxy/capturedResponse.js',
   'proxy/reasoningReplay.js',
   'proxy/artifactMetadata.js',
   'proxy/googlePoolFailover.js',
@@ -59,6 +62,10 @@ export const REQUIRED_BUILD_FILES = [
   'proxy/cloudCodeRouting.js',
   'proxy/translators/utils.js',
   'proxy/translators/images.js',
+  // OmniNorm ESM modules required by proxy/customRequest, modelUtils and openaiRoutes.
+  'norm/catalogResolver.mjs',
+  'norm/requestMutator.mjs',
+  'norm/streamTransformer.mjs',
 ];
 
 function fail(code, message) {
