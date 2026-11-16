@@ -9,6 +9,7 @@ import { createModelManager } from './modelManagement';
 import { createModelActions } from './modelActions';
 import { startProxy, stopProxy, loadCustomModels } from './proxy';
 import { createModelDelegation } from './modelDelegation';
+import { runIdeAutoPatch, type IdeAutoPatchFn } from './ideAutoPatch';
 
 export interface ServiceOptions {
   port: number;
@@ -16,6 +17,12 @@ export interface ServiceOptions {
   token: string;
   instance: string;
   onStop?: () => void;
+  /**
+   * Startup IDE auto-patch step, run once after the proxy is listening.
+   * `false` disables it; a function replaces OmniNorm's `ensurePatched({ port })`;
+   * omitted uses the default patcher. Failures only log a warning.
+   */
+  ideAutoPatch?: false | IdeAutoPatchFn;
 }
 
 function equalSecret(actual: unknown, expected: string): boolean {
@@ -199,5 +206,7 @@ export async function startStandaloneService(
     shutdownGraceMs: 1500,
     ideCloudCodeRouting: true,
   });
+  // Runs only after startProxy resolves (a rejection skips it); never throws.
+  await runIdeAutoPatch(options.ideAutoPatch, port);
   return { port, stop };
 }
