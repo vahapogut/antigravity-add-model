@@ -66,6 +66,11 @@ The default loopback port is **50999**. To change it, supply `--port 51001` to
 changing an already managed endpoint. A busy port is an error, never a silent
 fallback to a different port.
 
+On start, the service also checks the IDE endpoint setting and repairs it for
+the bound port, for example after an IDE update. A failed check is logged as
+`[OmniNorm] IDE auto-patch skipped` or `failed` and does not stop the service.
+Set `ANTIGRAVITY_IDE_AUTOPATCH=0` before `proxy:start` to turn this off.
+
 Optional arguments:
 
 | Argument | Purpose |
@@ -246,6 +251,36 @@ Restore checks the managed entry and backup integrity, restores the original
 file when unchanged, and preserves unrelated later edits. Backups live in the
 adjacent `mcp_config.json.antigravity-custom-models` directory. A manual change to
 the managed entry is reported as a conflict rather than overwritten.
+
+## OpenAI-compatible endpoint
+
+The running proxy also serves your saved custom models to OpenAI-compatible
+tools on the same port:
+
+```sh
+curl http://127.0.0.1:50999/v1/models
+curl http://127.0.0.1:50999/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-4o","messages":[{"role":"user","content":"Hello"}],"stream":true}'
+```
+
+`/v1/models` lists each model by its name without the `models/` prefix, plus
+its external model name when that differs. Either id works as `model` in a
+chat request. Requests go through the same provider routing, retries and
+fallbacks as IDE requests. Text messages, tool calls, tool results, `tools`,
+`max_tokens`/`max_completion_tokens` and `temperature` are supported. Image
+parts are dropped, and `top_p` and `stop` are not forwarded to providers yet.
+
+Streamed replies send a `: keep-alive` comment every 3 seconds until the first
+token. For Antigravity clients, reasoning arrives as a `<think>...</think>`
+block inside `delta.content`; send `x-omninorm-raw-reasoning: true` to receive
+`delta.reasoning_content` instead. Errors use the OpenAI error format: 400 for a
+malformed request, 404 `model_not_found` for an unknown model, and the
+provider's status for an upstream failure before any output.
+
+The endpoint has no API key. Like the rest of the proxy it only listens on
+loopback and refuses browser pages from other origins, but any local program
+can use it.
 
 ## Status and recovery
 

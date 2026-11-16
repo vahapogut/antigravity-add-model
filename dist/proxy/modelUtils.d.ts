@@ -1,5 +1,5 @@
 /**
- * Centralized model capability detection.
+ * Centralized model capability detection with OmniNorm CatalogResolver integration.
  * Replaces ~9 duplicate regex blocks across proxy.js.
  */
 export interface CustomModelConfig {
@@ -7,6 +7,7 @@ export interface CustomModelConfig {
     provider: string;
     externalModelName?: string;
     displayName?: string;
+    apiUrl?: string;
     contextWindow?: number;
     maxOutputTokens?: number;
     supportsVision?: boolean;
@@ -54,7 +55,7 @@ export declare function nativeModelExperiments(model: CustomModelConfig): {
  */
 export declare function nativeCatalogCapabilities(model: CustomModelConfig): ModelCapabilities;
 /**
- * Detects model capabilities from a custom model config object.
+ * Detects model capabilities from a custom model config object using OmniNorm CatalogResolver.
  */
 export declare function detectModelCapabilities(m: CustomModelConfig, includeDisplayName?: boolean): ModelCapabilities;
 /**

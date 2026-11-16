@@ -58,6 +58,9 @@ const subagentRouting_1 = require("./subagentRouting");
 const subagentModels_1 = require("./subagentModels");
 const googlePoolFailover_1 = require("./googlePoolFailover");
 const reasoningReplay_1 = require("./reasoningReplay");
+const catalogResolver_mjs_1 = require("../norm/catalogResolver.mjs");
+const requestMutator_mjs_1 = require("../norm/requestMutator.mjs");
+const streamTransformer_mjs_1 = require("../norm/streamTransformer.mjs");
 const circuits = new circuitBreaker_1.CircuitBreaker();
 const controllers = new Set();
 const counts = {
@@ -374,6 +377,21 @@ async function runCustomModelRequest(res, primary, originalBody, isStream, allMo
                         const body = (0, requestOptions_1.trimContext)(guardedBody, model.contextWindow, outputBudget);
                         const effectiveModel = outputBudget ? { ...model, maxOutputTokens: outputBudget } : model;
                         payload = (0, requestOptions_1.applyRequestOptions)(registry.translateRequest(model.provider, body, externalName, format, stateKey), effectiveModel, format, isStream, compactionEffort);
+                        // OmniNorm RequestMutator: sanitize max_tokens/max_completion_tokens, scrub reasoning history, vision guard, strict schema & Cursor tool normalization
+                        if (format === 'openai') {
+                            // The vision guard follows the model's resolved capabilities, so an
+                            // explicit supportsVision setting wins over the catalog guess.
+                            const spec = {
+                                ...catalogResolver_mjs_1.defaultCatalogResolver.resolveModelSpec(externalName, model.apiUrl),
+                                supportsVision: (0, modelUtils_1.detectModelCapabilities)(model).supportsImages,
+                            };
+                            payload = requestMutator_mjs_1.defaultRequestMutator.mutate(payload, {
+                                modelId: externalName,
+                                providerUrl: model.apiUrl,
+                                spec,
+                                injectXmlToolFallback: true,
+                            });
+                        }
                         const target = cloudCode || model.rawUrl
                             ? model.apiUrl
                             : registry.getProviderUrl(model.apiUrl, externalName, isStream, registry.getTranslator(model.provider, format));
@@ -454,6 +472,7 @@ async function runCustomModelRequest(res, primary, originalBody, isStream, allMo
                                 : `Upstream returned HTTP ${status}.`}${hint}`, status, !!decision || status === 408 || status === 429 || status >= 500, retryAfter, status !== 400 && status !== 422, decision);
                     }
                     if (isStream && String(upstream.headers['content-type']).includes('text/event-stream')) {
+                        const heartbeat = (0, streamTransformer_mjs_1.startSseHeartbeat)(res);
                         const decoder = new string_decoder_1.StringDecoder('utf8');
                         let buffer = '';
                         let dataLines = [];
@@ -526,8 +545,10 @@ async function runCustomModelRequest(res, primary, originalBody, isStream, allMo
                                 if (mapped.finishReason && mapped.finishReason !== 'OTHER')
                                     finalReason = true;
                                 // A role-only or empty completion must not commit headers and prevent fallback.
-                                if (emitted)
+                                if (emitted) {
+                                    heartbeat.stop();
                                     writeCandidate(mapped);
+                                }
                             }
                         };
                         const drain = () => {
@@ -555,6 +576,7 @@ async function runCustomModelRequest(res, primary, originalBody, isStream, allMo
                             buffer += '\n';
                         drain();
                         event();
+                        heartbeat.stop();
                         if (!emitted)
                             throw new UpstreamError('Upstream returned an empty stream.');
                         if (!terminal)

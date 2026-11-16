@@ -44,6 +44,7 @@ const modelManagement_1 = require("./modelManagement");
 const modelActions_1 = require("./modelActions");
 const proxy_1 = require("./proxy");
 const modelDelegation_1 = require("./modelDelegation");
+const ideAutoPatch_1 = require("./ideAutoPatch");
 function equalSecret(actual, expected) {
     if (typeof actual !== 'string')
         return false;
@@ -225,6 +226,8 @@ async function startStandaloneService(options) {
         shutdownGraceMs: 1500,
         ideCloudCodeRouting: true,
     });
+    // Runs only after startProxy resolves (a rejection skips it); never throws.
+    await (0, ideAutoPatch_1.runIdeAutoPatch)(options.ideAutoPatch, port);
     return { port, stop };
 }
 //# sourceMappingURL=standaloneService.js.map
