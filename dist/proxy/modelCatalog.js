@@ -4,6 +4,7 @@ exports.legacyModelSlug = legacyModelSlug;
 exports.localModelSlug = localModelSlug;
 exports.catalogModelSlug = catalogModelSlug;
 exports.matchesModelSlug = matchesModelSlug;
+exports.fallbackModelDisplayName = fallbackModelDisplayName;
 exports.catalogDisplayNames = catalogDisplayNames;
 exports.mergeCloudCodeCatalog = mergeCloudCodeCatalog;
 const node_crypto_1 = require("node:crypto");
@@ -30,6 +31,15 @@ function matchesModelSlug(model, value, models) {
     const id = value.replace(/^models\//, '');
     return id === localModelSlug(model) || id === catalogModelSlug(model, models);
 }
+function fallbackModelDisplayName(model) {
+    const display = typeof model.displayName === 'string' ? model.displayName.trim() : '';
+    if (display)
+        return display;
+    const external = typeof model.externalModelName === 'string' ? model.externalModelName.trim() : '';
+    if (external)
+        return external;
+    return String(model.name || '').replace(/^models\//, '').trim() || String(model.name || '');
+}
 /** The native IDE resolves sorted options by label, so display labels must also be unique. */
 function catalogDisplayNames(models, upstream = {}) {
     const used = new Set();
@@ -46,12 +56,12 @@ function catalogDisplayNames(models, upstream = {}) {
     }
     const counts = new Map();
     for (const model of models) {
-        const label = model.displayName || model.name;
+        const label = fallbackModelDisplayName(model);
         counts.set(label, (counts.get(label) || 0) + 1);
     }
     const labels = new Map();
     for (const model of [...models].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
-        const base = model.displayName || model.name;
+        const base = fallbackModelDisplayName(model);
         let label = base;
         if (counts.get(base) > 1 || used.has(label))
             label = `${base} (${model.name.replace(/^models\//, '')})`;

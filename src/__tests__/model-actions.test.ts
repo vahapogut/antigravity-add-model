@@ -95,6 +95,7 @@ describe('shared management model identity responses', () => {
     });
     f.actions['storage:save-custom-model'](returned);
     expect(f.manager.store.read()[0]).not.toHaveProperty('nativeModelExperiments');
+    expect(f.manager.store.read()[0]).not.toHaveProperty('configIndex');
     expect(f.manager.store.read()[0]).toMatchObject({ compactionThresholdPercent: 80, contextWindow: 85000 });
     expect(f.list()[0].nativeModelExperiments).toEqual(experiments);
     f.actions['storage:save-custom-model']({ ...returned, compactionThresholdPercent: undefined, compactionReasoningEffort: undefined });

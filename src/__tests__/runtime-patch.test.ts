@@ -26,6 +26,76 @@ function startLanguageServer(port, csrf, options = {}) {
 exports.setupLocalCertTrust = () => 'vendor certificate policy';
 `;
 
+const vendorSpreadServer = `
+const child_process_1 = require('child_process');
+const electron_1 = require('electron');
+const paths_1 = require('./paths');
+const wsl_1 = require('./wsl');
+const lsDefaults_1 = require('./lsDefaults');
+exports.startLanguageServer = startLanguageServer;
+async function startLanguageServer(port, csrf, options = {}) {
+  const { headless, hostBridgeUrl, hostBridgeToken, wsl } = options;
+  return new Promise((resolve) => {
+    record('vendor-start');
+    const args = [
+      ...(0, lsDefaults_1.baseLsArgs)({
+        ideVersion: electron_1.app.getVersion(),
+        httpsServerPort: port,
+        csrfToken: csrf,
+        appDataDir: (0, paths_1.getAppDataDirName)(),
+      }),
+      '--enable_sidecars',
+    ];
+    if (hostBridgeUrl && hostBridgeToken) {
+      args.push(\`--host_bridge_url=\${hostBridgeUrl}\`, \`--host_bridge_token=\${hostBridgeToken}\`);
+    }
+    if (headless) {
+      args.push('--headless');
+    }
+    let spawnCmd = 'vendor-language-server';
+    let spawnArgs = args;
+    if (wsl) {
+      args.push('--exit_on_stdin_close');
+      spawnCmd = 'wsl';
+      spawnArgs = (0, wsl_1.wslShellArgs)(wsl.distro, 'exec "$@"', args);
+    }
+    (0, child_process_1.spawn)(spawnCmd, spawnArgs, {});
+    resolve({ wsl });
+  });
+}
+`;
+
+const vendorLsDefaults = `
+Object.defineProperty(exports, '__esModule', { value: true });
+exports.LS_CLOUD_CODE_ENDPOINT = exports.LS_API_SERVER_URL = void 0;
+exports.baseLsArgs = baseLsArgs;
+exports.LS_API_SERVER_URL = 'https://generativelanguage.googleapis.com';
+exports.LS_CLOUD_CODE_ENDPOINT = 'https://daily-cloudcode-pa.googleapis.com';
+function baseLsArgs(opts) {
+  return [
+    '--standalone',
+    '--override_ide_name',
+    'antigravity',
+    '--subclient_type',
+    'hub',
+    '--override_ide_version',
+    opts.ideVersion,
+    '--override_user_agent_name',
+    'antigravity',
+    '--https_server_port',
+    String(opts.httpsServerPort),
+    '--csrf_token',
+    opts.csrfToken,
+    '--app_data_dir',
+    opts.appDataDir,
+    '--api_server_url',
+    exports.LS_API_SERVER_URL,
+    '--cloud_code_endpoint',
+    exports.LS_CLOUD_CODE_ENDPOINT,
+  ];
+}
+`;
+
 const vendorPreload = `
 const electron_1 = require('electron');
 const storageAPI = { getItems: () => electron_1.ipcRenderer.invoke('storage:get-items') };
@@ -43,10 +113,15 @@ const storageAPI = { getCustomModels: () => electron_1.ipcRenderer.invoke('model
 window.addEventListener('DOMContentLoaded', () => storageAPI.getCustomModels());
 `;
 
-function fixture(overrides: Record<string, string> = {}, build = customPreload, contextBuild = '// context preload fixture') {
+function fixture(
+  overrides: Record<string, string> = {},
+  build = customPreload,
+  contextBuild = '// context preload fixture',
+) {
   const files: Record<string, string> = {
     'dist/main.js': vendorMain,
     'dist/languageServer.js': vendorServer,
+    'dist/lsDefaults.js': vendorLsDefaults,
     'dist/preload.js': vendorPreload,
     ...overrides,
   };
@@ -62,17 +137,25 @@ function fixture(overrides: Record<string, string> = {}, build = customPreload, 
 function serverFixture(source = vendorServer) {
   const patched = fixture({ 'dist/languageServer.js': source }).plan().get('dist/languageServer.js')!.toString();
   const exports: Record<string, (...args: unknown[]) => Promise<{ args: string[]; wsl?: unknown }>> = {};
+  const defaultsExports: Record<string, unknown> = {};
+  runInNewContext(vendorLsDefaults, { exports: defaultsExports });
   const record = vi.fn();
+  const spawn = vi.fn();
   const startProxy = vi.fn().mockResolvedValue(61001);
   runInNewContext(patched, {
     exports,
     record,
     require: (name: string) => {
-      expect(name).toBe('./modelPatch/proxy');
-      return { startProxy };
+      if (name === './modelPatch/proxy') return { startProxy };
+      if (name === './lsDefaults') return defaultsExports;
+      if (name === 'child_process') return { spawn };
+      if (name === 'electron') return { app: { getVersion: () => '2.32.1' } };
+      if (name === './paths') return { getAppDataDirName: () => 'antigravity' };
+      if (name === './wsl') return { wslShellArgs: (_distro: string, _script: string, args: string[]) => args };
+      throw new Error(`Unexpected fixture require: ${name}`);
     },
   });
-  return { exports, record, startProxy };
+  return { exports, record, spawn, startProxy };
 }
 
 describe('vendor runtime adapter', () => {
@@ -186,6 +269,60 @@ describe('vendor runtime adapter', () => {
     expect(args[args.indexOf('--api_server_url') + 1]).toBe('http://localhost:61001');
   });
 
+  it('routes the 2.32 shared-defaults layout through the proxy only after local args are assembled', async () => {
+    const f = serverFixture(vendorSpreadServer);
+    await f.exports.startLanguageServer(60123, 'csrf', {
+      headless: true,
+      hostBridgeUrl: 'http://localhost:62000',
+      hostBridgeToken: 'bridge-token',
+    });
+    expect(f.spawn).toHaveBeenCalledOnce();
+    const args = f.spawn.mock.calls[0][1] as string[];
+    for (const flag of ['--api_server_url', '--cloud_code_endpoint', '--inference_api_server_url']) {
+      expect(args.filter((arg) => arg === flag)).toHaveLength(1);
+      expect(args[args.indexOf(flag) + 1]).toBe('http://localhost:61001');
+    }
+    expect(args.indexOf('--inference_api_server_url')).toBeLessThan(
+      args.indexOf('--host_bridge_url=http://localhost:62000'),
+    );
+    expect(args).toContain('--host_bridge_token=bridge-token');
+    expect(args).toContain('--headless');
+    expect(f.record).toHaveBeenCalledWith('vendor-start');
+  });
+
+  it('preserves 2.32 WSL endpoints without starting the host proxy', async () => {
+    const f = serverFixture(vendorSpreadServer);
+    const wsl = { distro: 'Ubuntu', binaryPath: '/opt/vendor/language_server' };
+    const result = await f.exports.startLanguageServer(60123, 'csrf', { wsl });
+    expect(f.startProxy).not.toHaveBeenCalled();
+    expect(result.wsl).toBe(wsl);
+    const args = f.spawn.mock.calls[0][1] as string[];
+    expect(args[args.indexOf('--api_server_url') + 1]).toBe('https://generativelanguage.googleapis.com');
+    expect(args[args.indexOf('--cloud_code_endpoint') + 1]).toBe('https://daily-cloudcode-pa.googleapis.com');
+    expect(args).not.toContain('--inference_api_server_url');
+    expect(args).toContain('--exit_on_stdin_close');
+  });
+
+  it('propagates proxy failures before the 2.32 language server starts', async () => {
+    const f = serverFixture(vendorSpreadServer);
+    const error = new Error('Port unavailable');
+    f.startProxy.mockRejectedValue(error);
+    await expect(f.exports.startLanguageServer(0, 'csrf')).rejects.toBe(error);
+    expect(f.record).not.toHaveBeenCalled();
+    expect(f.spawn).not.toHaveBeenCalled();
+  });
+
+  it('reads shared defaults only for the 2.32 layout and leaves them outside the patch', () => {
+    const legacy = fixture();
+    legacy.plan();
+    expect(legacy.readVendor).not.toHaveBeenCalledWith('dist/lsDefaults.js');
+    const spread = fixture({ 'dist/languageServer.js': vendorSpreadServer });
+    const patched = spread.plan();
+    expect(spread.readVendor).toHaveBeenCalledWith('dist/lsDefaults.js');
+    expect([...patched.keys()]).toEqual(['dist/main.js', 'dist/languageServer.js', 'dist/preload.js']);
+    expect(patched.has('dist/lsDefaults.js')).toBe(false);
+  });
+
   it('preserves all vendor bridges and appends an isolated sandbox-compatible preload', () => {
     const source = fixture().plan().get('dist/preload.js')!.toString();
     expect(source.startsWith(vendorPreload)).toBe(true);
@@ -273,6 +410,168 @@ describe('vendor runtime adapter', () => {
     ['invalid JavaScript', 'dist/preload.js', 'const = ;'],
   ])('fails closed on %s', (_label, name, source) => {
     expect(() => fixture({ [name]: source }).plan()).toThrow('UNSUPPORTED_RUNTIME');
+  });
+
+  it.each([
+    [
+      'unknown shared-defaults callee',
+      { 'dist/languageServer.js': vendorSpreadServer.replace('lsDefaults_1.baseLsArgs)', 'lsDefaults_1.otherArgs)') },
+    ],
+    [
+      'wrong shared-defaults import',
+      { 'dist/languageServer.js': vendorSpreadServer.replace("require('./lsDefaults')", "require('./otherDefaults')") },
+    ],
+    [
+      'late endpoint override',
+      {
+        'dist/languageServer.js': vendorSpreadServer.replace(
+          'resolve({ wsl });',
+          "args.push('--api_server_url', 'https://later.example'); resolve({ wsl });",
+        ),
+      },
+    ],
+    [
+      'dynamic spread mutation',
+      { 'dist/languageServer.js': vendorSpreadServer.replace("args.push('--headless');", 'args.push(...extraArgs);') },
+    ],
+    [
+      'unknown args alias',
+      {
+        'dist/languageServer.js': vendorSpreadServer.replace(
+          'let spawnArgs = args;',
+          'const alias = args; let spawnArgs = args;',
+        ),
+      },
+    ],
+    [
+      'unknown helper signature',
+      {
+        'dist/languageServer.js': vendorSpreadServer,
+        'dist/lsDefaults.js': vendorLsDefaults.replace('function baseLsArgs(opts)', 'function baseLsArgs(opts, extra)'),
+      },
+    ],
+    [
+      'duplicate default endpoint',
+      {
+        'dist/languageServer.js': vendorSpreadServer,
+        'dist/lsDefaults.js': vendorLsDefaults.replace(
+          "'--standalone',",
+          "'--api_server_url', exports.LS_API_SERVER_URL, '--standalone',",
+        ),
+      },
+    ],
+    [
+      'dynamic default endpoint',
+      {
+        'dist/languageServer.js': vendorSpreadServer,
+        'dist/lsDefaults.js': vendorLsDefaults.replace('exports.LS_API_SERVER_URL,', 'getEndpoint(),'),
+      },
+    ],
+    [
+      'inference endpoint in shared defaults',
+      {
+        'dist/languageServer.js': vendorSpreadServer,
+        'dist/lsDefaults.js': vendorLsDefaults.replace(
+          "'--standalone',",
+          "'--inference_api_server_url', 'https://inference.vendor.example', '--standalone',",
+        ),
+      },
+    ],
+    [
+      'mismatched WSL options binding',
+      { 'dist/languageServer.js': vendorSpreadServer.replace('} = options;', '} = config;') },
+    ],
+    [
+      'mutable WSL options binding',
+      {
+        'dist/languageServer.js': vendorSpreadServer.replace(
+          'const { headless, hostBridgeUrl, hostBridgeToken, wsl } = options;',
+          'let { headless, hostBridgeUrl, hostBridgeToken, wsl } = options;',
+        ),
+      },
+    ],
+    [
+      'unguarded WSL argument wrapping',
+      { 'dist/languageServer.js': vendorSpreadServer.replace('if (wsl) {', 'if (options.remote) {') },
+    ],
+    [
+      'async helper',
+      {
+        'dist/languageServer.js': vendorSpreadServer,
+        'dist/lsDefaults.js': vendorLsDefaults.replace('function baseLsArgs(opts)', 'async function baseLsArgs(opts)'),
+      },
+    ],
+    [
+      'rest-parameter helper',
+      {
+        'dist/languageServer.js': vendorSpreadServer,
+        'dist/lsDefaults.js': vendorLsDefaults.replace('function baseLsArgs(opts)', 'function baseLsArgs(...opts)'),
+      },
+    ],
+    [
+      'nested helper export',
+      {
+        'dist/languageServer.js': vendorSpreadServer,
+        'dist/lsDefaults.js': vendorLsDefaults.replace(
+          'exports.baseLsArgs = baseLsArgs;',
+          'function nestedExport() { exports.baseLsArgs = baseLsArgs; }',
+        ),
+      },
+    ],
+    [
+      'later dynamic endpoint write',
+      {
+        'dist/languageServer.js': vendorSpreadServer,
+        'dist/lsDefaults.js': `${vendorLsDefaults}\nexports.LS_API_SERVER_URL = getEndpoint();`,
+      },
+    ],
+    [
+      'wrong getVersion receiver',
+      {
+        'dist/languageServer.js': vendorSpreadServer.replace('electron_1.app.getVersion()', 'paths_1.app.getVersion()'),
+      },
+    ],
+    [
+      'wrong getAppDataDirName receiver',
+      {
+        'dist/languageServer.js': vendorSpreadServer.replace('paths_1.getAppDataDirName', 'wsl_1.getAppDataDirName'),
+      },
+    ],
+    [
+      'wrong wslShellArgs receiver',
+      { 'dist/languageServer.js': vendorSpreadServer.replace('wsl_1.wslShellArgs', 'paths_1.wslShellArgs') },
+    ],
+    [
+      'wrong spawn receiver',
+      { 'dist/languageServer.js': vendorSpreadServer.replace('child_process_1.spawn', 'wsl_1.spawn') },
+    ],
+    [
+      'wrong Electron import',
+      { 'dist/languageServer.js': vendorSpreadServer.replace("require('electron')", "require('not-electron')") },
+    ],
+    [
+      'computed helper export write',
+      {
+        'dist/languageServer.js': vendorSpreadServer,
+        'dist/lsDefaults.js': `${vendorLsDefaults}\nexports["baseLsArgs"] = () => [];`,
+      },
+    ],
+    [
+      'reflective helper export write',
+      {
+        'dist/languageServer.js': vendorSpreadServer,
+        'dist/lsDefaults.js': `${vendorLsDefaults}\nObject.defineProperty(exports, "baseLsArgs", { value: () => [] });`,
+      },
+    ],
+    [
+      'computed endpoint write',
+      {
+        'dist/languageServer.js': vendorSpreadServer,
+        'dist/lsDefaults.js': `${vendorLsDefaults}\nexports["LS_API_SERVER_URL"] = "https://later.example";`,
+      },
+    ],
+  ])('fails closed on 2.32 %s', (_label, overrides) => {
+    expect(() => fixture(overrides).plan()).toThrow('UNSUPPORTED_RUNTIME');
   });
 
   it('rejects repeated patching instead of appending another extension', () => {

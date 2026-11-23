@@ -11,6 +11,7 @@ const storageAPI = {
     getPresets: () => electron_1.ipcRenderer.invoke('storage:get-provider-presets'),
     discoverModels: (params) => electron_1.ipcRenderer.invoke('storage:discover-models', params),
 };
+const customModelsCache = { models: [], ts: 0 };
 window.addEventListener('DOMContentLoaded', () => {
     let modelList = [];
     let renderVersion = 0;
@@ -1912,168 +1913,999 @@ window.addEventListener('DOMContentLoaded', () => {
                 clearInterval(fleetTimer);
         }, { once: true });
     }
-    // --- Network Interceptor for Model Injection --------------------------
-    function isSafeToIntercept(url) {
-        // Never touch the internal Connect-RPC LanguageServerService channel —
-        // those responses are protocol-framed, not plain JSON, and rewriting
-        // them corrupts the renderer's RPC client / store hydration.
-        if (url.includes('exa.language_server_pb.'))
-            return false;
-        if (url.includes('/LanguageServerService/'))
-            return false;
-        return true;
+    // Start the observer and ensure network interceptors are active
+    installMainWorldBridge();
+    installNetworkInterceptors();
+    setupInjectionObserver();
+});
+// --- Network Interceptor for Model Injection --------------------------
+function isSafeToIntercept(url) {
+    // Never touch the internal Connect-RPC LanguageServerService channel —
+    // those responses are protocol-framed, not plain JSON, and rewriting
+    // them corrupts the renderer's RPC client / store hydration.
+    if (url.includes('exa.language_server_pb.'))
+        return false;
+    if (url.includes('/LanguageServerService/'))
+        return false;
+    return true;
+}
+const EFFORT_SUFFIX_RE = /-(low|medium|high|xhigh|max)$/;
+function isMendelFlagsUrl(url) {
+    return url.includes('GetMendelFlags') || url.includes('getMendelFlags');
+}
+function isCascadeModelConfigUrl(url) {
+    return (url.includes('GetUserStatus') ||
+        url.includes('getUserStatus') ||
+        url.includes('GetCascadeModelConfigs') ||
+        url.includes('getCascadeModelConfigs'));
+}
+function isJsonResponse(contentType) {
+    return contentType?.split(';', 1)[0].trim().toLowerCase() === 'application/json';
+}
+function headersWithoutContentLength(source) {
+    if (typeof Headers !== 'undefined') {
+        const headers = new Headers(source);
+        headers.delete('content-length');
+        return headers;
     }
-    function isJsonResponse(contentType) {
-        return contentType?.split(';', 1)[0].trim().toLowerCase() === 'application/json';
+    const record = {};
+    source.forEach((value, key) => {
+        if (key.toLowerCase() !== 'content-length')
+            record[key] = value;
+    });
+    return record;
+}
+function modelIdentityKey(model) {
+    const raw = String(model.name || model.id || model.externalModelName || '').trim();
+    if (!raw)
+        return '';
+    return raw.startsWith('models/') ? raw : `models/${raw}`;
+}
+function modelDisplayLabel(model, fallback = 'custom-model') {
+    const displayName = typeof model.displayName === 'string' ? model.displayName.trim() : '';
+    if (displayName)
+        return displayName;
+    const external = typeof model.externalModelName === 'string' ? model.externalModelName.trim() : '';
+    if (external)
+        return external;
+    const id = typeof model.id === 'string' ? model.id.trim() : '';
+    if (id)
+        return id.replace(/^models\//, '') || id;
+    const name = typeof model.name === 'string' ? model.name.trim() : '';
+    if (name)
+        return name.replace(/^models\//, '') || name;
+    return fallback;
+}
+function deduplicateCustomModels(customModels) {
+    if (!Array.isArray(customModels))
+        return [];
+    const ordered = customModels
+        .map((model, idx) => ({
+        model,
+        idx,
+        configOrder: model &&
+            typeof model === 'object' &&
+            !Array.isArray(model) &&
+            typeof model.configIndex === 'number' &&
+            Number.isFinite(model.configIndex)
+            ? model.configIndex
+            : Number.MAX_SAFE_INTEGER,
+    }))
+        .sort((a, b) => a.configOrder - b.configOrder || a.idx - b.idx)
+        .map((item) => item.model);
+    const seen = new Set();
+    const deduped = [];
+    for (const model of ordered) {
+        if (!model || typeof model !== 'object' || Array.isArray(model))
+            continue;
+        if (model.enabled === false)
+            continue;
+        const key = modelIdentityKey(model);
+        if (!key || seen.has(key))
+            continue;
+        seen.add(key);
+        deduped.push(model);
     }
-    const customModelsCache = { models: [], ts: 0 };
-    function injectMissingCustomModels(parsed, customModels) {
-        const key = ['models', 'availableModels', 'available_models'].find((name) => parsed[name] !== undefined) || 'models';
-        const collection = parsed[key];
-        // Preserve list/protocol shapes we do not own; the proxy handles array catalogs.
-        if (collection !== undefined && (!collection || typeof collection !== 'object' || Array.isArray(collection)))
+    return deduped;
+}
+function legacySlug(model) {
+    const cleaned = String(model.externalModelName || model.id || model.name || '')
+        .replace(/^models\//, '')
+        .replace(/[^a-zA-Z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .toLowerCase();
+    return cleaned ? `custom-${cleaned}` : '';
+}
+function resolveCustomSlug(model, customModels) {
+    if (!model || typeof model !== 'object' || model.enabled === false || model.nativePickerAvailable === false) {
+        return null;
+    }
+    const authoritative = typeof model.nativeCatalogId === 'string' &&
+        model.nativeCatalogId.trim().length > 0 &&
+        typeof model.nativeModelId === 'string' &&
+        model.nativeModelId.trim().length > 0;
+    const slug = authoritative ? String(model.nativeCatalogId).trim() : legacySlug(model);
+    if (!slug || slug === 'custom-')
+        return null;
+    // Compatibility with older IPC: never guess a shared external alias for effort variants.
+    if (!authoritative && customModels.filter((other) => legacySlug(other) === slug).length !== 1)
+        return null;
+    return slug;
+}
+function customModelBaseSlugs(customModels) {
+    const deduped = deduplicateCustomModels(customModels);
+    const seen = new Set();
+    const slugs = [];
+    for (const model of deduped) {
+        const slug = resolveCustomSlug(model, deduped);
+        if (!slug)
+            continue;
+        const base = slug.replace(EFFORT_SUFFIX_RE, '');
+        if (!base || seen.has(base))
+            continue;
+        seen.add(base);
+        slugs.push(base);
+    }
+    return slugs;
+}
+function injectCustomOrchestratorModelRoles(parsed, customModels) {
+    const slugs = customModelBaseSlugs(customModels);
+    if (slugs.length === 0)
+        return false;
+    const expConfig = (parsed.experimentConfig ?? parsed.experiment_config);
+    const experiments = expConfig?.experiments;
+    if (!Array.isArray(experiments))
+        return false;
+    const entry = experiments.find((item) => Boolean(item) &&
+        typeof item === 'object' &&
+        (item.keyString ?? item.key_string) ===
+            'orchestrator-model-roles' &&
+        !item.disabled);
+    if (!entry)
+        return false;
+    const payload = entry.payload && typeof entry.payload === 'object' ? entry.payload : undefined;
+    let rawJson;
+    let target;
+    if (typeof entry.string === 'string') {
+        rawJson = entry.string;
+        target = 'string';
+    }
+    else if (typeof entry.stringValue === 'string') {
+        rawJson = entry.stringValue;
+        target = 'stringValue';
+    }
+    else if (payload?.case === 'string' && typeof payload.value === 'string') {
+        rawJson = payload.value;
+        target = 'payload';
+    }
+    if (rawJson === undefined || !target)
+        return false;
+    let rolesObj;
+    try {
+        const decoded = JSON.parse(rawJson);
+        if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded))
             return false;
-        const modelsObj = (collection || {});
-        const legacySlug = (model) => 'custom-' + String(model.externalModelName || model.name || '')
-            .replace(/^models\//, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
-        const usedLabels = new Set(Object.values(modelsObj).map((entry) => entry?.displayName).filter((label) => typeof label === 'string'));
-        let changed = false;
-        for (const model of customModels) {
-            if (model.nativePickerAvailable === false)
-                continue;
-            const authoritative = typeof model.nativeCatalogId === 'string' && typeof model.nativeModelId === 'string';
-            const slug = authoritative ? model.nativeCatalogId : legacySlug(model);
-            // Compatibility with older IPC: never guess a shared external alias for effort variants.
-            if (!authoritative && customModels.filter((other) => legacySlug(other) === slug).length !== 1)
-                continue;
-            const placeholder = authoritative ? model.nativeModelId : 'MODEL_PLACEHOLDER_M' +
-                (400 + hashCodeStr(String(model.displayName || model.name || 'custom-model').toLowerCase()) % 200);
-            const baseLabel = model.displayName || model.name;
-            // The proxy is authoritative. Reinjection must not overwrite its capabilities or add a legacy duplicate.
-            if (Object.prototype.hasOwnProperty.call(modelsObj, slug) || Object.entries(modelsObj).some(([id, entry]) => id.startsWith('custom-') && entry?.model === placeholder && entry.displayName === baseLabel))
-                continue;
-            let displayName = baseLabel;
-            if (usedLabels.has(displayName) || customModels.filter((entry) => (entry.displayName || entry.name) === baseLabel).length > 1)
-                displayName = `${baseLabel} (${String(model.name).replace(/^models\//, '')})`;
-            let suffix = 2;
-            while (usedLabels.has(displayName))
-                displayName = `${baseLabel} (${String(model.name).replace(/^models\//, '')} #${suffix++})`;
-            usedLabels.add(displayName);
-            modelsObj[slug] = {
-                displayName, recommended: true,
-                maxTokens: model.nativeContextWindow || model.contextWindow || 1048576,
-                maxOutputTokens: model.nativeMaxOutputTokens || model.maxOutputTokens || 4096,
-                tokenizerType: 'LLAMA_WITH_SPECIAL', model: placeholder,
-                apiProvider: 'API_PROVIDER_GOOGLE_GEMINI', modelProvider: 'MODEL_PROVIDER_GOOGLE',
-                ...(authoritative && model.nativeModelExperiments ? { modelExperiments: model.nativeModelExperiments } : {}),
-            };
+        rolesObj = decoded;
+    }
+    catch {
+        return false;
+    }
+    if (!Array.isArray(rolesObj.orchestrators) || !Array.isArray(rolesObj.executors))
+        return false;
+    const appendMissing = (list) => {
+        const next = [...list];
+        const seen = new Set(list);
+        let added = false;
+        for (const slug of slugs) {
+            if (!seen.has(slug)) {
+                seen.add(slug);
+                next.push(slug);
+                added = true;
+            }
+        }
+        return { next, added };
+    };
+    const orch = appendMissing(rolesObj.orchestrators);
+    const exec = appendMissing(rolesObj.executors);
+    if (!orch.added && !exec.added)
+        return false;
+    const serialized = JSON.stringify({ ...rolesObj, orchestrators: orch.next, executors: exec.next });
+    if (target === 'payload' && payload)
+        payload.value = serialized;
+    else
+        entry[target] = serialized;
+    return true;
+}
+function extractCascadeModelConfigContainer(parsed) {
+    const userStatus = (parsed.userStatus ?? parsed.user_status);
+    const candidate = (userStatus && typeof userStatus === 'object'
+        ? (userStatus.cascadeModelConfigData ?? userStatus.cascade_model_config_data)
+        : undefined) ??
+        parsed.cascadeModelConfigData ??
+        parsed.cascade_model_config_data;
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate))
+        return null;
+    const container = candidate;
+    const configsKey = Array.isArray(container.clientModelConfigs)
+        ? 'clientModelConfigs'
+        : Array.isArray(container.client_model_configs)
+            ? 'client_model_configs'
+            : null;
+    if (!configsKey)
+        return null;
+    const configs = container[configsKey];
+    if (configs.length === 0)
+        return null;
+    return { container, configsKey, configs };
+}
+function normalizeCascadeClientModelConfigs(parsed, customModels) {
+    const located = extractCascadeModelConfigContainer(parsed);
+    if (!located)
+        return false;
+    const { container, configsKey, configs } = located;
+    const deduped = deduplicateCustomModels(customModels);
+    const bySlug = new Map();
+    const byPlaceholder = new Map();
+    deduped.forEach((model, order) => {
+        const slug = resolveCustomSlug(model, deduped);
+        if (!slug)
+            return;
+        const label = modelDisplayLabel(model, slug);
+        bySlug.set(slug, { order, label });
+        if (typeof model.nativeModelId === 'string' && model.nativeModelId.trim()) {
+            byPlaceholder.set(model.nativeModelId.trim(), { order, label });
+        }
+    });
+    const builtInEntries = [];
+    const customEntries = [];
+    let changed = false;
+    configs.forEach((cfg, idx) => {
+        if (!cfg || typeof cfg !== 'object') {
+            builtInEntries.push(cfg);
+            return;
+        }
+        const modelId = typeof cfg.modelId === 'string' ? cfg.modelId : typeof cfg.model_id === 'string' ? cfg.model_id : '';
+        const modelOrAlias = (cfg.modelOrAlias ?? cfg.model_or_alias);
+        const choice = modelOrAlias?.choice && typeof modelOrAlias.choice === 'object'
+            ? modelOrAlias.choice
+            : undefined;
+        const rawModelVal = modelOrAlias?.model ?? choice?.value;
+        const placeholder = typeof rawModelVal === 'string'
+            ? rawModelVal
+            : typeof rawModelVal === 'number' && rawModelVal >= 1000 && rawModelVal <= 1650
+                ? `MODEL_PLACEHOLDER_M${rawModelVal - 1000}`
+                : '';
+        const info = (modelId ? bySlug.get(modelId) : undefined) ?? (placeholder ? byPlaceholder.get(placeholder) : undefined);
+        const isCustom = Boolean(info) || modelId.startsWith('custom-');
+        if (info && (typeof cfg.label !== 'string' || !cfg.label.trim())) {
+            cfg.label = info.label;
             changed = true;
         }
-        if (changed)
-            parsed[key] = modelsObj;
+        if (isCustom) {
+            customEntries.push({ cfg, order: info ? info.order : Number.MAX_SAFE_INTEGER, idx });
+        }
+        else {
+            builtInEntries.push(cfg);
+        }
+    });
+    if (customEntries.length === 0)
         return changed;
+    customEntries.sort((a, b) => a.order - b.order || a.idx - b.idx);
+    const reordered = [...builtInEntries, ...customEntries.map((item) => item.cfg)];
+    if (reordered.some((item, index) => item !== configs[index])) {
+        container[configsKey] = reordered;
+        changed = true;
     }
-    async function getCustomModelsForInjection() {
-        if (Date.now() - customModelsCache.ts < 30000)
-            return customModelsCache.models;
-        try {
-            customModelsCache.models = (await storageAPI.getCustomModels()).filter((model) => model.enabled !== false);
-            customModelsCache.ts = Date.now();
+    return changed;
+}
+function rewriteGrpcWebJsonFrames(bytes, transform) {
+    if (bytes.length < 5)
+        return null;
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const decoder = new TextDecoder();
+    const encoder = new TextEncoder();
+    const frames = [];
+    let offset = 0;
+    let anyChanged = false;
+    while (offset < bytes.length) {
+        if (offset + 5 > bytes.length)
+            return null;
+        const flag = bytes[offset];
+        const len = view.getUint32(offset + 1, false);
+        const end = offset + 5 + len;
+        if ((flag & 1) === 1 || end > bytes.length)
+            return null;
+        const rawFrame = bytes.subarray(offset, end);
+        if (flag === 0x00) {
+            const text = decoder.decode(bytes.subarray(offset + 5, end));
+            let parsed;
+            try {
+                parsed = JSON.parse(text);
+            }
+            catch {
+                return null;
+            }
+            if (parsed &&
+                typeof parsed === 'object' &&
+                !Array.isArray(parsed) &&
+                transform(parsed)) {
+                const encoded = encoder.encode(JSON.stringify(parsed));
+                const outFrame = new Uint8Array(5 + encoded.length);
+                outFrame[0] = flag;
+                new DataView(outFrame.buffer, outFrame.byteOffset, outFrame.byteLength).setUint32(1, encoded.length, false);
+                outFrame.set(encoded, 5);
+                frames.push(outFrame);
+                anyChanged = true;
+            }
+            else {
+                frames.push(rawFrame);
+            }
         }
-        catch {
-            /* ignore */
+        else {
+            frames.push(rawFrame);
         }
+        offset = end;
+    }
+    if (!anyChanged || offset !== bytes.length)
+        return null;
+    const totalLength = frames.reduce((sum, frame) => sum + frame.length, 0);
+    const result = new Uint8Array(totalLength);
+    let cursor = 0;
+    for (const frame of frames) {
+        result.set(frame, cursor);
+        cursor += frame.length;
+    }
+    return result;
+}
+function hashCodeStr(s) {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) {
+        h = (h << 5) + h + s.charCodeAt(i);
+        h = h & h;
+    }
+    return Math.abs(h);
+}
+function injectMissingCustomModels(parsed, customModels) {
+    const key = ['models', 'availableModels', 'available_models'].find((name) => parsed[name] !== undefined) || 'models';
+    const collection = parsed[key];
+    // Preserve list/protocol shapes we do not own; the proxy handles array catalogs.
+    if (collection !== undefined && (!collection || typeof collection !== 'object' || Array.isArray(collection))) {
+        return false;
+    }
+    const deduped = deduplicateCustomModels(customModels);
+    if (deduped.length === 0)
+        return false;
+    const modelsObj = (collection || {});
+    const usedLabels = new Set(Object.values(modelsObj)
+        .map((entry) => entry?.displayName)
+        .filter((label) => typeof label === 'string'));
+    let changed = false;
+    for (const model of deduped) {
+        const slug = resolveCustomSlug(model, deduped);
+        if (!slug)
+            continue;
+        const authoritative = typeof model.nativeCatalogId === 'string' && typeof model.nativeModelId === 'string';
+        const baseLabel = modelDisplayLabel(model, slug);
+        const placeholder = authoritative
+            ? String(model.nativeModelId)
+            : 'MODEL_PLACEHOLDER_M' + (400 + (hashCodeStr(baseLabel.toLowerCase()) % 200));
+        // The proxy is authoritative. Reinjection must not overwrite its capabilities or add a legacy duplicate.
+        if (Object.prototype.hasOwnProperty.call(modelsObj, slug) ||
+            Object.entries(modelsObj).some(([id, entry]) => id.startsWith('custom-') && entry?.model === placeholder && entry.displayName === baseLabel)) {
+            continue;
+        }
+        const shortId = String(model.name || model.id || model.externalModelName || slug).replace(/^models\//, '');
+        let displayName = baseLabel;
+        if (usedLabels.has(displayName) ||
+            deduped.filter((entry) => modelDisplayLabel(entry) === baseLabel).length > 1) {
+            displayName = `${baseLabel} (${shortId})`;
+        }
+        let suffix = 2;
+        while (usedLabels.has(displayName)) {
+            displayName = `${baseLabel} (${shortId} #${suffix++})`;
+        }
+        usedLabels.add(displayName);
+        modelsObj[slug] = {
+            displayName,
+            recommended: true,
+            maxTokens: model.nativeContextWindow || model.contextWindow || 1048576,
+            maxOutputTokens: model.nativeMaxOutputTokens || model.maxOutputTokens || 4096,
+            tokenizerType: 'LLAMA_WITH_SPECIAL',
+            model: placeholder,
+            apiProvider: 'API_PROVIDER_GOOGLE_GEMINI',
+            modelProvider: 'MODEL_PROVIDER_GOOGLE',
+            ...(authoritative && model.nativeModelExperiments ? { modelExperiments: model.nativeModelExperiments } : {}),
+        };
+        changed = true;
+    }
+    if (changed)
+        parsed[key] = modelsObj;
+    return changed;
+}
+async function getCustomModelsForInjection() {
+    if (Date.now() - customModelsCache.ts < 5000)
         return customModelsCache.models;
+    try {
+        const raw = await storageAPI.getCustomModels();
+        customModelsCache.models = deduplicateCustomModels(Array.isArray(raw) ? raw : []);
+        customModelsCache.ts = Date.now();
     }
-    // Intercept XHR to inject custom models into GetAvailableModels responses
-    const origXHROpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function (method, url, async, username, password) {
-        this._agy_url = typeof url === 'string' ? url : url.toString();
-        this._agy_method = method;
-        this._agy_async = async !== false;
-        return origXHROpen.call(this, method, url, async !== false, username, password);
-    };
-    const origXHRSend = XMLHttpRequest.prototype.send;
-    XMLHttpRequest.prototype.send = function (body) {
-        const url = this._agy_url || '';
-        if ((url.includes('GetAvailableModels') || url.includes('fetchAvailableModels')) && isSafeToIntercept(url)) {
-            // Warm the cache without delaying native XHR events. If it is not ready by
-            // DONE, leave the response alone; load/readystatechange ordering must survive.
-            if (this._agy_async)
-                void getCustomModelsForInjection();
-            const origOnReady = this.onreadystatechange;
-            this.onreadystatechange = (ev) => {
-                if (this.readyState === 4 &&
-                    this.status === 200 &&
-                    (this.responseType === '' || this.responseType === 'text') &&
-                    isJsonResponse(this.getResponseHeader('content-type'))) {
-                    const customModels = customModelsCache.models;
+    catch {
+        customModelsCache.models = [];
+    }
+    return customModelsCache.models;
+}
+function projectCustomModelsForMainWorld(customModels) {
+    const deduped = deduplicateCustomModels(customModels);
+    const projected = [];
+    for (const model of deduped) {
+        const slug = resolveCustomSlug(model, deduped);
+        if (!slug)
+            continue;
+        const baseSlug = slug.replace(EFFORT_SUFFIX_RE, '');
+        if (!baseSlug)
+            continue;
+        const label = modelDisplayLabel(model, slug);
+        const placeholder = typeof model.nativeModelId === 'string' && model.nativeModelId.trim() ? model.nativeModelId.trim() : '';
+        projected.push({ slug, baseSlug, label, placeholder });
+    }
+    return projected;
+}
+function buildMainWorldFetchInterceptorSource(bridgeToken) {
+    return `(() => {
+  if (typeof window === 'undefined' || typeof window.fetch !== 'function') return;
+  if (window.fetch._agy_main_world_wrapped) return;
+  const CHANNEL = ${JSON.stringify(bridgeToken)};
+  const origFetch = window.fetch;
+  let cachedModels = [];
+  let cachedAt = 0;
+  let reqSeq = 0;
+
+  function fetchBridgeModels() {
+    if (Date.now() - cachedAt < 3000) return Promise.resolve(cachedModels);
+    return new Promise((resolve) => {
+      const id = ++reqSeq;
+      let done = false;
+      const timer = setTimeout(() => {
+        if (done) return;
+        done = true;
+        window.removeEventListener('message', onMessage);
+        resolve(cachedModels);
+      }, 2000);
+      function onMessage(event) {
+        if (event.source !== window) return;
+        const d = event.data;
+        if (!d || typeof d !== 'object' || d.channel !== CHANNEL || d.type !== 'response' || d.id !== id) return;
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        window.removeEventListener('message', onMessage);
+        cachedModels = Array.isArray(d.models) ? d.models : [];
+        cachedAt = Date.now();
+        resolve(cachedModels);
+      }
+      window.addEventListener('message', onMessage);
+      try {
+        window.postMessage({ channel: CHANNEL, type: 'request', id }, '*');
+      } catch {
+        if (!done) {
+          done = true;
+          clearTimeout(timer);
+          window.removeEventListener('message', onMessage);
+          resolve(cachedModels);
+        }
+      }
+    });
+  }
+
+  function isJsonCt(ct) {
+    return typeof ct === 'string' && ct.split(';', 1)[0].trim().toLowerCase() === 'application/json';
+  }
+
+  function stripContentLength(source) {
+    if (typeof Headers !== 'undefined') {
+      const h = new Headers(source);
+      h.delete('content-length');
+      return h;
+    }
+    const out = {};
+    if (source && typeof source.forEach === 'function') {
+      source.forEach((v, k) => {
+        if (String(k).toLowerCase() !== 'content-length') out[k] = v;
+      });
+    }
+    return out;
+  }
+
+  function rewriteGrpcWebFrames(bytes, transform) {
+    if (!bytes || bytes.length < 5) return null;
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const decoder = new TextDecoder();
+    const encoder = new TextEncoder();
+    const frames = [];
+    let offset = 0;
+    let changed = false;
+    while (offset < bytes.length) {
+      if (offset + 5 > bytes.length) return null;
+      const flag = bytes[offset];
+      const len = view.getUint32(offset + 1, false);
+      const end = offset + 5 + len;
+      if ((flag & 1) === 1 || end > bytes.length) return null;
+      const rawFrame = bytes.subarray(offset, end);
+      if (flag === 0x00) {
+        let parsed;
+        try {
+          parsed = JSON.parse(decoder.decode(bytes.subarray(offset + 5, end)));
+        } catch {
+          return null;
+        }
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && transform(parsed)) {
+          const encoded = encoder.encode(JSON.stringify(parsed));
+          const outFrame = new Uint8Array(5 + encoded.length);
+          outFrame[0] = flag;
+          new DataView(outFrame.buffer, outFrame.byteOffset, outFrame.byteLength).setUint32(1, encoded.length, false);
+          outFrame.set(encoded, 5);
+          frames.push(outFrame);
+          changed = true;
+        } else {
+          frames.push(rawFrame);
+        }
+      } else {
+        frames.push(rawFrame);
+      }
+      offset = end;
+    }
+    if (!changed || offset !== bytes.length) return null;
+    let total = 0;
+    for (const f of frames) total += f.length;
+    const result = new Uint8Array(total);
+    let cursor = 0;
+    for (const f of frames) {
+      result.set(f, cursor);
+      cursor += f.length;
+    }
+    return result;
+  }
+
+  function injectRoles(parsed, models) {
+    const slugs = [];
+    const seenSlugs = new Set();
+    for (const m of models) {
+      if (m && typeof m.baseSlug === 'string' && m.baseSlug && !seenSlugs.has(m.baseSlug)) {
+        seenSlugs.add(m.baseSlug);
+        slugs.push(m.baseSlug);
+      }
+    }
+    if (slugs.length === 0) return false;
+    const expCfg = parsed.experimentConfig ?? parsed.experiment_config;
+    const experiments = expCfg && typeof expCfg === 'object' ? expCfg.experiments : null;
+    if (!Array.isArray(experiments)) return false;
+    const entry = experiments.find(
+      (item) =>
+        item &&
+        typeof item === 'object' &&
+        (item.keyString ?? item.key_string) === 'orchestrator-model-roles' &&
+        !item.disabled,
+    );
+    if (!entry) return false;
+    const payload = entry.payload && typeof entry.payload === 'object' ? entry.payload : null;
+    let rawJson;
+    let target;
+    if (typeof entry.string === 'string') {
+      rawJson = entry.string;
+      target = 'string';
+    } else if (typeof entry.stringValue === 'string') {
+      rawJson = entry.stringValue;
+      target = 'stringValue';
+    } else if (payload && payload.case === 'string' && typeof payload.value === 'string') {
+      rawJson = payload.value;
+      target = 'payload';
+    }
+    if (rawJson === undefined || !target) return false;
+    let rolesObj;
+    try {
+      const dec = JSON.parse(rawJson);
+      if (!dec || typeof dec !== 'object' || Array.isArray(dec)) return false;
+      rolesObj = dec;
+    } catch {
+      return false;
+    }
+    if (!Array.isArray(rolesObj.orchestrators) || !Array.isArray(rolesObj.executors)) return false;
+    function appendMissing(list) {
+      const next = list.slice();
+      const seen = new Set(list);
+      let added = false;
+      for (const s of slugs) {
+        if (!seen.has(s)) {
+          seen.add(s);
+          next.push(s);
+          added = true;
+        }
+      }
+      return { next, added };
+    }
+    const orch = appendMissing(rolesObj.orchestrators);
+    const exec = appendMissing(rolesObj.executors);
+    if (!orch.added && !exec.added) return false;
+    const serialized = JSON.stringify({ ...rolesObj, orchestrators: orch.next, executors: exec.next });
+    if (target === 'payload' && payload) payload.value = serialized;
+    else entry[target] = serialized;
+    return true;
+  }
+
+  function normalizeConfigs(parsed, models) {
+    const userStatus = parsed.userStatus ?? parsed.user_status;
+    const candidate =
+      (userStatus && typeof userStatus === 'object'
+        ? userStatus.cascadeModelConfigData ?? userStatus.cascade_model_config_data
+        : undefined) ??
+      parsed.cascadeModelConfigData ??
+      parsed.cascade_model_config_data;
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return false;
+    const configsKey = Array.isArray(candidate.clientModelConfigs)
+      ? 'clientModelConfigs'
+      : Array.isArray(candidate.client_model_configs)
+        ? 'client_model_configs'
+        : null;
+    if (!configsKey) return false;
+    const configs = candidate[configsKey];
+    if (!Array.isArray(configs) || configs.length === 0) return false;
+    const bySlug = new Map();
+    const byPlaceholder = new Map();
+    for (let order = 0; order < models.length; order++) {
+      const m = models[order];
+      if (!m || typeof m.slug !== 'string' || !m.slug) continue;
+      const info = { order, label: typeof m.label === 'string' && m.label ? m.label : m.slug };
+      bySlug.set(m.slug, info);
+      if (typeof m.placeholder === 'string' && m.placeholder) byPlaceholder.set(m.placeholder, info);
+    }
+    const builtIn = [];
+    const custom = [];
+    let changed = false;
+    for (let idx = 0; idx < configs.length; idx++) {
+      const cfg = configs[idx];
+      if (!cfg || typeof cfg !== 'object') {
+        builtIn.push(cfg);
+        continue;
+      }
+      const modelId = typeof cfg.modelId === 'string' ? cfg.modelId : typeof cfg.model_id === 'string' ? cfg.model_id : '';
+      const moa = cfg.modelOrAlias ?? cfg.model_or_alias;
+      const choice = moa && typeof moa === 'object' && moa.choice && typeof moa.choice === 'object' ? moa.choice : null;
+      const rawVal = moa && typeof moa === 'object' ? moa.model ?? (choice ? choice.value : undefined) : undefined;
+      const placeholder =
+        typeof rawVal === 'string'
+          ? rawVal
+          : typeof rawVal === 'number' && rawVal >= 1000 && rawVal <= 1650
+            ? 'MODEL_PLACEHOLDER_M' + (rawVal - 1000)
+            : '';
+      const info = (modelId ? bySlug.get(modelId) : undefined) ?? (placeholder ? byPlaceholder.get(placeholder) : undefined);
+      const isCustom = Boolean(info) || modelId.startsWith('custom-');
+      if (info && (typeof cfg.label !== 'string' || !cfg.label.trim())) {
+        cfg.label = info.label;
+        changed = true;
+      }
+      if (isCustom) custom.push({ cfg, order: info ? info.order : Number.MAX_SAFE_INTEGER, idx });
+      else builtIn.push(cfg);
+    }
+    if (custom.length === 0) return changed;
+    custom.sort((a, b) => a.order - b.order || a.idx - b.idx);
+    const reordered = builtIn.concat(custom.map((item) => item.cfg));
+    for (let i = 0; i < reordered.length; i++) {
+      if (reordered[i] !== configs[i]) {
+        candidate[configsKey] = reordered;
+        return true;
+      }
+    }
+    return changed;
+  }
+
+  async function wrappedFetch(input, init) {
+    const url = typeof input === 'string' ? input : input && typeof input.url === 'string' ? input.url : String(input || '');
+    const response = await origFetch.call(window, input, init);
+    if (!response || !response.ok) return response;
+
+    const isMendel = url.includes('GetMendelFlags') || url.includes('getMendelFlags');
+    const isCascade =
+      url.includes('GetUserStatus') ||
+      url.includes('getUserStatus') ||
+      url.includes('GetCascadeModelConfigs') ||
+      url.includes('getCascadeModelConfigs');
+    if (!isMendel && !isCascade) return response;
+
+    const contentType = response.headers.get('content-type');
+    const ctLower = (contentType || '').toLowerCase();
+    const isGrpcWeb = ctLower.includes('application/grpc-web');
+    const isJson = isJsonCt(contentType);
+    if (!isGrpcWeb && !isJson) return response;
+
+    try {
+      const cloned = response.clone();
+      if (isMendel) {
+        const models = await fetchBridgeModels();
+        if (!models || models.length === 0) return response;
+        if (isJson) {
+          const text = await cloned.text();
+          if (text && text.length > 2) {
+            const parsed = JSON.parse(text);
+            if (injectRoles(parsed, models)) {
+              return new Response(JSON.stringify(parsed), {
+                status: response.status,
+                statusText: response.statusText,
+                headers: stripContentLength(response.headers),
+              });
+            }
+          }
+        } else {
+          const raw = new Uint8Array(await cloned.arrayBuffer());
+          const rewritten = rewriteGrpcWebFrames(raw, (p) => injectRoles(p, models));
+          if (rewritten) {
+            return new Response(rewritten, {
+              status: response.status,
+              statusText: response.statusText,
+              headers: stripContentLength(response.headers),
+            });
+          }
+        }
+      } else if (isCascade) {
+        if (isJson) {
+          const text = await cloned.text();
+          if (text && (text.includes('clientModelConfigs') || text.includes('client_model_configs'))) {
+            const models = await fetchBridgeModels();
+            if (models && models.length > 0) {
+              const parsed = JSON.parse(text);
+              if (normalizeConfigs(parsed, models)) {
+                return new Response(JSON.stringify(parsed), {
+                  status: response.status,
+                  statusText: response.statusText,
+                  headers: stripContentLength(response.headers),
+                });
+              }
+            }
+          }
+        } else {
+          const raw = new Uint8Array(await cloned.arrayBuffer());
+          const preview = new TextDecoder().decode(raw);
+          if (preview.includes('clientModelConfigs') || preview.includes('client_model_configs')) {
+            const models = await fetchBridgeModels();
+            if (models && models.length > 0) {
+              const rewritten = rewriteGrpcWebFrames(raw, (p) => normalizeConfigs(p, models));
+              if (rewritten) {
+                return new Response(rewritten, {
+                  status: response.status,
+                  statusText: response.statusText,
+                  headers: stripContentLength(response.headers),
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      /* ignore main-world intercept errors */
+    }
+    return response;
+  }
+
+  wrappedFetch._agy_main_world_wrapped = true;
+  window.fetch = wrappedFetch;
+})();`;
+}
+function installMainWorldBridge() {
+    if (typeof window === 'undefined' ||
+        typeof window.addEventListener !== 'function' ||
+        typeof window.postMessage !== 'function' ||
+        !electron_1.webFrame ||
+        typeof electron_1.webFrame.executeJavaScript !== 'function') {
+        return;
+    }
+    if (window.__agyMainWorldBridgeInstalled)
+        return;
+    window.__agyMainWorldBridgeInstalled = true;
+    const bridgeToken = '__agy_orch_' + Math.random().toString(36).slice(2) + '_' + Date.now().toString(36);
+    window.addEventListener('message', (event) => {
+        if (event.source !== window)
+            return;
+        const data = event.data;
+        if (!data || typeof data !== 'object' || data.channel !== bridgeToken || data.type !== 'request')
+            return;
+        const requestId = data.id;
+        void getCustomModelsForInjection()
+            .then((models) => {
+            window.postMessage({
+                channel: bridgeToken,
+                type: 'response',
+                id: requestId,
+                models: projectCustomModelsForMainWorld(models),
+            }, '*');
+        })
+            .catch(() => {
+            window.postMessage({ channel: bridgeToken, type: 'response', id: requestId, models: [] }, '*');
+        });
+    });
+    void electron_1.webFrame.executeJavaScript(buildMainWorldFetchInterceptorSource(bridgeToken)).catch(() => { });
+}
+function installNetworkInterceptors() {
+    if (typeof XMLHttpRequest !== 'undefined' &&
+        XMLHttpRequest?.prototype &&
+        !XMLHttpRequest.prototype.open?._agy_wrapped) {
+        const origXHROpen = XMLHttpRequest.prototype.open;
+        const wrappedOpen = function (method, url, async, username, password) {
+            this._agy_url = typeof url === 'string' ? url : url.toString();
+            this._agy_method = method;
+            this._agy_async = async !== false;
+            return origXHROpen.call(this, method, url, async !== false, username, password);
+        };
+        wrappedOpen._agy_wrapped = true;
+        XMLHttpRequest.prototype.open = wrappedOpen;
+        const origXHRSend = XMLHttpRequest.prototype.send;
+        const wrappedSend = function (body) {
+            const url = this._agy_url || '';
+            if ((url.includes('GetAvailableModels') || url.includes('fetchAvailableModels')) && isSafeToIntercept(url)) {
+                // Warm the cache without delaying native XHR events. If it is not ready by
+                // DONE, leave the response alone; load/readystatechange ordering must survive.
+                if (this._agy_async)
+                    void getCustomModelsForInjection();
+                const origOnReady = this.onreadystatechange;
+                this.onreadystatechange = (ev) => {
+                    if (this.readyState === 4 &&
+                        this.status === 200 &&
+                        (this.responseType === '' || this.responseType === 'text') &&
+                        isJsonResponse(this.getResponseHeader('content-type'))) {
+                        const customModels = customModelsCache.models;
+                        if (customModels && customModels.length > 0) {
+                            try {
+                                const responseText = this.responseText;
+                                if (responseText && responseText.length > 10) {
+                                    const parsed = JSON.parse(responseText);
+                                    if (injectMissingCustomModels(parsed, customModels)) {
+                                        // Override only a changed response; keep native event ordering intact.
+                                        Object.defineProperty(this, 'responseText', { value: JSON.stringify(parsed), writable: true });
+                                        Object.defineProperty(this, 'response', { value: JSON.stringify(parsed), writable: true });
+                                    }
+                                }
+                            }
+                            catch {
+                                /* ignore parse errors */
+                            }
+                        }
+                    }
+                    if (origOnReady)
+                        origOnReady.call(this, ev);
+                };
+            }
+            return origXHRSend.call(this, body);
+        };
+        wrappedSend._agy_wrapped = true;
+        XMLHttpRequest.prototype.send = wrappedSend;
+    }
+    if (typeof window !== 'undefined' &&
+        typeof window.fetch === 'function' &&
+        !window.fetch?._agy_wrapped) {
+        const origFetch = window.fetch;
+        const wrappedFetch = async function (input, init) {
+            const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+            const response = await origFetch.call(window, input, init);
+            if ((url.includes('GetAvailableModels') || url.includes('fetchAvailableModels')) &&
+                isSafeToIntercept(url) &&
+                response.ok) {
+                if (!isJsonResponse(response.headers.get('content-type'))) {
+                    return response;
+                }
+                const customModels = await getCustomModelsForInjection();
+                if (customModels && customModels.length > 0) {
+                    try {
+                        const cloned = response.clone();
+                        const text = await cloned.text();
+                        if (text && text.length > 10) {
+                            const parsed = JSON.parse(text);
+                            if (!injectMissingCustomModels(parsed, customModels))
+                                return response;
+                            return new Response(JSON.stringify(parsed), {
+                                status: response.status,
+                                statusText: response.statusText,
+                                headers: response.headers,
+                            });
+                        }
+                    }
+                    catch {
+                        /* ignore parse errors */
+                    }
+                }
+            }
+            if (isMendelFlagsUrl(url) && response.ok) {
+                const contentType = response.headers.get('content-type');
+                const ctLower = (contentType || '').toLowerCase();
+                const isGrpcWeb = ctLower.includes('application/grpc-web');
+                const isJson = isJsonResponse(contentType);
+                if (isGrpcWeb || isJson) {
+                    const customModels = await getCustomModelsForInjection();
                     if (customModels && customModels.length > 0) {
                         try {
-                            const responseText = this.responseText;
-                            if (responseText && responseText.length > 10) {
-                                const parsed = JSON.parse(responseText);
-                                if (injectMissingCustomModels(parsed, customModels)) {
-                                    // Override only a changed response; keep native event ordering intact.
-                                    Object.defineProperty(this, 'responseText', { value: JSON.stringify(parsed), writable: true });
-                                    Object.defineProperty(this, 'response', { value: JSON.stringify(parsed), writable: true });
+                            const cloned = response.clone();
+                            if (isJson) {
+                                const text = await cloned.text();
+                                if (text && text.length > 2) {
+                                    const parsed = JSON.parse(text);
+                                    if (injectCustomOrchestratorModelRoles(parsed, customModels)) {
+                                        return new Response(JSON.stringify(parsed), {
+                                            status: response.status,
+                                            statusText: response.statusText,
+                                            headers: headersWithoutContentLength(response.headers),
+                                        });
+                                    }
+                                }
+                            }
+                            else {
+                                const raw = new Uint8Array(await cloned.arrayBuffer());
+                                const rewritten = rewriteGrpcWebJsonFrames(raw, (parsed) => injectCustomOrchestratorModelRoles(parsed, customModels));
+                                if (rewritten) {
+                                    return new Response(rewritten, {
+                                        status: response.status,
+                                        statusText: response.statusText,
+                                        headers: headersWithoutContentLength(response.headers),
+                                    });
                                 }
                             }
                         }
                         catch {
-                            /* ignore parse errors */
+                            /* ignore Mendel parse errors */
                         }
                     }
                 }
-                if (origOnReady)
-                    origOnReady.call(this, ev);
-            };
-        }
-        return origXHRSend.call(this, body);
-    };
-    // Intercept fetch responses for model endpoints
-    const origFetch = window.fetch;
-    window.fetch = async function (input, init) {
-        const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-        const response = await origFetch.call(window, input, init);
-        if ((url.includes('GetAvailableModels') || url.includes('fetchAvailableModels')) &&
-            isSafeToIntercept(url) &&
-            response.ok) {
-            if (!isJsonResponse(response.headers.get('content-type'))) {
-                return response;
             }
-            const customModels = await getCustomModelsForInjection();
-            if (customModels && customModels.length > 0) {
-                try {
-                    const cloned = response.clone();
-                    const text = await cloned.text();
-                    if (text && text.length > 10) {
-                        const parsed = JSON.parse(text);
-                        if (!injectMissingCustomModels(parsed, customModels))
-                            return response;
-                        return new Response(JSON.stringify(parsed), {
-                            status: response.status,
-                            statusText: response.statusText,
-                            headers: response.headers,
-                        });
+            if (isCascadeModelConfigUrl(url) && response.ok) {
+                const contentType = response.headers.get('content-type');
+                const ctLower = (contentType || '').toLowerCase();
+                const isGrpcWeb = ctLower.includes('application/grpc-web');
+                const isJson = isJsonResponse(contentType);
+                if (isGrpcWeb || isJson) {
+                    try {
+                        const cloned = response.clone();
+                        if (isJson) {
+                            const text = await cloned.text();
+                            if (text && (text.includes('clientModelConfigs') || text.includes('client_model_configs'))) {
+                                const customModels = await getCustomModelsForInjection();
+                                if (customModels && customModels.length > 0) {
+                                    const parsed = JSON.parse(text);
+                                    if (normalizeCascadeClientModelConfigs(parsed, customModels)) {
+                                        return new Response(JSON.stringify(parsed), {
+                                            status: response.status,
+                                            statusText: response.statusText,
+                                            headers: headersWithoutContentLength(response.headers),
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                        else {
+                            const raw = new Uint8Array(await cloned.arrayBuffer());
+                            const preview = new TextDecoder().decode(raw);
+                            if (preview.includes('clientModelConfigs') || preview.includes('client_model_configs')) {
+                                const customModels = await getCustomModelsForInjection();
+                                if (customModels && customModels.length > 0) {
+                                    const rewritten = rewriteGrpcWebJsonFrames(raw, (parsed) => normalizeCascadeClientModelConfigs(parsed, customModels));
+                                    if (rewritten) {
+                                        return new Response(rewritten, {
+                                            status: response.status,
+                                            statusText: response.statusText,
+                                            headers: headersWithoutContentLength(response.headers),
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch {
+                        /* ignore cascade config parse errors */
                     }
                 }
-                catch {
-                    /* ignore parse errors */
-                }
             }
-        }
-        return response;
-    };
-    function hashCodeStr(s) {
-        let h = 5381;
-        for (let i = 0; i < s.length; i++) {
-            h = (h << 5) + h + s.charCodeAt(i);
-            h = h & h;
-        }
-        return Math.abs(h);
+            return response;
+        };
+        wrappedFetch._agy_wrapped = true;
+        window.fetch = wrappedFetch;
     }
-    // Start the observer
-    setupInjectionObserver();
-});
+}
+installMainWorldBridge();
+installNetworkInterceptors();
 //# sourceMappingURL=customPreload.js.map

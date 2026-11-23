@@ -10,6 +10,8 @@ export interface SubagentRoutingContext {
     readonly requestId: string;
     /** Set to the actual configured provider attempt before emitting its output. */
     modelName?: string;
+    /** The incoming HTTP request's matched custom model before subagent override. */
+    httpModelName?: string;
 }
 /**
  * Bridge the IDE's fixed subagent tiers at the common Gemini boundary. Provider
@@ -38,7 +40,7 @@ export declare class SubagentRoutingBridge {
     private requireBoundModel;
     private validateBinding;
     private bind;
-    prepareRequest(body: GeminiBody, resolve: SubagentModelResolver): {
+    prepareRequest(body: GeminiBody, resolve: SubagentModelResolver, requestModelName?: string): {
         body: GeminiBody;
         context: SubagentRoutingContext;
         modelName?: string;

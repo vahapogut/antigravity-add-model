@@ -38,6 +38,7 @@ async function installVendor(
   version = '2.0.1',
   main = 'dist/main.js',
   unpackDir = 'native',
+  spreadDefaults = false,
 ) {
   const source = fs.mkdtempSync(path.join(root, 'vendor-'));
   put(path.join(source, 'package.json'), JSON.stringify({ version, main, vendorField: 'retain me' }));
@@ -49,10 +50,25 @@ async function installVendor(
     path.join(source, 'dist/preload.js'),
     `// original preload\nconst electron_1 = require('electron');\nelectron_1.contextBridge.exposeInMainWorld('wsl', { getState: () => electron_1.ipcRenderer.invoke('wsl:get-state') });\n`,
   );
-  put(
-    path.join(source, 'dist/languageServer.js'),
-    `// original server\nfunction startLanguageServer(port, csrf, options = {}) {\n const { headless, wsl } = options;\n return new Promise((resolve, reject) => {\n const args = ['--https_server_port', String(port), '--api_server_url', 'https://generativelanguage.googleapis.com', '--cloud_code_endpoint', 'https://daily-cloudcode-pa.googleapis.com', '--enable_sidecars'];\n resolve({ port, args });\n });\n}\n`,
-  );
+  if (spreadDefaults) {
+    put(
+      path.join(source, 'dist/languageServer.js'),
+      `const child_process_1 = require('child_process');\nconst electron_1 = require('electron');\nconst paths_1 = require('./paths');\nconst wsl_1 = require('./wsl');\nconst lsDefaults_1 = require('./lsDefaults');\nasync function startLanguageServer(port, csrf, options = {}) {\n const { headless, hostBridgeUrl, hostBridgeToken, wsl } = options;\n return new Promise((resolve) => {\n const args = [\n ...(0, lsDefaults_1.baseLsArgs)({\n ideVersion: electron_1.app.getVersion(),\n httpsServerPort: port,\n csrfToken: csrf,\n appDataDir: (0, paths_1.getAppDataDirName)(),\n }),\n '--enable_sidecars',\n ];\n if (hostBridgeUrl && hostBridgeToken) args.push(\`--host_bridge_url=\${hostBridgeUrl}\`, \`--host_bridge_token=\${hostBridgeToken}\`);\n if (headless) args.push('--headless');\n let spawnCmd = 'vendor-language-server';\n let spawnArgs = args;\n if (wsl) {\n args.push('--exit_on_stdin_close');\n spawnArgs = (0, wsl_1.wslShellArgs)(wsl.distro, 'exec "$@"', args);\n }\n (0, child_process_1.spawn)(spawnCmd, spawnArgs, {});\n resolve({ wsl });\n });\n}\n`,
+    );
+    put(
+      path.join(source, 'dist/lsDefaults.js'),
+      `Object.defineProperty(exports, '__esModule', { value: true });\nexports.LS_CLOUD_CODE_ENDPOINT = exports.LS_API_SERVER_URL = void 0;\nexports.baseLsArgs = baseLsArgs;\nexports.LS_API_SERVER_URL = 'https://generativelanguage.googleapis.com';\nexports.LS_CLOUD_CODE_ENDPOINT = 'https://daily-cloudcode-pa.googleapis.com';\nfunction baseLsArgs(opts) {\n return [\n '--standalone', '--override_ide_name', 'antigravity', '--subclient_type', 'hub',\n '--override_ide_version', opts.ideVersion, '--override_user_agent_name', 'antigravity',\n '--https_server_port', String(opts.httpsServerPort), '--csrf_token', opts.csrfToken,\n '--app_data_dir', opts.appDataDir, '--api_server_url', exports.LS_API_SERVER_URL,\n '--cloud_code_endpoint', exports.LS_CLOUD_CODE_ENDPOINT,\n ];\n}\n`,
+    );
+    put(
+      path.join(source, 'dist/remote/remoteLsArgs.js'),
+      `// original remote SSH defaults\nconst lsDefaults_1 = require('../lsDefaults');\nexports.buildRemoteLsArgs = (opts) => [...lsDefaults_1.baseLsArgs(opts), '--persistent_mode'];\n`,
+    );
+  } else {
+    put(
+      path.join(source, 'dist/languageServer.js'),
+      `// original server\nfunction startLanguageServer(port, csrf, options = {}) {\n const { headless, wsl } = options;\n return new Promise((resolve, reject) => {\n const args = ['--https_server_port', String(port), '--api_server_url', 'https://generativelanguage.googleapis.com', '--cloud_code_endpoint', 'https://daily-cloudcode-pa.googleapis.com', '--enable_sidecars'];\n resolve({ port, args });\n });\n}\n`,
+    );
+  }
   put(path.join(source, 'dist/ipcHandlers.js'), '// vendor WSL and IPC handlers\n');
   put(path.join(source, 'dist/utils.js'), '// vendor window and certificate settings\n');
   put(path.join(source, 'dist/vendor-only.js'), `// vendor ${version}\n`);
@@ -66,13 +82,13 @@ async function installVendor(
   asar.uncache(path.join(resources, 'app.asar'));
 }
 
-async function fixture(options: { binary?: string; main?: string } = {}) {
+async function fixture(options: { binary?: string; main?: string; spreadDefaults?: boolean } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'antigravity-deployment-test-'));
   roots.push(root);
   const resources = path.join(root, 'App With Spaces', 'resources');
   const dist = path.join(root, 'build');
   for (const file of REQUIRED_BUILD_FILES) put(path.join(dist, file), `// patch ${file}\n`);
-  await installVendor(root, resources, '2.0.1', options.main);
+  await installVendor(root, resources, '2.0.1', options.main, 'native', options.spreadDefaults);
   if (options.binary)
     put(path.join(resources, 'bin/language_server.exe'), Buffer.from(`MZ\0\x01vendor ${options.binary}\0suffix`));
   return { root, resources, dist };
@@ -141,6 +157,22 @@ describe('standalone deployment with real ASAR fixtures', () => {
       'unlisted 2.0.1',
     );
     expect(state(f.resources).original).toEqual(original);
+  });
+
+  it('patches local 2.32 startup without changing shared defaults or remote SSH args', async () => {
+    const f = await fixture({ spreadDefaults: true });
+    const original = fingerprint(f.resources);
+    const languageServer = readArchive(f.resources, 'dist/languageServer.js');
+    const defaults = readArchive(f.resources, 'dist/lsDefaults.js');
+    const remote = readArchive(f.resources, 'dist/remote/remoteLsArgs.js');
+    await deploy(f);
+    expect(readArchive(f.resources, 'dist/languageServer.js')).toContain("require('./modelPatch/proxy')");
+    expect(readArchive(f.resources, 'dist/languageServer.js')).toContain("args.push('--inference_api_server_url'");
+    expect(readArchive(f.resources, 'dist/lsDefaults.js')).toBe(defaults);
+    expect(readArchive(f.resources, 'dist/remote/remoteLsArgs.js')).toBe(remote);
+    await deploy({ resources: f.resources, restore: true });
+    expect(fingerprint(f.resources)).toEqual(original);
+    expect(readArchive(f.resources, 'dist/languageServer.js')).toBe(languageServer);
   });
 
   it('keeps new runtime files unpacked when their original ancestor directory was unpacked', async () => {

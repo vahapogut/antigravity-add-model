@@ -133,7 +133,13 @@ import {
 // Model configuration & capability detection
 import { detectModelCapabilities, nativeCatalogCapabilities, nativeModelExperiments } from './proxy/modelUtils';
 import { CloudCodeRouting } from './proxy/cloudCodeRouting';
-import { catalogModelSlug, catalogDisplayNames, localModelSlug, mergeCloudCodeCatalog } from './proxy/modelCatalog';
+import {
+  catalogModelSlug,
+  catalogDisplayNames,
+  fallbackModelDisplayName,
+  localModelSlug,
+  mergeCloudCodeCatalog,
+} from './proxy/modelCatalog';
 import { allocateModelIdentities, ModelIdentity } from './modelIdentity';
 
 // Custom request transport and model storage
@@ -186,7 +192,14 @@ function modelIdentities(models: CustomModel[], upstream?: unknown): Map<string,
     const saved = readModelConfig(getCustomModelsPath()).filter(
       (model) => typeof model.name === 'string' && model.name,
     );
-    const configured = [...new Map([...saved, ...models].map((model) => [model.name, model])).values()];
+    const configured: CustomModel[] = [];
+    const seen = new Set<string>();
+    for (const model of [...saved, ...models] as CustomModel[]) {
+      if (!seen.has(model.name)) {
+        seen.add(model.name);
+        configured.push(model);
+      }
+    }
     return new Map(
       allocateModelIdentities(path.dirname(getCustomModelsPath()), configured, upstream).map((identity) => [
         identity.name,
@@ -464,10 +477,17 @@ export function loadCustomModels(): CustomModel[] {
 
     // Validate all models
     const validModels: CustomModel[] = [];
+    const seenNames = new Set<string>();
     for (let i = 0; i < decrypted.length; i++) {
       const validation = validateCustomModel(decrypted[i]) as { valid: boolean; error?: string };
       if (validation.valid) {
-        if (decrypted[i].enabled !== false) validModels.push(decrypted[i]);
+        if (decrypted[i].enabled !== false && !seenNames.has(decrypted[i].name)) {
+          seenNames.add(decrypted[i].name);
+          if (!decrypted[i].displayName || !decrypted[i].displayName.trim()) {
+            decrypted[i].displayName = fallbackModelDisplayName(decrypted[i]);
+          }
+          validModels.push(decrypted[i]);
+        }
       } else {
         log.warn(`[Proxy] Skipping invalid model at index ${i}: ${validation.error}`);
       }
@@ -1139,11 +1159,12 @@ function handleGetAvailableModelsProxy(res: http.ServerResponse, reqBody: Buffer
                 for (const m of customModels) {
                   const placeholderId = identities.get(m.name)?.placeholderId;
                   if (!placeholderId) continue;
-                  const entry = encodeModelEntryForGetModels('models/' + placeholderId, m.displayName, fieldMapping);
+                  const label = fallbackModelDisplayName(m);
+                  const entry = encodeModelEntryForGetModels('models/' + placeholderId, label, fieldMapping);
                   const tagBuf = encodeVarint(modelTag);
                   const lenBuf = encodeVarint(entry.length);
                   newParts.push(tagBuf, lenBuf, entry);
-                  log.info(`[Proxy] Injected into GetAvailableModels: ${m.displayName} => ${placeholderId}`);
+                  log.info(`[Proxy] Injected into GetAvailableModels: ${label} => ${placeholderId}`);
                 }
 
                 const newMsgBody = Buffer.concat(newParts);
@@ -1441,6 +1462,7 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
         );
         {
           const customModels = loadCustomModels();
+          const requestedCustomModel = matchCustomModel(customModels, modelName, modelId);
           const actualGeminiBody = { ...((reqJson.request || reqJson) as GeminiRequestBody) };
           if (typeof reqJson.sessionId === 'string') actualGeminiBody.sessionId = reqJson.sessionId;
           if (typeof reqJson.conversationId === 'string') actualGeminiBody.conversationId = reqJson.conversationId;
@@ -1449,10 +1471,11 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
           const prepared = subagentRouting.prepareRequest(
             actualGeminiBody,
             (selector) => resolveConfiguredSubagentModel(customModels, selector)?.name,
+            requestedCustomModel?.name,
           );
           const matchedCustomModel = prepared.modelName
             ? resolveConfiguredSubagentModel(customModels, prepared.modelName)
-            : matchCustomModel(customModels, modelName, modelId);
+            : requestedCustomModel;
           if (matchedCustomModel) {
             log.info(
               `[Proxy] Intercepting Cloud Code generation for custom model: ${modelName} => ${matchedCustomModel.displayName}`,
@@ -1521,13 +1544,15 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
       const customModels = loadCustomModels();
       try {
         const geminiBody = JSON.parse(bodyStr) as GeminiRequestBody;
+        const requestedCustomModel = matchCustomModel(customModels, matchedModelName);
         const prepared = subagentRouting.prepareRequest(
           geminiBody,
           (selector) => resolveConfiguredSubagentModel(customModels, selector)?.name,
+          requestedCustomModel?.name,
         );
         const matchedCustomModel = prepared.modelName
           ? resolveConfiguredSubagentModel(customModels, prepared.modelName)
-          : matchCustomModel(customModels, matchedModelName);
+          : requestedCustomModel;
         if (matchedCustomModel) {
           resolveFileData(
             prepared.body as GeminiRequestBody,

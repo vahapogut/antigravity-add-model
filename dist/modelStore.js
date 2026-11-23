@@ -189,6 +189,7 @@ class ModelStore {
         delete model.nativeContextWindow;
         delete model.nativeMaxOutputTokens;
         delete model.nativeModelExperiments;
+        delete model.configIndex;
         if (!model.name?.startsWith('models/'))
             model.name = `models/${model.name || ''}`;
         if (model.name === 'models/')
