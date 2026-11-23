@@ -190,6 +190,30 @@ function validateRequireBinding(tree, binding, moduleName) {
   }
 }
 
+// 2.33+ emits `...(opts.csrfToken !== undefined ? ['--csrf_token', opts.csrfToken] : [])`.
+// Return the forwarded csrfToken node when the spread matches that exact shape, else null.
+function conditionalCsrfOption(expr, parameter) {
+  expr = ts.skipParentheses(expr);
+  if (
+    !ts.isConditionalExpression(expr) ||
+    !ts.isBinaryExpression(expr.condition) ||
+    expr.condition.operatorToken.kind !== ts.SyntaxKind.ExclamationEqualsEqualsToken ||
+    !isProperty(expr.condition.left, parameter, 'csrfToken') ||
+    !ts.isIdentifier(expr.condition.right) ||
+    expr.condition.right.text !== 'undefined' ||
+    !ts.isArrayLiteralExpression(expr.whenTrue) ||
+    expr.whenTrue.elements.length !== 2 ||
+    !ts.isStringLiteral(expr.whenTrue.elements[0]) ||
+    expr.whenTrue.elements[0].text !== '--csrf_token' ||
+    !isProperty(expr.whenTrue.elements[1], parameter, 'csrfToken') ||
+    !ts.isArrayLiteralExpression(expr.whenFalse) ||
+    expr.whenFalse.elements.length !== 0
+  ) {
+    return null;
+  }
+  return expr.whenTrue.elements[1];
+}
+
 function validateBaseLsDefaults(bytes) {
   const file = 'dist/lsDefaults.js';
   const { tree } = parse(file, bytes);
@@ -217,8 +241,25 @@ function validateBaseLsDefaults(bytes) {
   if (!ts.isReturnStatement(returned) || !returned.expression || !ts.isArrayLiteralExpression(returned.expression)) {
     unsupported(file, 'baseLsArgs must directly return one literal array');
   }
-  const elements = returned.expression.elements;
-  if (elements.length !== 19 || elements.some(ts.isSpreadElement)) {
+  const rawElements = returned.expression.elements;
+  const spreadElements = rawElements.filter(ts.isSpreadElement);
+  let elements;
+  if (rawElements.length === 19 && spreadElements.length === 0) {
+    elements = rawElements;
+  } else if (
+    rawElements.length === 18 &&
+    spreadElements.length === 1 &&
+    rawElements.indexOf(spreadElements[0]) === 11
+  ) {
+    const csrfOption = conditionalCsrfOption(spreadElements[0].expression, parameter);
+    if (!csrfOption) unsupported(file, 'unrecognized conditional CSRF spread in baseLsArgs');
+    elements = [
+      ...rawElements.slice(0, 11),
+      ts.factory.createStringLiteral('--csrf_token'),
+      csrfOption,
+      ...rawElements.slice(12),
+    ];
+  } else {
     unsupported(file, 'baseLsArgs must contain the recognized 19 literal entries');
   }
   const literals = new Map([
@@ -426,17 +467,22 @@ function validateSpreadStartup(tree, fn, args) {
     validateRequireBinding(tree, binding, moduleName);
   }
   const options = call.arguments[0];
-  const names = ['ideVersion', 'httpsServerPort', 'csrfToken', 'appDataDir'];
-  if (!ts.isObjectLiteralExpression(options) || options.properties.length !== names.length) {
-    unsupported(file, 'baseLsArgs must receive the four recognized options');
+  // 2.32 passes csrfToken in the call; 2.33+ moves it to child env/stdin and omits it here.
+  const withCsrf = ['ideVersion', 'httpsServerPort', 'csrfToken', 'appDataDir'];
+  const withoutCsrf = ['ideVersion', 'httpsServerPort', 'appDataDir'];
+  if (!ts.isObjectLiteralExpression(options)) {
+    unsupported(file, 'baseLsArgs must receive an object literal of options');
   }
-  options.properties.forEach((property, index) => {
-    if (!ts.isPropertyAssignment(property) || !ts.isIdentifier(property.name) || property.name.text !== names[index]) {
-      unsupported(file, `unrecognized baseLsArgs option at index ${index}`);
-    }
-  });
+  const optionNames = options.properties.map((property) =>
+    ts.isPropertyAssignment(property) && ts.isIdentifier(property.name) ? property.name.text : null,
+  );
+  const hasCsrf = optionNames.join(',') === withCsrf.join(',');
+  if (!hasCsrf && optionNames.join(',') !== withoutCsrf.join(',')) {
+    unsupported(file, 'baseLsArgs must receive the recognized options');
+  }
   const values = options.properties.map((property) => property.initializer);
   const versionTarget = ts.isCallExpression(values[0]) ? callTarget(values[0].expression) : null;
+  const appDataIndex = hasCsrf ? 3 : 2;
   if (
     !ts.isCallExpression(values[0]) ||
     values[0].arguments.length ||
@@ -444,10 +490,9 @@ function validateSpreadStartup(tree, fn, args) {
     !isProperty(versionTarget.expression, 'electron_1', 'app') ||
     !ts.isIdentifier(values[1]) ||
     values[1].text !== fn.parameters[0].name.text ||
-    !ts.isIdentifier(values[2]) ||
-    values[2].text !== fn.parameters[1].name.text ||
-    !isNamedCall(values[3], 'paths_1', 'getAppDataDirName') ||
-    values[3].arguments.length
+    (hasCsrf && (!ts.isIdentifier(values[2]) || values[2].text !== fn.parameters[1].name.text)) ||
+    !isNamedCall(values[appDataIndex], 'paths_1', 'getAppDataDirName') ||
+    values[appDataIndex].arguments.length
   ) {
     unsupported(file, 'baseLsArgs option values changed');
   }
@@ -479,7 +524,10 @@ function validateSpreadStartup(tree, fn, args) {
     if (
       push.arguments.length === 2 &&
       isTemplate(push.arguments[0], '--host_bridge_url=', 'hostBridgeUrl') &&
-      isTemplate(push.arguments[1], '--host_bridge_token=', 'hostBridgeToken')
+      // 2.32 forwards the token in argv; 2.33+ reads it from stdin instead.
+      (isTemplate(push.arguments[1], '--host_bridge_token=', 'hostBridgeToken') ||
+        (ts.isStringLiteral(push.arguments[1]) &&
+          push.arguments[1].text === '--read_host_bridge_token_from_stdin'))
     ) {
       kind = 'host-bridge';
     } else if (
@@ -542,6 +590,14 @@ function validateSpreadStartup(tree, fn, args) {
     ) {
       if (spawnCall) unsupported(file, 'multiple language-server spawn calls');
       spawnCall = parent;
+    } else if (
+      ts.isCallExpression(parent) &&
+      parent.arguments.length === 1 &&
+      parent.arguments[0] === reference &&
+      isNamedCall(parent, 'authBootstrap_1', 'redactSensitiveArgsForLog')
+    ) {
+      // 2.33+ logs a redacted copy of spawnArgs; this is a read, not a mutation.
+      validateRequireBinding(tree, 'authBootstrap_1', './authBootstrap');
     } else {
       unsupported(file, 'unrecognized mutation of language-server spawnArgs');
     }

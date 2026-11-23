@@ -229,14 +229,20 @@ class SubagentRoutingBridge {
             throw new SubagentRoutingError('Ambiguous subagent model routing for this conversation.');
         return intent;
     }
-    bind(scope, token) {
+    bind(scope, token, httpModelName) {
         const intent = this.validateBinding(scope, token);
         intent.childScope = scope;
         intent.touched = this.now();
         this.expiredScopes.delete(scope);
-        this.bindings.set(scope, { token, modelName: intent.modelName, touched: this.now() });
+        const prevHttpModel = this.bindings.get(scope)?.httpModelName;
+        this.bindings.set(scope, {
+            token,
+            modelName: intent.modelName,
+            httpModelName: httpModelName ?? prevHttpModel,
+            touched: this.now(),
+        });
     }
-    prepareRequest(body, resolve) {
+    prepareRequest(body, resolve, requestModelName) {
         this.prune();
         const prepared = clone(body);
         const conversation = identifier(object(prepared.labels)?.cascade_id) ?? identifier(prepared.conversationId);
@@ -244,6 +250,7 @@ class SubagentRoutingBridge {
             scope: conversation ? `conversation:${conversation}` : `request:${(0, crypto_1.randomUUID)()}`,
             stable: Boolean(conversation),
             requestId: (0, crypto_1.randomUUID)(),
+            httpModelName: requestModelName,
         };
         const contents = prepared.contents || [];
         const firstUser = contents.findIndex((content) => content.role === 'user' &&
@@ -275,9 +282,15 @@ class SubagentRoutingBridge {
             const intent = this.requireMarker(token);
             if (intent.scope === context.scope)
                 throw new SubagentRoutingError('A subagent route cannot replace its parent conversation model.');
+            if (intent.inherited &&
+                requestModelName &&
+                requestModelName !== intent.modelName &&
+                requestModelName !== intent.parentHttpModelName) {
+                intent.modelName = this.requireBoundModel(requestModelName, resolve);
+            }
             modelName = this.requireBoundModel(intent.modelName, resolve);
             if (context.stable)
-                this.bind(context.scope, token);
+                this.bind(context.scope, token, requestModelName);
             intent.touched = this.now();
         }
         if (!modelName && context.stable) {
@@ -287,6 +300,8 @@ class SubagentRoutingBridge {
             if (binding) {
                 this.requireMarker(binding.token).touched = this.now();
                 modelName = this.requireBoundModel(binding.modelName, resolve);
+                if (binding.httpModelName)
+                    context.httpModelName = binding.httpModelName;
                 binding.touched = this.now();
             }
         }
@@ -505,6 +520,7 @@ class SubagentRoutingBridge {
             return {
                 selector: rawModel,
                 modelName: inherited ? this.requireBoundModel(inherited, resolve) : this.requireModel(selector, resolve),
+                inherited: Boolean(inherited),
             };
         });
         if (intents.filter((intent) => intent.modelName).length > Math.min(128, this.maxEntries))
@@ -547,6 +563,8 @@ class SubagentRoutingBridge {
                 toolId: id,
                 selector: intent.selector,
                 modelName: intent.modelName,
+                inherited: intent.inherited,
+                parentHttpModelName: context.httpModelName ?? context.modelName,
                 touched: this.now(),
             });
             entries[index].Model = 'inherit';

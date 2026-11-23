@@ -124,7 +124,14 @@ function modelIdentities(models, upstream) {
     try {
         // Include disabled entries so toggling an effort variant cannot reassign another model's identity.
         const saved = (0, modelStore_1.readModelConfig)(getCustomModelsPath()).filter((model) => typeof model.name === 'string' && model.name);
-        const configured = [...new Map([...saved, ...models].map((model) => [model.name, model])).values()];
+        const configured = [];
+        const seen = new Set();
+        for (const model of [...saved, ...models]) {
+            if (!seen.has(model.name)) {
+                seen.add(model.name);
+                configured.push(model);
+            }
+        }
         return new Map((0, modelIdentity_1.allocateModelIdentities)(path.dirname(getCustomModelsPath()), configured, upstream).map((identity) => [
             identity.name,
             identity,
@@ -372,11 +379,17 @@ function loadCustomModels() {
         }
         // Validate all models
         const validModels = [];
+        const seenNames = new Set();
         for (let i = 0; i < decrypted.length; i++) {
             const validation = validateCustomModel(decrypted[i]);
             if (validation.valid) {
-                if (decrypted[i].enabled !== false)
+                if (decrypted[i].enabled !== false && !seenNames.has(decrypted[i].name)) {
+                    seenNames.add(decrypted[i].name);
+                    if (!decrypted[i].displayName || !decrypted[i].displayName.trim()) {
+                        decrypted[i].displayName = (0, modelCatalog_1.fallbackModelDisplayName)(decrypted[i]);
+                    }
                     validModels.push(decrypted[i]);
+                }
             }
             else {
                 electron_log_1.default.warn(`[Proxy] Skipping invalid model at index ${i}: ${validation.error}`);
@@ -969,11 +982,12 @@ function handleGetAvailableModelsProxy(res, reqBody, lsUrl) {
                                     const placeholderId = identities.get(m.name)?.placeholderId;
                                     if (!placeholderId)
                                         continue;
-                                    const entry = encodeModelEntryForGetModels('models/' + placeholderId, m.displayName, fieldMapping);
+                                    const label = (0, modelCatalog_1.fallbackModelDisplayName)(m);
+                                    const entry = encodeModelEntryForGetModels('models/' + placeholderId, label, fieldMapping);
                                     const tagBuf = encodeVarint(modelTag);
                                     const lenBuf = encodeVarint(entry.length);
                                     newParts.push(tagBuf, lenBuf, entry);
-                                    electron_log_1.default.info(`[Proxy] Injected into GetAvailableModels: ${m.displayName} => ${placeholderId}`);
+                                    electron_log_1.default.info(`[Proxy] Injected into GetAvailableModels: ${label} => ${placeholderId}`);
                                 }
                                 const newMsgBody = Buffer.concat(newParts);
                                 const newHeader = Buffer.alloc(5);
@@ -1242,6 +1256,7 @@ function handleRequest(req, res) {
                 electron_log_1.default.info(`[Proxy] Cloud Code generation request model: ${modelName}, modelId: ${modelId}, url: ${req.url}, bodyKeys: ${Object.keys(reqJson).join(',')}`);
                 {
                     const customModels = loadCustomModels();
+                    const requestedCustomModel = matchCustomModel(customModels, modelName, modelId);
                     const actualGeminiBody = { ...(reqJson.request || reqJson) };
                     if (typeof reqJson.sessionId === 'string')
                         actualGeminiBody.sessionId = reqJson.sessionId;
@@ -1249,10 +1264,10 @@ function handleRequest(req, res) {
                         actualGeminiBody.conversationId = reqJson.conversationId;
                     if (!actualGeminiBody.labels && reqJson.labels && typeof reqJson.labels === 'object')
                         actualGeminiBody.labels = reqJson.labels;
-                    const prepared = subagentRouting_1.subagentRouting.prepareRequest(actualGeminiBody, (selector) => (0, subagentModels_1.resolveConfiguredSubagentModel)(customModels, selector)?.name);
+                    const prepared = subagentRouting_1.subagentRouting.prepareRequest(actualGeminiBody, (selector) => (0, subagentModels_1.resolveConfiguredSubagentModel)(customModels, selector)?.name, requestedCustomModel?.name);
                     const matchedCustomModel = prepared.modelName
                         ? (0, subagentModels_1.resolveConfiguredSubagentModel)(customModels, prepared.modelName)
-                        : matchCustomModel(customModels, modelName, modelId);
+                        : requestedCustomModel;
                     if (matchedCustomModel) {
                         electron_log_1.default.info(`[Proxy] Intercepting Cloud Code generation for custom model: ${modelName} => ${matchedCustomModel.displayName}`);
                         const isStream = req.url.includes('streamGenerateContent') || req.url.includes('alt=sse');
@@ -1309,10 +1324,11 @@ function handleRequest(req, res) {
             const customModels = loadCustomModels();
             try {
                 const geminiBody = JSON.parse(bodyStr);
-                const prepared = subagentRouting_1.subagentRouting.prepareRequest(geminiBody, (selector) => (0, subagentModels_1.resolveConfiguredSubagentModel)(customModels, selector)?.name);
+                const requestedCustomModel = matchCustomModel(customModels, matchedModelName);
+                const prepared = subagentRouting_1.subagentRouting.prepareRequest(geminiBody, (selector) => (0, subagentModels_1.resolveConfiguredSubagentModel)(customModels, selector)?.name, requestedCustomModel?.name);
                 const matchedCustomModel = prepared.modelName
                     ? (0, subagentModels_1.resolveConfiguredSubagentModel)(customModels, prepared.modelName)
-                    : matchCustomModel(customModels, matchedModelName);
+                    : requestedCustomModel;
                 if (matchedCustomModel) {
                     resolveFileData(prepared.body, req.headers, res).then(() => {
                         handleCustomModelRequest(res, matchedCustomModel, prepared.body, isStandardStream, false);

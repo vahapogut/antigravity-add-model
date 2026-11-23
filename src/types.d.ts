@@ -188,6 +188,7 @@ declare module 'electron' {
     getZoomLevel(): number;
     getZoomFactor(): number;
     setZoomFactor(factor: number): void;
+    executeJavaScript(code: string, userGesture?: boolean): Promise<unknown>;
   };
 
   // Type-only export for function signatures that need BrowserWindow as a type

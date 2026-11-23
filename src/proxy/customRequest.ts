@@ -214,7 +214,7 @@ export async function runCustomModelRequest(
   const resolveSubagent = (selector: string) => resolveConfiguredSubagentModel(allModels, selector)?.name;
   let prepared: ReturnType<typeof subagentRouting.prepareRequest>;
   try {
-    prepared = subagentRouting.prepareRequest(originalBody, resolveSubagent);
+    prepared = subagentRouting.prepareRequest(originalBody, resolveSubagent, primary.name);
     originalBody = prepared.body;
     if (prepared.modelName) primary = resolveConfiguredSubagentModel(allModels, prepared.modelName)!;
   } catch (error) {

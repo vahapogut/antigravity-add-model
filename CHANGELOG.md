@@ -2,6 +2,27 @@
 
 Release history preserved from the project README. Historical entries describe the behavior of their release; see [compatibility and recovery](docs/compatibility.md) for current installation guidance.
 
+### 2.2.2 — Main-world fetch bridge for Electron contextIsolation
+
+- Inject the `GetMendelFlags` and `GetUserStatus`/`GetCascadeModelConfigs` `window.fetch` interceptor into Electron's main world via `webFrame.executeJavaScript` + `window.postMessage` (passing only non-secret `{ slug, baseSlug, label, placeholder }` metadata) so `contextIsolation: true, sandbox: true` renderer windows intercept `ls_web/main.js` requests.
+- Upgrade `scripts/orchestrator-custom-models.ps1` `--check` and `--dry-run` to report per-marker `MATCH`/`MISSING` status for both `dist/customPreload.js` and installed `app.asar`.
+
+### 2.2.1 — Dynamic custom models & edge-case hardening for Orchestrator and Executor pickers
+
+- Install preload network interceptors at module initialization (before `DOMContentLoaded` and synchronous `/main.js` evaluation) so initial `LanguageServerService/GetMendelFlags` and `LanguageServerService/GetUserStatus` requests are always intercepted at boot.
+- Normalize `cascadeModelConfigData.clientModelConfigs` in `GetUserStatus` and `GetCascadeModelConfigs` responses so built-in Gemini models always appear first (preserving native order) followed by enabled custom models in `custom_models.json` order, and fall back missing `displayName` values to the model ID.
+- Deduplicate duplicate model IDs in `storage:get-custom-models`, `src/proxy.ts`, and `src/customPreload.ts` without disabling native picker slots, preserve recency ordering in `storage:get-custom-models` while exposing `configIndex` so Orchestrator/Executor pickers derive all enabled custom models dynamically in `custom_models.json` order with no hard-coded IDs, and route inherited Orchestrator → Executor subagent calls to each model's own configured endpoint.
+- Add `--check` / `-Check`, `--dry-run` / `-DryRun`, and `--revert` / `-Revert` support to `scripts/orchestrator-custom-models.ps1`.
+
+### 2.2.0 — Custom models in Orchestrator and Executor pickers
+
+- Intercept `LanguageServerService/GetMendelFlags` responses (`application/grpc-web+json` 5-byte frames and plain JSON) in `src/customPreload.ts` to append enabled custom model base slugs to both `orchestrators` and `executors` in `orchestrator-model-roles` while preserving built-in Gemini ordering and gRPC-Web trailer frames.
+- Add `scripts/orchestrator-custom-models.ps1` with idempotent `-Backup`, `-Apply`, and `-Rollback` workflows verified against SHA-256 backup manifests.
+
+### 2.1.0 — Standalone Antigravity 2.33 / 2.34 support
+
+- The additive installer now recognizes the 2.33+ language-server startup: `baseLsArgs` may omit `csrfToken` (forwarded via child env/stdin), the host-bridge token may be read from stdin (`--read_host_bridge_token_from_stdin`), a redacted `spawnArgs` log copy is accepted as a read, and `lsDefaults` may wrap the CSRF flag in a conditional spread. 2.32 layouts remain supported; unknown layouts still fail closed.
+
 ### Unreleased — Local hardening
 
 - Text attachments are resolved with the same local file URL check as the request translators. File URLs that name another host are rejected in both places.

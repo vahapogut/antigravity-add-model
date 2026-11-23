@@ -229,7 +229,7 @@ async function runCustomModelRequest(res, primary, originalBody, isStream, allMo
     const resolveSubagent = (selector) => (0, subagentModels_1.resolveConfiguredSubagentModel)(allModels, selector)?.name;
     let prepared;
     try {
-        prepared = subagentRouting_1.subagentRouting.prepareRequest(originalBody, resolveSubagent);
+        prepared = subagentRouting_1.subagentRouting.prepareRequest(originalBody, resolveSubagent, primary.name);
         originalBody = prepared.body;
         if (prepared.modelName)
             primary = (0, subagentModels_1.resolveConfiguredSubagentModel)(allModels, prepared.modelName);

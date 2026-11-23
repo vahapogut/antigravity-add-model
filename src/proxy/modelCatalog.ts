@@ -30,6 +30,14 @@ export function matchesModelSlug(model: CatalogIdentity, value: string, models: 
   return id === localModelSlug(model) || id === catalogModelSlug(model, models);
 }
 
+export function fallbackModelDisplayName(model: CatalogIdentity): string {
+  const display = typeof model.displayName === 'string' ? model.displayName.trim() : '';
+  if (display) return display;
+  const external = typeof model.externalModelName === 'string' ? model.externalModelName.trim() : '';
+  if (external) return external;
+  return String(model.name || '').replace(/^models\//, '').trim() || String(model.name || '');
+}
+
 /** The native IDE resolves sorted options by label, so display labels must also be unique. */
 export function catalogDisplayNames(models: CatalogIdentity[], upstream: unknown = {}): Map<string, string> {
   const used = new Set<string>();
@@ -44,12 +52,12 @@ export function catalogDisplayNames(models: CatalogIdentity[], upstream: unknown
   }
   const counts = new Map<string, number>();
   for (const model of models) {
-    const label = model.displayName || model.name;
+    const label = fallbackModelDisplayName(model);
     counts.set(label, (counts.get(label) || 0) + 1);
   }
   const labels = new Map<string, string>();
   for (const model of [...models].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
-    const base = model.displayName || model.name;
+    const base = fallbackModelDisplayName(model);
     let label = base;
     if (counts.get(base)! > 1 || used.has(label)) label = `${base} (${model.name.replace(/^models\//, '')})`;
     let suffix = 2;
