@@ -18,3 +18,13 @@ scratch/
 dist/__mocks__/
 dist/*.test.js
 dist/**/*.test.js
+
+# Local configurations & secrets
+custom_models.json
+*.local.json
+.env
+.env.*
+*.key
+*.pem
+.antigravity-model-patch/
+
