@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { runInNewContext } from 'node:vm';
 import { planRuntimePatch } from '../../scripts/runtime-patch.mjs';
+import { sharedLsDefaults, sharedLsServer } from './fixtures/shared-ls-runtime';
 
 const vendorMain = `
 const electron_1 = require('electron');
@@ -43,7 +44,11 @@ const storageAPI = { getCustomModels: () => electron_1.ipcRenderer.invoke('model
 window.addEventListener('DOMContentLoaded', () => storageAPI.getCustomModels());
 `;
 
-function fixture(overrides: Record<string, string> = {}, build = customPreload, contextBuild = '// context preload fixture') {
+function fixture(
+  overrides: Record<string, string> = {},
+  build = customPreload,
+  contextBuild = '// context preload fixture',
+) {
   const files: Record<string, string> = {
     'dist/main.js': vendorMain,
     'dist/languageServer.js': vendorServer,
@@ -59,15 +64,32 @@ function fixture(overrides: Record<string, string> = {}, build = customPreload, 
   return { files, readVendor, readBuild, plan };
 }
 
-function serverFixture(source = vendorServer) {
-  const patched = fixture({ 'dist/languageServer.js': source }).plan().get('dist/languageServer.js')!.toString();
-  const exports: Record<string, (...args: unknown[]) => Promise<{ args: string[]; wsl?: unknown }>> = {};
+function serverFixture(source = vendorServer, defaults?: string) {
+  const patched = fixture({
+    'dist/languageServer.js': source,
+    ...(defaults === undefined ? {} : { 'dist/lsDefaults.js': defaults }),
+  })
+    .plan()
+    .get('dist/languageServer.js')!
+    .toString();
+  const exports: Record<
+    string,
+    (...args: unknown[]) => Promise<{
+      args: string[];
+      wsl?: unknown;
+      env?: Record<string, string>;
+      stdin?: string;
+    }>
+  > = {};
   const record = vi.fn();
   const startProxy = vi.fn().mockResolvedValue(61001);
+  const sharedExports = {};
+  if (defaults !== undefined) runInNewContext(defaults, { exports: sharedExports });
   runInNewContext(patched, {
     exports,
     record,
     require: (name: string) => {
+      if (name === './lsDefaults') return sharedExports;
       expect(name).toBe('./modelPatch/proxy');
       return { startProxy };
     },
@@ -76,6 +98,114 @@ function serverFixture(source = vendorServer) {
 }
 
 describe('vendor runtime adapter', () => {
+  it('inspects shared defaults without evaluating vendor code or editing the shared module', () => {
+    const defaults = `throw new Error('must not execute');\n${sharedLsDefaults}`;
+    const f = fixture({ 'dist/languageServer.js': sharedLsServer, 'dist/lsDefaults.js': defaults });
+    const plan = f.plan();
+    expect(f.readVendor).toHaveBeenCalledWith('dist/lsDefaults.js');
+    expect([...plan.keys()]).toEqual(['dist/main.js', 'dist/languageServer.js', 'dist/preload.js']);
+    expect(plan.get('dist/languageServer.js')!.toString()).toContain('...(0, lsDefaults_1.baseLsArgs)(');
+    expect(plan.get('dist/languageServer.js')!.toString()).not.toContain('async async');
+  });
+
+  it('routes shared-defaults startup through the proxy while preserving env and stdin authentication', async () => {
+    const f = serverFixture(sharedLsServer, sharedLsDefaults);
+    const result = await f.exports.startLanguageServer(60123, 'fixture-csrf', {
+      headless: true,
+      hostBridgeUrl: 'http://localhost:62000',
+      hostBridgeToken: 'fixture-bridge-token',
+    });
+    for (const flag of ['--api_server_url', '--cloud_code_endpoint', '--inference_api_server_url']) {
+      expect(result.args.filter((arg) => arg === flag)).toHaveLength(1);
+      expect(result.args[result.args.indexOf(flag) + 1]).toBe('http://localhost:61001');
+    }
+    expect(result.args).toContain('--enable_sidecars');
+    expect(result.args[result.args.indexOf('--https_server_port') + 1]).toBe('60123');
+    expect(result.args).toContain('--headless');
+    expect(result.args).toContain('--host_bridge_url=http://localhost:62000');
+    expect(result.args).toContain('--read_host_bridge_token_from_stdin');
+    expect(result.args).not.toContain('--csrf_token');
+    expect(result.args.join(' ')).not.toContain('fixture-csrf');
+    expect(result.args.join(' ')).not.toContain('fixture-bridge-token');
+    expect(result.env).toEqual({ VENDOR_ENV: 'preserved', ANTIGRAVITY_SERVER_CSRF_TOKEN: 'fixture-csrf' });
+    expect(result.stdin).toBe('fixture-bridge-token');
+  });
+
+  it('leaves shared vendor endpoints intact for WSL, including after a local launch', async () => {
+    const f = serverFixture(sharedLsServer, sharedLsDefaults);
+    await f.exports.startLanguageServer(60123, 'csrf');
+    f.startProxy.mockClear();
+    const wsl = { distro: 'Ubuntu' };
+    const result = await f.exports.startLanguageServer(60123, 'csrf', { wsl });
+    expect(f.startProxy).not.toHaveBeenCalled();
+    expect(result.wsl).toBe(wsl);
+    expect(result.args[result.args.indexOf('--api_server_url') + 1]).toBe('https://generativelanguage.googleapis.com');
+    expect(result.args[result.args.indexOf('--cloud_code_endpoint') + 1]).toBe(
+      'https://daily-cloudcode-pa.googleapis.com',
+    );
+    expect(result.args).not.toContain('--inference_api_server_url');
+    expect(result.args).toContain('--exit_on_stdin_close');
+  });
+
+  it('awaits the proxy and stops shared-defaults startup when the proxy fails', async () => {
+    const f = serverFixture(sharedLsServer, sharedLsDefaults);
+    const error = new Error('Port unavailable');
+    f.startProxy.mockRejectedValue(error);
+    await expect(f.exports.startLanguageServer(60123, 'csrf')).rejects.toBe(error);
+    expect(f.record).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'wrong helper export',
+      sharedLsServer,
+      sharedLsDefaults.replace('exports.baseLsArgs = baseLsArgs', 'exports.baseLsArgs = otherHelper'),
+    ],
+    ['async helper', sharedLsServer, sharedLsDefaults.replace('function baseLsArgs', 'async function baseLsArgs')],
+    ['reassigned endpoint', sharedLsServer, sharedLsDefaults + '\nexports.LS_API_SERVER_URL = getEndpoint();'],
+    ['wrong import', sharedLsServer.replace("require('./lsDefaults')", "require('./other')"), sharedLsDefaults],
+    ['wrong helper', sharedLsServer.replace('lsDefaults_1.baseLsArgs', 'lsDefaults_1.otherArgs'), sharedLsDefaults],
+    ['second spread', sharedLsServer.replace("'--enable_sidecars'", '...otherArgs'), sharedLsDefaults],
+    [
+      'later endpoint override',
+      sharedLsServer.replace("'--enable_sidecars'", "'--api_server_url', 'https://other.example'"),
+      sharedLsDefaults,
+    ],
+    ['unknown helper spread', sharedLsServer, sharedLsDefaults.replace("'--standalone'", '...otherArgs')],
+    ['changed optional flag', sharedLsServer, sharedLsDefaults.replace("'--csrf_token'", "'--api_server_url'")],
+    ['missing endpoint', sharedLsServer, sharedLsDefaults.replace("'--cloud_code_endpoint'", "'--renamed'")],
+    [
+      'duplicate endpoint',
+      sharedLsServer,
+      sharedLsDefaults.replace("'--standalone'", "'--api_server_url', exports.LS_API_SERVER_URL"),
+    ],
+    [
+      'HTTP endpoint',
+      sharedLsServer,
+      sharedLsDefaults.replace('https://generativelanguage.googleapis.com', 'http://other.example'),
+    ],
+    [
+      'computed endpoint',
+      sharedLsServer,
+      sharedLsDefaults.replace("'https://generativelanguage.googleapis.com'", 'getEndpoint()'),
+    ],
+    [
+      'unknown inference default',
+      sharedLsServer,
+      sharedLsDefaults.replace("'--standalone'", "'--inference_api_server_url', 'https://other.example'"),
+    ],
+  ])('rejects an unrecognized shared-defaults layout: %s', (_label, server, defaults) => {
+    expect(() => fixture({ 'dist/languageServer.js': server, 'dist/lsDefaults.js': defaults }).plan()).toThrow(
+      'UNSUPPORTED_RUNTIME',
+    );
+  });
+
+  it('explains a missing shared defaults module', () => {
+    expect(() => fixture({ 'dist/languageServer.js': sharedLsServer }).plan()).toThrow(
+      'UNSUPPORTED_RUNTIME: dist/lsDefaults.js: cannot read required runtime file',
+    );
+  });
+
   it('plans only three vendor edits without evaluating code', () => {
     const f = fixture({ 'dist/main.js': `throw new Error('must not execute');\n${vendorMain}` });
     const patched = f.plan();
