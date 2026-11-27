@@ -36,6 +36,40 @@ every future Antigravity release. CI uses controlled Electron mocks and syntheti
 ASAR packages; it does not log in to Google. CI includes macOS for filesystem
 behavior, not proof of macOS IDE model generation, signing, or UI support.
 
+## Standalone 2.35.2 shared language-server defaults
+
+The Windows standalone 2.35.2 launcher builds its arguments with
+`...(0, lsDefaults_1.baseLsArgs)(...)` from `dist/lsDefaults.js`, rather than
+keeping the API endpoint literals in `dist/languageServer.js`. The installer
+recognizes this layout by inspecting the import, helper, exported HTTPS
+defaults and optional CSRF argument spread without executing vendor code.
+Unknown spreads, endpoint overrides and altered helper layouts are refused.
+
+Only the local startup argument array is redirected to the proxy. The shared
+module is left byte-for-byte intact, so other launchers and WSL keep the vendor
+defaults. Environment-based CSRF authentication and host-bridge tokens passed
+through stdin remain in the original vendor startup code.
+
+On 2026-11-27, read-only preflight passed against an installed Windows 2.35.2
+archive (SHA-256 `e057115571cf5085406d20f2427a5afac272b712ec84332c7157da0113d4b2d0`).
+The planned language-server code was exercised with stubbed process creation in
+both local and WSL modes, checking endpoints, environment authentication and
+stdin tokens. A separate copy of that real archive and its unpacked dependencies
+passed deployment, reapplication and byte-identical restoration. The installed
+archive, unpacked files and language-server binary were unchanged.
+
+After deployment to the installed application on the same date, the tester
+confirmed successful use through the native UI and reported that a request to
+exercise the agent's tools completed without observed errors. This is a manual
+user report; the exact provider/model, tool inventory and per-tool transcript
+were not recorded, so it does not establish exhaustive tool coverage or
+compatibility with every model.
+
+The automated startup harness itself uses stubbed process creation; it does not
+launch a real language-server process. Automated ASAR fixtures cover this layout
+alongside the older inline-endpoint layout. Live WSL behavior, other operating
+systems and other application versions were not tested in this verification.
+
 ## Black screen after an update
 
 [Issue #1](https://github.com/vahapogut/antigravity-add-model/issues/1) reports

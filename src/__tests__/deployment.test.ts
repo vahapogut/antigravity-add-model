@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import * as asar from '@electron/asar';
 import { deploy, fingerprint, parseArgs, preflight, REQUIRED_BUILD_FILES } from '../../scripts/deploy.mjs';
+import { sharedLsDefaults, sharedLsServer } from './fixtures/shared-ls-runtime';
 
 // Real ASAR packing can exceed the default 5 seconds on a busy Windows disk.
 // Allow it to finish before cleanup removes files still being packed.
@@ -38,6 +39,7 @@ async function installVendor(
   version = '2.0.1',
   main = 'dist/main.js',
   unpackDir = 'native',
+  sharedDefaults = false,
 ) {
   const source = fs.mkdtempSync(path.join(root, 'vendor-'));
   put(path.join(source, 'package.json'), JSON.stringify({ version, main, vendorField: 'retain me' }));
@@ -54,6 +56,10 @@ async function installVendor(
     `// original server\nfunction startLanguageServer(port, csrf, options = {}) {\n const { headless, wsl } = options;\n return new Promise((resolve, reject) => {\n const args = ['--https_server_port', String(port), '--api_server_url', 'https://generativelanguage.googleapis.com', '--cloud_code_endpoint', 'https://daily-cloudcode-pa.googleapis.com', '--enable_sidecars'];\n resolve({ port, args });\n });\n}\n`,
   );
   put(path.join(source, 'dist/ipcHandlers.js'), '// vendor WSL and IPC handlers\n');
+  if (sharedDefaults) {
+    put(path.join(source, 'dist/languageServer.js'), sharedLsServer);
+    put(path.join(source, 'dist/lsDefaults.js'), sharedLsDefaults);
+  }
   put(path.join(source, 'dist/utils.js'), '// vendor window and certificate settings\n');
   put(path.join(source, 'dist/vendor-only.js'), `// vendor ${version}\n`);
   put(path.join(source, 'native/helper.dat'), `native ${version}`);
@@ -89,6 +95,24 @@ afterEach(() => {
 });
 
 describe('standalone deployment with real ASAR fixtures', () => {
+  it('checks, deploys, reapplies and restores the 2.35.2 shared-defaults layout', async () => {
+    const f = await fixture();
+    await installVendor(f.root, f.resources, '2.35.2', 'dist/main.js', 'native', true);
+    const original = fingerprint(f.resources);
+    expect((await deploy({ ...f, check: true })).action).toBe('check');
+    expect(fingerprint(f.resources)).toEqual(original);
+    await deploy(f);
+    expect(readArchive(f.resources, 'dist/lsDefaults.js')).toBe(sharedLsDefaults);
+    expect(readArchive(f.resources, 'dist/languageServer.js')).toContain('args[args.indexOf(flag) + 1]');
+    await deploy(f);
+    expect(readArchive(f.resources, 'dist/lsDefaults.js')).toBe(sharedLsDefaults);
+    expect(readArchive(f.resources, 'dist/languageServer.js').match(/const __antigravityModelPatchUrl/g)).toHaveLength(
+      1,
+    );
+    await deploy({ resources: f.resources, restore: true });
+    expect(fingerprint(f.resources)).toEqual(original);
+  });
+
   it('includes every relative runtime dependency in the deployed addon', () => {
     const packaged = new Set(REQUIRED_BUILD_FILES);
     for (const file of REQUIRED_BUILD_FILES) {

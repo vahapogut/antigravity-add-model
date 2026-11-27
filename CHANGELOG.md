@@ -2,6 +2,12 @@
 
 Release history preserved from the project README. Historical entries describe the behavior of their release; see [compatibility and recovery](docs/compatibility.md) for current installation guidance.
 
+### Unreleased — Standalone 2.35.2 startup layout
+
+- Recognize the standalone launcher's shared `lsDefaults.baseLsArgs` layout instead of rejecting its spread arguments with `UNSUPPORTED_RUNTIME`. Inspect the imported module without evaluating vendor code; retain rejection of unknown spreads, endpoint overrides and altered defaults.
+- Redirect only local startup arguments, leaving `lsDefaults.js` unchanged for WSL and other launchers. Preserve environment-based CSRF and stdin host-bridge authentication, with regression coverage for the new layout and existing inline-endpoint releases.
+- Verify read-only preflight against Windows 2.35.2 and deployment/reapplication/restoration on a separate copy of its real archive. After installation, the tester reported successful native UI use and tool execution without observed errors; the exact model and per-tool results were not recorded. See [compatibility and validation scope](docs/compatibility.md#standalone-2352-shared-language-server-defaults).
+
 ### Unreleased — Local hardening
 
 - Text attachments are resolved with the same local file URL check as the request translators. File URLs that name another host are rejected in both places.

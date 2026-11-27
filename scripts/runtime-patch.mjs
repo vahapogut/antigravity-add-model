@@ -130,7 +130,171 @@ function patchMain(bytes, userDataDir) {
   ]);
 }
 
-function patchLanguageServer(bytes) {
+// Newer desktop builds share base flags with other launchers. Inspect that
+// module without evaluating it, then override only this launcher's local args.
+function validateSharedLsArgs(readVendorFile, serverTree, spread) {
+  const file = 'dist/languageServer.js';
+  const call = spread.expression;
+  const callee = ts.isCallExpression(call) && call.expression;
+  const pair = callee && ts.isParenthesizedExpression(callee) && callee.expression;
+  const target = pair && ts.isBinaryExpression(pair) && pair.right;
+  if (
+    !pair ||
+    !ts.isBinaryExpression(pair) ||
+    pair.operatorToken.kind !== ts.SyntaxKind.CommaToken ||
+    !ts.isNumericLiteral(pair.left) ||
+    pair.left.text !== '0' ||
+    !target ||
+    !ts.isPropertyAccessExpression(target) ||
+    target.name.text !== 'baseLsArgs' ||
+    !ts.isIdentifier(target.expression) ||
+    call.arguments.length !== 1 ||
+    !ts.isObjectLiteralExpression(call.arguments[0])
+  )
+    unsupported(file, 'spread must call the imported baseLsArgs helper');
+  const binding = one(
+    file,
+    matching(
+      serverTree,
+      (node) =>
+        ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === target.expression.text,
+    ),
+    'lsDefaults import',
+  );
+  const imported = binding.initializer;
+  if (
+    !imported ||
+    !ts.isCallExpression(imported) ||
+    !ts.isIdentifier(imported.expression) ||
+    imported.expression.text !== 'require' ||
+    imported.arguments.length !== 1 ||
+    !ts.isStringLiteral(imported.arguments[0]) ||
+    imported.arguments[0].text !== './lsDefaults' ||
+    binding.parent.parent.parent !== serverTree
+  )
+    unsupported(file, 'baseLsArgs must come from a top-level require of ./lsDefaults');
+
+  const defaultsFile = 'dist/lsDefaults.js';
+  const { tree } = parse(defaultsFile, readInput(readVendorFile, defaultsFile));
+  const helper = one(
+    defaultsFile,
+    matching(tree, (node) => ts.isFunctionDeclaration(node) && node.name?.text === 'baseLsArgs'),
+    'baseLsArgs function',
+  );
+  const exportedProperty = (node, name) =>
+    ts.isPropertyAccessExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === 'exports' &&
+    node.name.text === name;
+  const assignments = (name) =>
+    matching(
+      tree,
+      (node) =>
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        exportedProperty(node.left, name),
+    );
+  const exportedHelper = one(defaultsFile, assignments('baseLsArgs'), 'baseLsArgs export');
+  if (
+    !ts.isIdentifier(exportedHelper.right) ||
+    exportedHelper.right.text !== 'baseLsArgs' ||
+    !ts.isExpressionStatement(exportedHelper.parent) ||
+    exportedHelper.parent.parent !== tree
+  )
+    unsupported(defaultsFile, 'baseLsArgs must export the inspected helper');
+  if (
+    helper.parent !== tree ||
+    !helper.body ||
+    helper.asteriskToken ||
+    helper.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword) ||
+    helper.parameters.length !== 1 ||
+    !ts.isIdentifier(helper.parameters[0].name) ||
+    helper.parameters[0].initializer ||
+    helper.parameters[0].dotDotDotToken ||
+    helper.body.statements.length !== 1 ||
+    !ts.isReturnStatement(helper.body.statements[0]) ||
+    !helper.body.statements[0].expression ||
+    !ts.isArrayLiteralExpression(helper.body.statements[0].expression)
+  )
+    unsupported(defaultsFile, 'baseLsArgs must return a literal args array');
+  const elements = helper.body.statements[0].expression.elements;
+  const opts = helper.parameters[0].name.text;
+  // The only spread in the inspected helper is its optional legacy CSRF flag.
+  for (const element of elements.filter(ts.isSpreadElement)) {
+    const value = element.expression;
+    const conditional = ts.isParenthesizedExpression(value) && value.expression;
+    const property = (node) =>
+      ts.isPropertyAccessExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === opts &&
+      node.name.text === 'csrfToken';
+    if (
+      !conditional ||
+      !ts.isConditionalExpression(conditional) ||
+      !ts.isBinaryExpression(conditional.condition) ||
+      !property(conditional.condition.left) ||
+      conditional.condition.operatorToken.kind !== ts.SyntaxKind.ExclamationEqualsEqualsToken ||
+      !ts.isIdentifier(conditional.condition.right) ||
+      conditional.condition.right.text !== 'undefined' ||
+      !ts.isArrayLiteralExpression(conditional.whenTrue) ||
+      conditional.whenTrue.elements.length !== 2 ||
+      !ts.isStringLiteral(conditional.whenTrue.elements[0]) ||
+      conditional.whenTrue.elements[0].text !== '--csrf_token' ||
+      !property(conditional.whenTrue.elements[1]) ||
+      !ts.isArrayLiteralExpression(conditional.whenFalse) ||
+      conditional.whenFalse.elements.length
+    )
+      unsupported(defaultsFile, 'unrecognized spread in baseLsArgs');
+  }
+  for (const [flag, constant] of [
+    ['--api_server_url', 'LS_API_SERVER_URL'],
+    ['--cloud_code_endpoint', 'LS_CLOUD_CODE_ENDPOINT'],
+  ]) {
+    const entry = one(
+      defaultsFile,
+      matching(helper, (node) => ts.isStringLiteral(node) && node.text === flag),
+      flag,
+    );
+    const value = elements[elements.indexOf(entry) + 1];
+    if (
+      !elements.includes(entry) ||
+      !value ||
+      !ts.isPropertyAccessExpression(value) ||
+      !ts.isIdentifier(value.expression) ||
+      value.expression.text !== 'exports' ||
+      value.name.text !== constant
+    )
+      unsupported(defaultsFile, `${flag} must use its exported vendor endpoint`);
+    const assignment = one(
+      defaultsFile,
+      assignments(constant).filter((node) => ts.isStringLiteral(node.right)),
+      `${constant} literal assignment`,
+    );
+    if (
+      !assignment.right.text.startsWith('https://') ||
+      !ts.isExpressionStatement(assignment.parent) ||
+      assignment.parent.parent !== tree
+    )
+      unsupported(defaultsFile, `${constant} must have a top-level literal HTTPS vendor endpoint`);
+    for (const write of assignments(constant).filter((node) => node !== assignment)) {
+      // TypeScript also emits a chained exports initialization to void 0.
+      let value = write.right;
+      while (ts.isBinaryExpression(value) && value.operatorToken.kind === ts.SyntaxKind.EqualsToken)
+        value = value.right;
+      if (
+        !ts.isVoidExpression(value) ||
+        !ts.isNumericLiteral(value.expression) ||
+        value.expression.text !== '0' ||
+        write.getStart(tree) > assignment.getStart(tree)
+      )
+        unsupported(defaultsFile, `${constant} has an unrecognized reassignment`);
+    }
+  }
+  if (matching(helper, (node) => ts.isStringLiteral(node) && node.text === '--inference_api_server_url').length)
+    unsupported(defaultsFile, 'inference endpoint in baseLsArgs is not a recognized layout');
+}
+
+function patchLanguageServer(bytes, readVendorFile) {
   const file = 'dist/languageServer.js';
   const { source, tree } = parse(file, bytes);
   const fn = one(
@@ -190,9 +354,18 @@ function patchLanguageServer(bytes) {
     unsupported(file, 'args must be declared directly in the returned startup Promise');
   }
   const elements = args.initializer.elements;
-  if (elements.some(ts.isSpreadElement)) unsupported(file, 'spread arguments are not a recognized startup layout');
+  const spreads = elements.filter(ts.isSpreadElement);
+  if (spreads.length) {
+    if (spreads.length !== 1 || elements[0] !== spreads[0] || !hasOptions)
+      unsupported(file, 'spread arguments are not a recognized startup layout');
+    validateSharedLsArgs(readVendorFile, tree, spreads[0]);
+    for (const flag of ['--api_server_url', '--cloud_code_endpoint', '--inference_api_server_url']) {
+      if (matching(fn.body, (node) => ts.isStringLiteral(node) && node.text === flag).length)
+        unsupported(file, `${flag} must not override the shared base args`);
+    }
+  }
   const edits = [];
-  for (const flag of ['--api_server_url', '--cloud_code_endpoint']) {
+  for (const flag of spreads.length ? [] : ['--api_server_url', '--cloud_code_endpoint']) {
     const entry = one(
       file,
       matching(fn.body, (node) => ts.isStringLiteral(node) && node.text === flag),
@@ -217,7 +390,13 @@ function patchLanguageServer(bytes) {
   } else {
     edits.push({
       start: args.parent.parent.end,
-      text: `\n        if (${LOCAL_URL}) args.push('--inference_api_server_url', ${LOCAL_URL});`,
+      text: spreads.length
+        ? `\n        if (${LOCAL_URL}) {\n` +
+          `            for (const flag of ['--api_server_url', '--cloud_code_endpoint']) {\n` +
+          `                args[args.indexOf(flag) + 1] = ${LOCAL_URL};\n` +
+          `            }\n` +
+          `            args.push('--inference_api_server_url', ${LOCAL_URL});\n        }`
+        : `\n        if (${LOCAL_URL}) args.push('--inference_api_server_url', ${LOCAL_URL});`,
     });
   }
   if (!fn.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword)) {
@@ -270,7 +449,10 @@ function patchPreload(vendorBytes, augmentations) {
 export function planRuntimePatch(readVendorFile, readBuildFile, userDataDir) {
   return new Map([
     ['dist/main.js', patchMain(readInput(readVendorFile, 'dist/main.js'), userDataDir)],
-    ['dist/languageServer.js', patchLanguageServer(readInput(readVendorFile, 'dist/languageServer.js'))],
+    [
+      'dist/languageServer.js',
+      patchLanguageServer(readInput(readVendorFile, 'dist/languageServer.js'), readVendorFile),
+    ],
     [
       'dist/preload.js',
       patchPreload(
